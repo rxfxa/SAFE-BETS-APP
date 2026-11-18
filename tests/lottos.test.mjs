@@ -111,10 +111,10 @@ try {
 
   // build: Open in builder puts L: legs in the slip with matching labels and chances
   if (ui.cards) {
-    await page.click('#main [data-lt-build]');
+    await page.click('#main [data-lt-build="small1"]');
     await page.waitForTimeout(300);
     const slip = await page.evaluate(() => SB.slip.map(l => ({ key: l.key, label: l.label, p: SB.p1(SB.gameById(l.gid), l.key) })));
-    const card = await page.evaluate(() => [...document.querySelectorAll('#main .lt-card')][0].querySelectorAll('.leg').length);
+    const card = await page.evaluate(() => document.querySelector('#main [data-lt-build="small1"]').closest('.lt-card').querySelectorAll('.leg').length);
     check('builder: Open in builder loads every lotto leg into the slip', slip.length === card && slip.every(l => /^L:[A-Z0-9]+-[a-z0-9-]+:\d+$/.test(l.key)), JSON.stringify(slip));
     check('builder: leg labels read "<Name> <N>+ points" with a live chance', slip.every(l => / \d+\+ points$/.test(l.label) && l.p > 0.1 && l.p < 0.5));
     await page.keyboard.press('Escape');
@@ -122,7 +122,7 @@ try {
     // a boosted-player line chip toggles into the slip
     await page.evaluate(() => SB.goTab('lottos'));
     await page.waitForTimeout(200);
-    const chip = await page.$('#main [data-lt-leg]');
+    const chip = await page.$('#main .lt-line[data-lt-leg]');
     if (chip) { await chip.click(); await page.waitForTimeout(150);
       const n = await page.evaluate(() => SB.slip.filter(l => l.key.startsWith('L:')).length);
       check('boosted board: tapping a line adds it to the slip', n === 1); }
@@ -145,6 +145,19 @@ try {
   const nba = await page.evaluate(() => ({ lg: [...document.querySelectorAll('#main .lt-game .lg')].map(x => x.textContent), gains: document.querySelectorAll('#main .lt-gain').length }));
   check('injuries tab: NBA filter shows only NBA games, with "Who gains"', nba.lg.length > 0 && nba.lg.every(t => t.startsWith('NBA')) && nba.gains > 0, `${nba.lg.length} games, ${nba.gains} gainers`);
   await page.evaluate(() => { const b = document.querySelector('[data-inj-sp="all"]'); b && b.click(); });
+
+  // first basket (firstbasket.json): every game's chances add to 100%, Pete's picks priced, cards build FB legs
+  await page.evaluate(() => SB.goTab('lottos')); await page.waitForTimeout(250);
+  const fb = await page.evaluate(() => { const L = window.__lottos, B = L.fbBoard();
+    const sums = B.games.map(g => L.fbSide(g, 'home').list.concat(L.fbSide(g, 'away').list).reduce((s, x) => s + x.p, 0));
+    return { file: !!L.FB, games: B.games.length, sumsOk: sums.every(x => Math.abs(x - 1) < 1e-9), named: B.rows.filter(r => r.named).length, priced: B.rows.filter(r => r.pick).length,
+      cards: [...document.querySelectorAll('#main [data-lt-build^="fb"]')].length, rows: document.querySelectorAll('#main .lt-fbr').length }; });
+  check('first basket: each game\'s first-basket chances add to 100%', !fb.games || fb.sumsOk, JSON.stringify(fb));
+  check('first basket: named picks in tonight\'s games are priced or explained', !fb.games || (fb.rows === fb.priced && fb.named >= fb.priced));
+  if (fb.games && fb.cards) { await page.evaluate(() => SB.setSlip([])); await page.click('#main [data-lt-build^="fbp2_"]'); await page.waitForTimeout(200);
+    const sl = await page.evaluate(() => SB.slip.map(l => ({ k: l.key, lab: l.label, p: SB.p1(SB.gameById(l.gid), l.key) })));
+    check('first basket: double opens in the builder as FB legs with live chances', sl.length === 2 && sl.every(x => /^FB:/.test(x.k) && / first basket$/.test(x.lab) && x.p > 0.03 && x.p < 0.5), JSON.stringify(sl));
+    await page.keyboard.press('Escape'); await page.evaluate(() => SB.setSlip([])); }
 
   // 360 wide: no sideways scroll on either tab
   await page.setViewportSize({ width: 360, height: 740 });

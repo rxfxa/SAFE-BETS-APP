@@ -62,14 +62,15 @@ const shortWhen = g => { try { return esc(SB.when(g)); } catch (e) { return ''; 
 const activeTab = () => { const el = document.querySelector('#tabs [aria-current="page"]') || document.querySelector('#tabs .tab.on'); return el ? el.dataset.t : null; };
 
 // ---------------- data ----------------
-let INJ = null, ROLES = null, LOAD = 'idle', loadedFor = null;
+let INJ = null, ROLES = null, FB = null, LOAD = 'idle', loadedFor = null;
 let MODELS = new Map();
 async function getJSON(u) { try { const r = await fetch(u, { cache: 'no-cache' }); if (!r.ok) return null; const j = await r.json(); return j && typeof j === 'object' ? j : null; } catch (e) { return null; } }
 async function load(force) {
   const stamp = SB.DATA && SB.DATA.updated;
   if (!force && (LOAD === 'loading' || (LOAD === 'done' && loadedFor === stamp))) return;
   LOAD = 'loading';
-  const [inj, roles] = await Promise.all([getJSON('injuries.json'), getJSON('nbaroles.json')]);
+  const [inj, roles, fb] = await Promise.all([getJSON('injuries.json'), getJSON('nbaroles.json'), getJSON('firstbasket.json')]);
+  if (fb && Array.isArray(fb.picks)) FB = fb;
   if (inj && Array.isArray(inj.injuries)) INJ = inj; else if (!INJ) INJ = null;
   if (roles && roles.teams && typeof roles.teams === 'object') ROLES = roles; else if (!ROLES) ROLES = null;
   MODELS = new Map(); LOAD = 'done'; loadedFor = stamp;
@@ -96,7 +97,7 @@ function teamModel(abbr) {
   const players = roster.map(p => {
     const e = inj.get(norm(p.name)) || null, w = e ? (W[e.status] ?? 0) : 0;
     return { team: abbr, name: p.name, slug: slugOf(p.name), pos: p.pos || '', gp: +p.gp || 0, mpg: +p.mpg || 0, ppg: +p.ppg || 0,
-      inj: e, w, absent: 0, rawBoost: 0, boost: 0, mean: +p.ppg || 0, star: false, fallback: !!p.fallback };
+      inj: e, w, absent: 0, rawBoost: 0, boost: 0, mean: +p.ppg || 0, star: false, starter: p.starter !== false, fallback: !!p.fallback };
   });
   let absent = 0; const missing = [];
   for (const p of players) if (p.w > 0) { p.absent = p.ppg * p.w * Math.min(1, p.gp / G); absent += p.absent; if (p.absent > 0.05) missing.push(p); }
@@ -172,6 +173,84 @@ function buildTier(C, tier, count = 3) {
   return out;
 }
 
+// ---------------- first basket (tonight) ----------------
+// P(team scores first) = 0.5 + 0.3 x (win chance - 0.5), kept within 35-65% (the tip and the first possessions are close to a
+// coin flip). Within a team, the first basket goes to one of the five projected starters (still playing) in proportion to their
+// injury-boosted scoring average, with centers x1.15 (tip-off sets and early touches near the rim). P(player) = P(team) x share.
+const FB_C = 1.15;
+const fbTeamFirst = (g, side) => { const pr = g.prob || {}, w = +(side === 'home' ? pr.home : pr.away); return Math.max(0.35, Math.min(0.65, 0.5 + 0.3 * ((isFinite(w) ? w : 0.5) - 0.5))); };
+function fbStarters(m) {
+  const a = m.players.filter(p => p.w === 0);
+  let s = a.filter(p => p.starter).sort((x, y) => y.mpg - x.mpg).slice(0, 5);
+  if (s.length < 5) s = s.concat(a.filter(p => !s.includes(p)).sort((x, y) => y.mpg - x.mpg).slice(0, 5 - s.length));
+  return s;
+}
+function fbSide(g, side) {
+  const t = g[side], m = teamModel(t.abbr), S = fbStarters(m), wt = p => Math.max(0.5, p.mean) * (/C/.test(p.pos) ? FB_C : 1);
+  const tot = S.reduce((s, p) => s + wt(p), 0) || 1, pt = fbTeamFirst(g, side);
+  return { team: t, opp: g[side === 'home' ? 'away' : 'home'], pTeam: pt, m, list: S.map(p => ({ p: pt * wt(p) / tot, player: p })).sort((a, b) => b.p - a.p) };
+}
+const FB_RE = /^FB:([A-Z0-9]+)-([a-z0-9-]+)$/;
+const fbKey = p => `FB:${p.team}-${p.slug}`;
+SB.registerLegType('FB', {
+  label(key) { const k = FB_RE.exec(String(key)); if (!k) return 'First basket'; const p = ROLES || (SB.DATA && SB.DATA.players) ? findPlayer(k[1], k[2]) : null; return `${p ? p.name : k[2].replace(/-/g, ' ')} first basket`; },
+  prob(g, key) { const k = FB_RE.exec(String(key)); if (!k || !g || g.sport !== 'nba') return 0; const side = g.home.abbr === k[1] ? 'home' : g.away.abbr === k[1] ? 'away' : null; if (!side) return 0;
+    const r = fbSide(g, side).list.find(x => x.player.slug === k[2]); return r ? r.p : 0; },
+});
+function fbBoard() {
+  const now = Date.now(), names = new Set(((FB && FB.picks) || []).map(norm));
+  const games = ((SB.DATA && SB.DATA.games) || []).filter(g => g.sport === 'nba' && SB.openG(g) && !(SB.isVoid && SB.isVoid(g)) && SB.startMs(g) - now <= 24 * 3600e3).sort((a, b) => SB.startMs(a) - SB.startMs(b));
+  const rows = [];
+  for (const g of games) for (const side of ['away', 'home']) {
+    const S = fbSide(g, side), named = S.m.players.filter(p => names.has(norm(p.name)));
+    for (const pl of named.length ? named : [null]) {
+      const hit = pl ? S.list.find(x => x.player === pl) : null;
+      rows.push({ g, side, S, named: pl, pick: hit, rank: hit ? S.list.indexOf(hit) + 1 : null, top: S.list[0] });
+    }
+  }
+  return { games, rows };
+}
+function fbParlays(pool, n, count, id) { // pool: [{g, player, p, opp, team}] sorted by p; legs from different games
+  const out = [], used = new Set();
+  for (let k = 0; k < count; k++) {
+    const legs = [], gs = new Set();
+    for (const c of pool) { const key = c.player.team + c.player.slug; if (used.has(key) || gs.has(c.g.id)) continue; legs.push(c); gs.add(c.g.id); if (legs.length === n) break; }
+    if (legs.length < n) break; legs.forEach(c => used.add(c.player.team + c.player.slug));
+    out.push({ id: `${id}${k + 1}`, legs, p: legs.reduce((s, c) => s * c.p, 1) });
+  }
+  return out;
+}
+function fbCard(P, title, tag) {
+  CACHE[P.id] = { fb: true, legs: P.legs, p: P.p, title };
+  return `<div class="pc lt-card"><div class="pchead"><span class="pctitle">${esc(title)} ${tag ? `<span class="badge lt-tag">${esc(tag)}</span>` : ''}</span><span class="hit ${hitClass(P.p)}">${pctS(P.p)} to hit</span></div>
+    <div class="gauge" style="--p:${Math.max(0, Math.min(1, P.p)).toFixed(3)}" aria-hidden="true"><i></i></div>
+    <div style="margin-top:4px">${P.legs.map((c, i) => `<div class="leg"><span class="legdot ${i === 0 ? 'base' : ''}">${i + 1}</span><div class="legtxt"><b>${esc(c.player.name)} first basket</b>
+      <span>${esc(c.team.abbr)} vs ${esc(c.opp.abbr)} · ${shortWhen(c.g)}</span><em class="lt-why">${esc(c.team.abbr)} scores first ${pctS(c.pTeam, 0)} · ${esc(c.why || '')}</em></div>
+      <span class="legp mono">${pctS(c.p, 1)}<small>${esc(SB.fmtOdds(c.p))}</small></span></div>`).join('')}</div>
+    <div class="pcfoot"><div class="odds mono">${esc(SB.fmtOdds(P.p))}<small>Fair odds · $10 pays ${money(10 / P.p)}</small></div></div>
+    <div class="lt-btns"><button class="btn" data-lt-build="${esc(P.id)}">Open in builder</button>${hasSim() ? `<button class="btn ghost" data-lt-sim="${esc(P.id)}">Simulate 100k</button>` : ''}</div>
+    <div class="note">Bet only at <b class="mono">${esc(SB.fmtOdds(P.p))}</b> or better. First-basket bets settle on the first made field goal; most books void them if the player doesn't start.</div></div>`;
+}
+function firstBasketSection() {
+  if (!FB || !ROLES) return '';
+  const { games, rows } = fbBoard(); if (!games.length) return '';
+  const picks = rows.filter(r => r.pick).map(r => ({ g: r.g, player: r.pick.player, p: r.pick.p, team: r.S.team, opp: r.S.opp, pTeam: r.S.pTeam,
+    why: r.rank === 1 ? 'our top pick on his team too' : `#${r.rank} of the starting five in our model` })).sort((a, b) => b.p - a.p);
+  const seenT = new Set(), model = rows.filter(r => r.top && !seenT.has(r.S.team.abbr) && seenT.add(r.S.team.abbr)).map(r => ({ g: r.g, player: r.top.player, p: r.top.p, team: r.S.team, opp: r.S.opp, pTeam: r.S.pTeam, why: 'model\'s top pick on this team' })).sort((a, b) => b.p - a.p);
+  const missing = rows.filter(r => r.named && !r.pick);
+  const agree = rows.filter(r => r.rank === 1).length, nP = rows.filter(r => r.pick).length;
+  let h = `<h2>First basket tonight <small>${games.length} NBA games · from ${esc(FB.source)}'s video</small></h2>
+    <div class="note">Pete named ${(FB.picks || []).length} first-basket picks for tonight (one or two per team). Our model prices each one: his team scores first about half the time, then his share of the starting five's scoring. It agrees with ${agree} of his ${nP} picks as the top choice on that team. ${esc(FB.note || '')}</div>`;
+  const P2 = fbParlays(picks, 2, 2, 'fbp2_'), P3 = fbParlays(picks, 3, 1, 'fbp3_'), M2 = fbParlays(model, 2, 1, 'fbm2_');
+  h += `<div class="grid">${P2.map((P, i) => fbCard(P, `Pete's first-basket double #${i + 1}`, 'FIRST BASKET')).join('')}${P3.map(P => fbCard(P, 'Pete\'s first-basket treble', 'FIRST BASKET')).join('')}${M2.map(P => fbCard(P, 'Model\'s first-basket double', 'MODEL')).join('')}</div>`;
+  h += `<h2>Pete's picks vs our model <small>tap to add a pick to your slip</small></h2><div class="pc"><div class="lt-fbt">${picks.map(c => {
+    const r = rows.find(x => x.pick && x.pick.player === c.player), key = fbKey(c.player), inS = SB.inSlip(c.g.id, key), alt = r && r.rank !== 1 ? r.top.player.name : null;
+    return `<button class="lt-fbr${inS ? ' on' : ''}" data-lt-leg="${esc(c.g.id + '|' + key)}" aria-pressed="${inS}"><span><b>${esc(c.player.name)}</b><small>${esc(c.team.abbr)} vs ${esc(c.opp.abbr)} · ${shortWhen(c.g)}${alt ? ` · model prefers ${esc(alt)}` : ' · model agrees'}</small></span><span class="mono">${pctS(c.p, 1)}<small>${esc(SB.fmtOdds(c.p))}</small></span></button>`; }).join('')}</div>
+    ${missing.length ? `<div class="note">Not priced: ${esc(missing.map(r => `${r.named.name} (${r.named.inj ? 'listed ' + r.named.inj.status : 'not in our projected starting five'})`).join(', '))}.</div>` : ''}
+    <div class="note">Source: <a href="${esc(FB.url)}" target="_blank" rel="noopener">${esc(FB.source)}, ${esc(FB.date)}</a>. First basket is a long shot: even the best pick in a game hits about 1 time in 5.</div></div>`;
+  return h;
+}
+
 // ---------------- markup ----------------
 const CACHE = {};
 function because(m, p) {
@@ -228,7 +307,7 @@ function renderLottos(main) {
   if (!ROLES && !((SB.DATA && SB.DATA.players) || []).length) { main.innerHTML = head + emptyCard('Player data is missing', 'The player averages file did not load, so lotto lines can\'t be priced right now. Try again after the next refresh.'); return; }
   const { games, C } = candidates(win);
   if (!games.length) { main.innerHTML = head + emptyCard('No NBA games in this window', win === '24h' ? 'Try Next 3 days.' : 'New games appear with the hourly refresh.') + footer(); return; }
-  let html = head;
+  let html = head + firstBasketSection();
   if (!INJ) html += `<div class="note lt-warn">The injury list did not load, so nobody is boosted right now. Lines below use normal averages.</div>`;
   const notChecked = [...new Set(games.flatMap(g => [g.home.abbr, g.away.abbr]).filter(a => unchecked('nba', a)))];
   if (notChecked.length) html += `<div class="note lt-warn">Injury reports not checked yet for ${esc(notChecked.join(', '))}: their players get no boost.</div>`;
@@ -289,9 +368,9 @@ document.addEventListener('click', e => {
   if (t.dataset.ltLeg) { const i = t.dataset.ltLeg.indexOf('|'); const added = SB.toggleLeg(t.dataset.ltLeg.slice(0, i), t.dataset.ltLeg.slice(i + 1));
     t.classList.toggle('on', !!added); t.setAttribute('aria-pressed', String(!!added)); return; }
   const P = CACHE[t.dataset.ltBuild || t.dataset.ltSim]; if (!P) return;
-  const legs = P.legs.map(L => ({ gid: L.g.id, key: legKey(L.p, L.line.thr) }));
+  const legs = P.fb ? P.legs.map(c => ({ gid: c.g.id, key: fbKey(c.player) })) : P.legs.map(L => ({ gid: L.g.id, key: legKey(L.p, L.line.thr) }));
   if (t.dataset.ltBuild != null) { (SB.replaceSlip || SB.setSlip)(legs, legs[0].gid + '|' + legs[0].key); SB.openSlip(); return; }
-  SB.goTab('sim', { legs, title: `${P.tier.name} #${P.id.slice(-1)}`, from: 'lottos', p: P.p });
+  SB.goTab('sim', { legs, title: P.fb ? P.title : `${P.tier.name} #${P.id.slice(-1)}`, from: 'lottos', p: P.p });
 });
 
 // ---------------- styles (tokens only) ----------------
@@ -331,6 +410,11 @@ css.textContent = `
 .lt-gain{border:1px solid var(--edge);background:var(--card-hi);color:var(--text);border-radius:5px;padding:6px 10px;min-height:36px;font-size:13px;text-transform:none;letter-spacing:0;cursor:pointer}
 .lt-gain b{color:var(--ice)}
 .lt-foot{margin-top:16px}
+.lt-fbt{display:grid;gap:6px}
+.lt-fbr{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:52px;text-align:left;background:var(--card-hi);border:1px solid var(--line);border-radius:6px;padding:8px 12px;color:var(--text);cursor:pointer;font:inherit}
+.lt-fbr.on{border-color:var(--glow);box-shadow:0 0 0 1px var(--glow) inset}
+.lt-fbr small{display:block;color:var(--dim);font-size:12px;margin-top:2px}
+.lt-fbr>span:last-child{text-align:right;flex:none;font-size:15px}
 `;
 document.head.appendChild(css);
 
@@ -341,6 +425,6 @@ SB.registerTab(TAB_L); SB.registerTab(TAB_I);
 SB.on('data', () => { load(); setTimeout(() => { if (!document.querySelector('#tabs [data-t="lottos"]')) SB.registerTab(TAB_L); if (!document.querySelector('#tabs [data-t="injuries"]')) SB.registerTab(TAB_I); }, 0); });
 
 // test/debug hook
-window.__lottos = { W, R, CAP_PCT, CAP_PTS, MIN_GP, MIN_MPG, LEG_MIN, LEG_MAX, TIERS, legP, teamModel, linesFor, candidates, buildTier, parseKey, legKey,
+window.__lottos = { fbSide, fbBoard, fbKey, get FB() { return FB; }, W, R, CAP_PCT, CAP_PTS, MIN_GP, MIN_MPG, LEG_MIN, LEG_MAX, TIERS, legP, teamModel, linesFor, candidates, buildTier, parseKey, legKey,
   get INJ() { return INJ; }, get ROLES() { return ROLES; }, get LOAD() { return LOAD; }, load };
 })();

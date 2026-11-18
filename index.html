@@ -185,6 +185,45 @@ input[type=text],input[type=number]{background:var(--soft);border:1px solid var(
 .csc span{display:block;font-size:10.5px;font-weight:700;color:var(--mute)}
 .csc.in{outline:2.5px solid var(--text);outline-offset:-2px}
 .csc:disabled{cursor:default;opacity:.6}
+.csc .csp{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--mute);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* theme, focus, nav, link buttons, tap targets, dialogs */
+:root.dark{color-scheme:dark}
+.search:focus-within{box-shadow:0 0 0 2px var(--accent2)}
+.tabs{position:relative}
+@media(max-width:759px){.tabs.fadeR{-webkit-mask-image:linear-gradient(90deg,#000 84%,transparent);mask-image:linear-gradient(90deg,#000 84%,transparent)}
+ .tabs.fadeL{-webkit-mask-image:linear-gradient(90deg,transparent,#000 16%);mask-image:linear-gradient(90deg,transparent,#000 16%)}
+ .tabs.fadeL.fadeR{-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}}
+@media(min-width:760px){.tabs{flex-wrap:wrap;overflow:visible}}
+.tab:focus-visible,.chip:focus-visible,.linkbtn:focus-visible,.btn:focus-visible,.yes:focus-visible,.iconbtn:focus-visible,.csc:focus-visible{outline:2.5px solid var(--accent2);outline-offset:2px}
+h2 a,.mkfoot a{color:var(--blue)}
+.linkbtn{background:none;border:0;padding:10px 4px;margin:-10px -4px;font:inherit;font-size:14px;color:var(--blue);font-weight:700;cursor:pointer;white-space:nowrap}
+.linkbtn:hover{text-decoration:underline}
+.iconbtn{width:40px;height:40px}.oddsel{height:40px}.chip{min-height:40px}
+.star{min-width:40px;min-height:40px;flex:none}.x{width:40px;height:40px}
+.sheet{overscroll-behavior:contain;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.sheettop{position:sticky;top:-10px;z-index:3;display:flex;justify-content:center;align-items:center;background:var(--bg);margin:-10px -16px 4px;padding:10px 16px 2px;min-height:48px}
+.sheettop .grab{margin:0}
+.sheetx{position:absolute;right:12px;top:6px;font-size:16px;font-weight:800}
+body.sheet-open{overflow:hidden}
+body.sheet-open .slipbar.on{z-index:42}
+.loading{text-align:center;color:var(--mute);padding:40px 18px;font-size:15px}
+.labhost{max-width:980px;margin:0 auto;padding:0 16px 20px}
+.b-void{background:var(--nobg);color:var(--no)}
+details.method{margin-top:8px;font-size:12.5px;color:var(--dim)}details.method summary{cursor:pointer;font-weight:700;color:var(--mute)}
+/* your-book prices, same-game pairs, ledger */
+.bookin .tgrid3,.bookin .tgrid{margin-top:6px}
+.bookin input{padding:9px 8px;font-size:15px}
+.bookbad{color:var(--no);font-weight:700}
+.ybk{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;background:var(--yesbg);color:var(--yes);margin-left:4px;vertical-align:middle}
+.pairs .prow{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.pairs .prow:first-child{border-top:0}
+.pairs .pl{font-weight:700;font-size:14.5px;min-width:0}.pairs .pl small{display:block;font-size:12px;color:var(--dim);font-weight:600}
+.pairs .pn{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:800;font-size:13.5px}.pairs .pn small{display:block;font-size:11px;color:var(--dim);font-weight:700}
+.pairs .padd{width:44px;height:40px;border:0;border-radius:9px;background:var(--yesbg);color:var(--ink);font-weight:800;font-size:18px;cursor:pointer}
+.dark .pairs .padd{color:var(--text)}
+.grade{display:flex;gap:6px;margin-top:4px}.grade button{border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:8px;padding:6px 10px;font:700 12.5px Inter,system-ui,sans-serif;cursor:pointer;min-height:36px}
+.stakein{max-width:120px}
+@media(max-width:380px){.top{gap:6px;padding-left:12px;padding-right:12px}.logo{font-size:17px;gap:6px}.oddsel{max-width:54px}.search{padding:8px 9px;gap:6px}}
 </style>
 </head>
 <body>
@@ -192,19 +231,20 @@ input[type=text],input[type=number]{background:var(--soft);border:1px solid var(
 <header>
   <div class="top">
     <div class="logo"><svg viewBox="0 0 32 32"><path d="M16 2.5l11 4v8.2c0 7-4.7 12.3-11 14.8C9.7 27 5 21.7 5 14.7V6.5z" fill="#8ccfff" stroke="#0a0a0a" stroke-width="2"/><path d="M10.5 15.8l3.8 3.8 7.4-7.6" stroke="#0a0a0a" stroke-width="2.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Safe&nbsp;Bets</div>
-    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--dim)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search teams or leagues" autocomplete="off"></label>
+    <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="color:var(--dim)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search" aria-label="Search teams or leagues" autocomplete="off"></label>
     <select class="oddsel" id="oddsFmt" aria-label="Odds format" title="Odds format"></select>
-    <button class="iconbtn" id="themeBtn" aria-label="Theme"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
+    <button class="iconbtn" id="themeBtn" aria-label="Dark mode" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg></button>
   </div>
-  <nav class="tabs" id="tabs"></nav>
+  <nav class="tabs" id="tabs" aria-label="Sections"></nav>
 </header>
 <div class="sub" id="sub"></div>
-<main id="main"></main>
+<main id="main"><div class="loading" aria-busy="true">Loading games and prices…</div></main>
+<div class="labhost" id="labHost" hidden></div>
 <footer class="foot">Hit chances are model estimates, not guarantees. Bet responsibly. 21+.</footer>
 
 <div class="slipbar" id="slipbar"><div class="n" id="slipN">0</div><div class="t" id="slipT">Parlay</div><div class="mono" style="font-weight:800" id="slipO"></div></div>
 <div class="bg" id="bg"></div>
-<div class="sheet" id="sheet"><div class="grab"></div><div id="sheetBody"></div></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Details" inert><div class="sheettop"><div class="grab"></div><button class="iconbtn sheetx" id="sheetX" type="button" aria-label="Close">✕</button></div><div id="sheetBody"></div></div>
 
 <script id="seed" type="application/json">{"updated":"2026-11-18T03:57:56Z","games":[{"id":"ncaaf-HAW-NDSU-2026-11-15","sport":"ncaaf","comp":"College Football","start":"2026-11-15T04:00:00Z","home":{"abbr":"HAW","name":"Hawai'i Rainbow Warriors"},"away":{"abbr":"NDSU","name":"North Dakota State Bison"},"status":"closed","src":"Sportradar","score":{"home":13,"away":21}},{"id":"nfl-DET-NE-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T14:30:00Z","home":{"abbr":"DET","name":"Detroit Lions"},"away":{"abbr":"NE","name":"New England Patriots"},"status":"closed","src":"Sportradar","score":{"home":35,"away":10}},{"id":"nba-PHI-IND-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T18:00:00Z","home":{"abbr":"PHI","name":"Philadelphia 76ers"},"away":{"abbr":"IND","name":"Indiana Pacers"},"status":"closed","src":"Sportradar","score":{"home":131,"away":124}},{"id":"nfl-ATL-KC-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"ATL","name":"Atlanta Falcons"},"away":{"abbr":"KC","name":"Kansas City Chiefs"},"status":"closed","src":"Sportradar","score":{"home":13,"away":35}},{"id":"nfl-NYJ-BUF-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"NYJ","name":"New York Jets"},"away":{"abbr":"BUF","name":"Buffalo Bills"},"status":"closed","src":"Sportradar","score":{"home":12,"away":31}},{"id":"nfl-IND-MIA-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"IND","name":"Indianapolis Colts"},"away":{"abbr":"MIA","name":"Miami Dolphins"},"status":"closed","src":"Sportradar","score":{"home":24,"away":22}},{"id":"nfl-GB-MIN-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"GB","name":"Green Bay Packers"},"away":{"abbr":"MIN","name":"Minnesota Vikings"},"status":"closed","src":"Sportradar","score":{"home":10,"away":30}},{"id":"nfl-NO-CAR-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"NO","name":"New Orleans Saints"},"away":{"abbr":"CAR","name":"Carolina Panthers"},"status":"closed","src":"Sportradar","score":{"home":17,"away":20}},{"id":"nfl-TEN-JAC-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"TEN","name":"Tennessee Titans"},"away":{"abbr":"JAC","name":"Jacksonville Jaguars"},"status":"closed","src":"Sportradar","score":{"home":23,"away":40}},{"id":"nfl-CLE-HOU-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T18:00:00Z","home":{"abbr":"CLE","name":"Cleveland Browns"},"away":{"abbr":"HOU","name":"Houston Texans"},"status":"closed","src":"Sportradar","score":{"home":27,"away":24}},{"id":"ncaaf-OKLA-MISS-2026-11-15","sport":"ncaaf","comp":"College Football","start":"2026-11-15T18:00:00Z","home":{"abbr":"OKLA","name":"Oklahoma Sooners"},"away":{"abbr":"MISS","name":"Ole Miss Rebels"},"status":"closed","src":"Sportradar","score":{"home":24,"away":17}},{"id":"nba-PHX-LAL-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T21:00:00Z","home":{"abbr":"PHX","name":"Phoenix Suns"},"away":{"abbr":"LAL","name":"Los Angeles Lakers"},"status":"closed","src":"Sportradar","score":{"home":123,"away":131}},{"id":"nfl-LV-SEA-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T21:05:00Z","home":{"abbr":"LV","name":"Las Vegas Raiders"},"away":{"abbr":"SEA","name":"Seattle Seahawks"},"status":"closed","src":"Sportradar","score":{"home":13,"away":21}},{"id":"nfl-ARI-LA-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T21:05:00Z","home":{"abbr":"ARI","name":"Arizona Cardinals"},"away":{"abbr":"LA","name":"Los Angeles Rams"},"status":"closed","src":"Sportradar","score":{"home":6,"away":34}},{"id":"nfl-DAL-SF-2026-11-15","sport":"nfl","comp":"NFL","start":"2026-11-15T21:25:00Z","home":{"abbr":"DAL","name":"Dallas Cowboys"},"away":{"abbr":"SF","name":"San Francisco 49ers"},"status":"closed","src":"Sportradar","score":{"home":40,"away":46}},{"id":"nba-LAC-CHA-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T21:30:00Z","home":{"abbr":"LAC","name":"LA Clippers"},"away":{"abbr":"CHA","name":"Charlotte Hornets"},"status":"closed","src":"Sportradar","score":{"home":113,"away":105}},{"id":"nba-UTA-SAS-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T22:00:00Z","home":{"abbr":"UTA","name":"Utah Jazz"},"away":{"abbr":"SAS","name":"San Antonio Spurs"},"status":"closed","src":"Sportradar","score":{"home":102,"away":110}},{"id":"nba-TOR-NYK-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T23:00:00Z","home":{"abbr":"TOR","name":"Toronto Raptors"},"away":{"abbr":"NYK","name":"New York Knicks"},"status":"closed","src":"Sportradar","score":{"home":108,"away":112}},{"id":"nba-BOS-DAL-2026-11-15","sport":"nba","comp":"NBA","start":"2026-11-15T23:00:00Z","home":{"abbr":"BOS","name":"Boston Celtics"},"away":{"abbr":"DAL","name":"Dallas Mavericks"},"status":"closed","src":"Sportradar","score":{"home":131,"away":94}},{"id":"nba-WAS-HOU-2026-11-16","sport":"nba","comp":"NBA","start":"2026-11-16T00:00:00Z","home":{"abbr":"WAS","name":"Washington Wizards"},"away":{"abbr":"HOU","name":"Houston Rockets"},"status":"closed","src":"Sportradar","score":{"home":119,"away":147}},{"id":"nhl-PHI-EDM-2026-11-16","sport":"nhl","comp":"NHL","start":"2026-11-16T00:30:00Z","home":{"abbr":"PHI","name":"Philadelphia Flyers"},"away":{"abbr":"EDM","name":"Edmonton Oilers"},"status":"closed","src":"Sportradar","score":{"home":2,"away":5}},{"id":"nba-MIL-ATL-2026-11-16","sport":"nba","comp":"NBA","start":"2026-11-16T01:00:00Z","home":{"abbr":"MIL","name":"Milwaukee Bucks"},"away":{"abbr":"ATL","name":"Atlanta Hawks"},"status":"closed","src":"Sportradar","score":{"home":106,"away":113}},{"id":"nhl-DAL-FLA-2026-11-16","sport":"nhl","comp":"NHL","start":"2026-11-16T01:00:00Z","home":{"abbr":"DAL","name":"Dallas Stars"},"away":{"abbr":"FLA","name":"Florida Panthers"},"status":"closed","src":"Sportradar","score":{"home":2,"away":1}},{"id":"nhl-ANA-CGY-2026-11-16","sport":"nhl","comp":"NHL","start":"2026-11-16T01:00:00Z","home":{"abbr":"ANA","name":"Anaheim Ducks"},"away":{"abbr":"CGY","name":"Calgary Flames"},"status":"closed","src":"Sportradar","score":{"home":6,"away":1}},{"id":"nfl-CIN-PIT-2026-11-16","sport":"nfl","comp":"NFL","start":"2026-11-16T01:20:00Z","home":{"abbr":"CIN","name":"Cincinnati Bengals"},"away":{"abbr":"PIT","name":"Pittsburgh Steelers"},"status":"closed","src":"Sportradar","score":{"home":38,"away":18},"tag":"Sunday Night Football"},{"id":"nba-SAC-OKC-2026-11-16","sport":"nba","comp":"NBA","start":"2026-11-16T02:00:00Z","home":{"abbr":"SAC","name":"Sacramento Kings"},"away":{"abbr":"OKC","name":"Oklahoma City Thunder"},"status":"closed","src":"Sportradar","score":{"home":103,"away":125}},{"id":"nhl-VGK-VAN-2026-11-16","sport":"nhl","comp":"NHL","start":"2026-11-16T02:00:00Z","home":{"abbr":"VGK","name":"Vegas Golden Knights"},"away":{"abbr":"VAN","name":"Vancouver Canucks"},"status":"closed","src":"Sportradar","score":{"home":3,"away":6}},{"id":"nhl-SJ-NSH-2026-11-16","sport":"nhl","comp":"NHL","start":"2026-11-16T02:00:00Z","home":{"abbr":"SJ","name":"San Jose Sharks"},"away":{"abbr":"NSH","name":"Nashville Predators"},"status":"closed","src":"Sportradar","score":{"home":4,"away":2}},{"id":"nba-WAS-MEM-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T00:00:00Z","home":{"abbr":"WAS","name":"Washington Wizards"},"away":{"abbr":"MEM","name":"Memphis Grizzlies"},"status":"closed","src":"Sportradar","score":{"home":120,"away":136}},{"id":"nba-BOS-ORL-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T00:00:00Z","home":{"abbr":"BOS","name":"Boston Celtics"},"away":{"abbr":"ORL","name":"Orlando Magic"},"status":"closed","src":"Sportradar","score":{"home":105,"away":115}},{"id":"nba-CLE-CHI-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T00:00:00Z","home":{"abbr":"CLE","name":"Cleveland Cavaliers"},"away":{"abbr":"CHI","name":"Chicago Bulls"},"status":"closed","src":"Sportradar","score":{"home":126,"away":115}},{"id":"nba-BKN-PHI-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T00:30:00Z","home":{"abbr":"BKN","name":"Brooklyn Nets"},"away":{"abbr":"PHI","name":"Philadelphia 76ers"},"status":"closed","src":"Sportradar","score":{"home":123,"away":135}},{"id":"nba-MIA-HOU-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T00:30:00Z","home":{"abbr":"MIA","name":"Miami Heat"},"away":{"abbr":"HOU","name":"Houston Rockets"},"status":"closed","src":"Sportradar","score":{"home":128,"away":110}},{"id":"nhl-NYR-MTL-2026-11-17","sport":"nhl","comp":"NHL","start":"2026-11-17T00:30:00Z","home":{"abbr":"NYR","name":"New York Rangers"},"away":{"abbr":"MTL","name":"Montreal Canadiens"},"status":"closed","src":"Sportradar","score":{"home":3,"away":1}},{"id":"nba-NOP-GSW-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T01:00:00Z","home":{"abbr":"NOP","name":"New Orleans Pelicans"},"away":{"abbr":"GSW","name":"Golden State Warriors"},"status":"closed","src":"Sportradar","score":{"home":115,"away":94}},{"id":"nba-MIN-POR-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T01:00:00Z","home":{"abbr":"MIN","name":"Minnesota Timberwolves"},"away":{"abbr":"POR","name":"Portland Trail Blazers"},"status":"closed","src":"Sportradar","score":{"home":106,"away":98}},{"id":"nfl-BAL-LAC-2026-11-17","sport":"nfl","comp":"NFL","start":"2026-11-17T01:15:00Z","home":{"abbr":"BAL","name":"Baltimore Ravens"},"away":{"abbr":"LAC","name":"Los Angeles Chargers"},"status":"closed","src":"Sportradar","score":{"home":20,"away":23},"tag":"Monday Night Football"},{"id":"nba-DEN-PHX-2026-11-17","sport":"nba","comp":"NBA","start":"2026-11-17T02:00:00Z","home":{"abbr":"DEN","name":"Denver Nuggets"},"away":{"abbr":"PHX","name":"Phoenix Suns"},"status":"closed","src":"Sportradar","score":{"home":105,"away":117}},{"id":"nhl-UTA-VAN-2026-11-17","sport":"nhl","comp":"NHL","start":"2026-11-17T02:30:00Z","home":{"abbr":"UTA","name":"Utah Mammoth"},"away":{"abbr":"VAN","name":"Vancouver Canucks"},"status":"closed","src":"Sportradar","score":{"home":2,"away":3}},{"id":"ncaaf-WMU-EMU-2026-11-17","sport":"ncaaf","comp":"College Football","start":"2026-11-17T23:00:00Z","home":{"abbr":"WMU","name":"Western Michigan Broncos"},"away":{"abbr":"EMU","name":"Eastern Michigan Eagles"},"status":"closed","src":"Sportradar","score":{"home":34,"away":27}},{"id":"nhl-FLA-EDM-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:00:00Z","home":{"abbr":"FLA","name":"Florida Panthers"},"away":{"abbr":"EDM","name":"Edmonton Oilers"},"status":"closed","src":"Sportradar","score":{"home":2,"away":5}},{"id":"nhl-PHI-BUF-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:00:00Z","home":{"abbr":"PHI","name":"Philadelphia Flyers"},"away":{"abbr":"BUF","name":"Buffalo Sabres"},"status":"closed","src":"Sportradar","score":{"home":4,"away":3}},{"id":"nhl-BOS-LA-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:00:00Z","home":{"abbr":"BOS","name":"Boston Bruins"},"away":{"abbr":"LA","name":"Los Angeles Kings"},"status":"closed","src":"Sportradar","score":{"home":0,"away":3}},{"id":"nhl-NYI-CBJ-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:00:00Z","home":{"abbr":"NYI","name":"New York Islanders"},"away":{"abbr":"CBJ","name":"Columbus Blue Jackets"},"status":"closed","src":"Sportradar","score":{"home":5,"away":1}},{"id":"nhl-WPG-OTT-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:00:00Z","home":{"abbr":"WPG","name":"Winnipeg Jets"},"away":{"abbr":"OTT","name":"Ottawa Senators"},"status":"closed","src":"Sportradar","score":{"home":1,"away":2}},{"id":"ncaaf-KENT-M-OH-2026-11-18","sport":"ncaaf","comp":"College Football","start":"2026-11-18T00:00:00Z","home":{"abbr":"KENT","name":"Kent State Golden Flashes"},"away":{"abbr":"M-OH","name":"Miami (OH) RedHawks"},"status":"closed","src":"Sportradar","score":{"home":3,"away":20}},{"id":"ncaaf-OHIO-BALL-2026-11-18","sport":"ncaaf","comp":"College Football","start":"2026-11-18T00:00:00Z","home":{"abbr":"OHIO","name":"Ohio Bobcats"},"away":{"abbr":"BALL","name":"Ball State Cardinals"},"status":"closed","src":"Sportradar","score":{"home":35,"away":28}},{"id":"nba-TOR-NYK-2026-11-18","sport":"nba","comp":"NBA","start":"2026-11-18T00:30:00Z","home":{"abbr":"TOR","name":"Toronto Raptors"},"away":{"abbr":"NYK","name":"New York Knicks"},"status":"closed","src":"Sportradar","score":{"home":102,"away":111}},{"id":"nhl-CHI-TOR-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:30:00Z","home":{"abbr":"CHI","name":"Chicago Blackhawks"},"away":{"abbr":"TOR","name":"Toronto Maple Leafs"},"status":"closed","src":"Sportradar","score":{"home":6,"away":3}},{"id":"nhl-TB-WSH-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T00:30:00Z","home":{"abbr":"TB","name":"Tampa Bay Lightning"},"away":{"abbr":"WSH","name":"Washington Capitals"},"status":"closed","src":"Sportradar","score":{"home":5,"away":2}},{"id":"nba-SAS-DET-2026-11-18","sport":"nba","comp":"NBA","start":"2026-11-18T01:00:00Z","home":{"abbr":"SAS","name":"San Antonio Spurs"},"away":{"abbr":"DET","name":"Detroit Pistons"},"status":"closed","src":"Sportradar","score":{"home":93,"away":105}},{"id":"nba-MIN-POR-2026-11-18","sport":"nba","comp":"NBA","start":"2026-11-18T01:00:00Z","home":{"abbr":"MIN","name":"Minnesota Timberwolves"},"away":{"abbr":"POR","name":"Portland Trail Blazers"},"status":"closed","src":"Sportradar","score":{"home":106,"away":105}},{"id":"nhl-STL-ANA-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T01:00:00Z","home":{"abbr":"STL","name":"St. Louis Blues"},"away":{"abbr":"ANA","name":"Anaheim Ducks"},"status":"closed","src":"Sportradar","score":{"home":8,"away":6}},{"id":"nhl-MIN-NSH-2026-11-18","sport":"nhl","comp":"NHL","start":"2026-11-18T01:00:00Z","home":{"abbr":"MIN","name":"Minnesota Wild"},"away":{"abbr":"NSH","name":"Nashville Predators"},"status":"closed","src":"Sportradar","score":{"home":7,"away":3}},{"id":"nba-LAL-CHA-2026-11-18","sport":"nba","comp":"NBA","start":"2026-11-18T04:00:00Z","home":{"abbr":"LAL","name":"Los Angeles Lakers"},"away":{"abbr":"CHA","name":"Charlotte Hornets"},"status":"scheduled","src":"Sportradar","prob":{"home":0.716,"away":0.284}},{"id":"nba-ORL-PHI-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:00:00Z","home":{"abbr":"ORL","name":"Orlando Magic"},"away":{"abbr":"PHI","name":"Philadelphia 76ers"},"status":"scheduled","src":"Sportradar","prob":{"home":0.473,"away":0.527}},{"id":"nba-CLE-MEM-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:00:00Z","home":{"abbr":"CLE","name":"Cleveland Cavaliers"},"away":{"abbr":"MEM","name":"Memphis Grizzlies"},"status":"scheduled","src":"Sportradar","prob":{"home":0.645,"away":0.355}},{"id":"nba-IND-HOU-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:00:00Z","home":{"abbr":"IND","name":"Indiana Pacers"},"away":{"abbr":"HOU","name":"Houston Rockets"},"status":"scheduled","src":"Sportradar","prob":{"home":0.304,"away":0.696}},{"id":"nba-MIA-MIL-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:00:00Z","home":{"abbr":"MIA","name":"Miami Heat"},"away":{"abbr":"MIL","name":"Milwaukee Bucks"},"status":"scheduled","src":"Sportradar","prob":{"home":0.86,"away":0.14}},{"id":"ncaaf-MASS-AKR-2026-11-19","sport":"ncaaf","comp":"College Football","start":"2026-11-19T00:00:00Z","home":{"abbr":"MASS","name":"UMass Minutemen"},"away":{"abbr":"AKR","name":"Akron Zips"},"status":"scheduled","src":"Sportradar","prob":{"home":0.597,"away":0.403}},{"id":"nba-TOR-WAS-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:30:00Z","home":{"abbr":"TOR","name":"Toronto Raptors"},"away":{"abbr":"WAS","name":"Washington Wizards"},"status":"scheduled","src":"Sportradar","prob":{"home":0.711,"away":0.289}},{"id":"nba-BKN-CHI-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T00:30:00Z","home":{"abbr":"BKN","name":"Brooklyn Nets"},"away":{"abbr":"CHI","name":"Chicago Bulls"},"status":"scheduled","src":"Sportradar","prob":{"home":0.566,"away":0.434}},{"id":"nhl-DET-BOS-2026-11-19","sport":"nhl","comp":"NHL","start":"2026-11-19T00:30:00Z","home":{"abbr":"DET","name":"Detroit Red Wings"},"away":{"abbr":"BOS","name":"Boston Bruins"},"status":"scheduled","src":"Sportradar","prob":{"home":0.503,"away":0.497}},{"id":"nhl-NJ-MTL-2026-11-19","sport":"nhl","comp":"NHL","start":"2026-11-19T00:30:00Z","home":{"abbr":"NJ","name":"New Jersey Devils"},"away":{"abbr":"MTL","name":"Montreal Canadiens"},"status":"scheduled","src":"Sportradar","prob":{"home":0.596,"away":0.404}},{"id":"ncaaf-BUFF-CMU-2026-11-19","sport":"ncaaf","comp":"College Football","start":"2026-11-19T00:30:00Z","home":{"abbr":"BUFF","name":"Buffalo Bulls"},"away":{"abbr":"CMU","name":"Central Michigan Chippewas"},"status":"scheduled","src":"Sportradar","prob":{"home":0.515,"away":0.485}},{"id":"nba-DAL-GSW-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T01:00:00Z","home":{"abbr":"DAL","name":"Dallas Mavericks"},"away":{"abbr":"GSW","name":"Golden State Warriors"},"status":"scheduled","src":"Sportradar","prob":{"home":0.673,"away":0.327}},{"id":"nba-NOP-DET-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T01:00:00Z","home":{"abbr":"NOP","name":"New Orleans Pelicans"},"away":{"abbr":"DET","name":"Detroit Pistons"},"status":"scheduled","src":"Sportradar"},{"id":"nba-OKC-ATL-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T01:00:00Z","home":{"abbr":"OKC","name":"Oklahoma City Thunder"},"away":{"abbr":"ATL","name":"Atlanta Hawks"},"status":"scheduled","src":"Sportradar","prob":{"home":0.717,"away":0.283}},{"id":"nba-DEN-BOS-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T02:30:00Z","home":{"abbr":"DEN","name":"Denver Nuggets"},"away":{"abbr":"BOS","name":"Boston Celtics"},"status":"scheduled","src":"Sportradar"},{"id":"nba-SAC-PHX-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T03:00:00Z","home":{"abbr":"SAC","name":"Sacramento Kings"},"away":{"abbr":"PHX","name":"Phoenix Suns"},"status":"scheduled","src":"Sportradar"},{"id":"nba-LAL-UTA-2026-11-19","sport":"nba","comp":"NBA","start":"2026-11-19T03:00:00Z","home":{"abbr":"LAL","name":"Los Angeles Lakers"},"away":{"abbr":"UTA","name":"Utah Jazz"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-UTA-COL-2026-11-19","sport":"nhl","comp":"NHL","start":"2026-11-19T03:00:00Z","home":{"abbr":"UTA","name":"Utah Mammoth"},"away":{"abbr":"COL","name":"Colorado Avalanche"},"status":"scheduled","src":"Sportradar","prob":{"home":0.507,"away":0.493}},{"id":"nhl-TOR-LA-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"TOR","name":"Toronto Maple Leafs"},"away":{"abbr":"LA","name":"Los Angeles Kings"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-OTT-PHI-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"OTT","name":"Ottawa Senators"},"away":{"abbr":"PHI","name":"Philadelphia Flyers"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-WPG-NYI-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"WPG","name":"Winnipeg Jets"},"away":{"abbr":"NYI","name":"New York Islanders"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-PIT-STL-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"PIT","name":"Pittsburgh Penguins"},"away":{"abbr":"STL","name":"St. Louis Blues"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-CAR-MTL-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"CAR","name":"Carolina Hurricanes"},"away":{"abbr":"MTL","name":"Montreal Canadiens"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-WSH-BUF-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:00:00Z","home":{"abbr":"WSH","name":"Washington Capitals"},"away":{"abbr":"BUF","name":"Buffalo Sabres"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-SFA-NWST-2026-11-20","sport":"ncaaf","comp":"College Football","start":"2026-11-20T00:00:00Z","home":{"abbr":"SFA","name":"Stephen F. Austin Lumberjacks"},"away":{"abbr":"NWST","name":"Northwestern State Demons"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-NICH-SELA-2026-11-20","sport":"ncaaf","comp":"College Football","start":"2026-11-20T00:00:00Z","home":{"abbr":"NICH","name":"Nicholls State Colonels"},"away":{"abbr":"SELA","name":"Southeastern Louisiana Lions"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-TB-EDM-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T00:30:00Z","home":{"abbr":"TB","name":"Tampa Bay Lightning"},"away":{"abbr":"EDM","name":"Edmonton Oilers"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-TEM-RICE-2026-11-20","sport":"ncaaf","comp":"College Football","start":"2026-11-20T00:30:00Z","home":{"abbr":"TEM","name":"Temple Owls"},"away":{"abbr":"RICE","name":"Rice Owls"},"status":"scheduled","src":"Sportradar","prob":{"home":0.574,"away":0.426}},{"id":"soccer-ORL-CIN-2026-11-20","sport":"soccer","comp":"MLS","start":"2026-11-20T00:30:00Z","home":{"abbr":"ORL","name":"Orlando City SC"},"away":{"abbr":"CIN","name":"FC Cincinnati"},"status":"scheduled","src":"Sportradar","prob":{"home":0.393,"away":0.377,"draw":0.23}},{"id":"nba-MIN-NYK-2026-11-20","sport":"nba","comp":"NBA","start":"2026-11-20T01:00:00Z","home":{"abbr":"MIN","name":"Minnesota Timberwolves"},"away":{"abbr":"NYK","name":"New York Knicks"},"status":"scheduled","src":"Sportradar"},{"id":"nba-SAS-LAC-2026-11-20","sport":"nba","comp":"NBA","start":"2026-11-20T01:00:00Z","home":{"abbr":"SAS","name":"San Antonio Spurs"},"away":{"abbr":"LAC","name":"LA Clippers"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-CHI-CBJ-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T01:00:00Z","home":{"abbr":"CHI","name":"Chicago Blackhawks"},"away":{"abbr":"CBJ","name":"Columbus Blue Jackets"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-CGY-MIN-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T01:00:00Z","home":{"abbr":"CGY","name":"Calgary Flames"},"away":{"abbr":"MIN","name":"Minnesota Wild"},"status":"scheduled","src":"Sportradar"},{"id":"nfl-HOU-IND-2026-11-20","sport":"nfl","comp":"NFL","start":"2026-11-20T01:15:00Z","home":{"abbr":"HOU","name":"Houston Texans"},"away":{"abbr":"IND","name":"Indianapolis Colts"},"status":"scheduled","src":"Sportradar","prob":{"home":0.854,"away":0.146},"tag":"Thursday Night Football"},{"id":"nhl-COL-ANA-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T02:00:00Z","home":{"abbr":"COL","name":"Colorado Avalanche"},"away":{"abbr":"ANA","name":"Anaheim Ducks"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-SEA-VAN-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T02:40:00Z","home":{"abbr":"SEA","name":"Seattle Kraken"},"away":{"abbr":"VAN","name":"Vancouver Canucks"},"status":"scheduled","src":"Sportradar"},{"id":"nhl-VGK-DAL-2026-11-20","sport":"nhl","comp":"NHL","start":"2026-11-20T03:00:00Z","home":{"abbr":"VGK","name":"Vegas Golden Knights"},"away":{"abbr":"DAL","name":"Dallas Stars"},"status":"scheduled","src":"Sportradar"},{"id":"soccer-SEA-RSL-2026-11-20","sport":"soccer","comp":"MLS","start":"2026-11-20T03:00:00Z","home":{"abbr":"SEA","name":"Seattle Sounders"},"away":{"abbr":"RSL","name":"Real Salt Lake"},"status":"scheduled","src":"Sportradar","prob":{"home":0.478,"away":0.272,"draw":0.25}},{"id":"soccer-BMU-KOE-2026-11-20","sport":"soccer","comp":"Bundesliga","start":"2026-11-20T19:30:00Z","home":{"abbr":"BMU","name":"Bayern Munich"},"away":{"abbr":"KOE","name":"1. FC Cologne"},"status":"scheduled","src":"Sportradar","prob":{"home":0.896,"away":0.035,"draw":0.069}},{"id":"soccer-EST-HAC-2026-11-20","sport":"soccer","comp":"Ligue 1","start":"2026-11-20T19:45:00Z","home":{"abbr":"EST","name":"ESTAC Troyes"},"away":{"abbr":"HAC","name":"Le Havre AC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.44,"away":0.287,"draw":0.273}},{"id":"soccer-ATH-ESP-2026-11-20","sport":"soccer","comp":"La Liga","start":"2026-11-20T20:00:00Z","home":{"abbr":"ATH","name":"Athletic Bilbao"},"away":{"abbr":"ESP","name":"Espanyol Barcelona"},"status":"scheduled","src":"Sportradar","prob":{"home":0.666,"away":0.133,"draw":0.201}},{"id":"ncaaf-UCF-ISU-2026-11-20","sport":"ncaaf","comp":"College Football","start":"2026-11-20T23:00:00Z","home":{"abbr":"UCF","name":"UCF Knights"},"away":{"abbr":"ISU","name":"Iowa State Cyclones"},"status":"scheduled","src":"Sportradar","prob":{"home":0.545,"away":0.455}},{"id":"ncaaf-DUKE-CLEM-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T00:30:00Z","home":{"abbr":"DUKE","name":"Duke Blue Devils"},"away":{"abbr":"CLEM","name":"Clemson Tigers"},"status":"scheduled","src":"Sportradar","prob":{"home":0.855,"away":0.145}},{"id":"ncaaf-TOL-BGSU-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T00:30:00Z","home":{"abbr":"TOL","name":"Toledo Rockets"},"away":{"abbr":"BGSU","name":"Bowling Green Falcons"},"status":"scheduled","src":"Sportradar","prob":{"home":0.875,"away":0.125}},{"id":"ncaaf-AFA-UTEP-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T01:00:00Z","home":{"abbr":"AFA","name":"Air Force Falcons"},"away":{"abbr":"UTEP","name":"UTEP Miners"},"status":"scheduled","src":"Sportradar","prob":{"home":0.941,"away":0.059}},{"id":"ncaaf-MSU-ORE-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T01:00:00Z","home":{"abbr":"MSU","name":"Michigan State Spartans"},"away":{"abbr":"ORE","name":"Oregon Ducks"},"status":"scheduled","src":"Sportradar","prob":{"home":0.111,"away":0.889}},{"id":"soccer-PUE-ASL-2026-11-21","sport":"soccer","comp":"Liga MX","start":"2026-11-21T01:00:00Z","home":{"abbr":"PUE","name":"Puebla"},"away":{"abbr":"ASL","name":"Atletico de San Luis"},"status":"scheduled","src":"FirstMove estimate","prob":{"home":0.4,"away":0.32,"draw":0.28}},{"id":"ncaaf-WYO-UNM-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T02:00:00Z","home":{"abbr":"WYO","name":"Wyoming Cowboys"},"away":{"abbr":"UNM","name":"New Mexico Lobos"},"status":"scheduled","src":"Sportradar"},{"id":"soccer-JUA-ATS-2026-11-21","sport":"soccer","comp":"Liga MX","start":"2026-11-21T03:00:00Z","home":{"abbr":"JUA","name":"FC Juarez"},"away":{"abbr":"ATS","name":"Atlas"},"status":"scheduled","src":"FirstMove estimate","prob":{"home":0.44,"away":0.28,"draw":0.28}},{"id":"soccer-TIJ-ATE-2026-11-21","sport":"soccer","comp":"Liga MX","start":"2026-11-21T03:00:00Z","home":{"abbr":"TIJ","name":"Club Tijuana"},"away":{"abbr":"ATE","name":"Atlante"},"status":"scheduled","src":"FirstMove estimate","prob":{"home":0.55,"away":0.2,"draw":0.25}},{"id":"soccer-MCI-FUL-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T12:30:00Z","home":{"abbr":"MCI","name":"Manchester City"},"away":{"abbr":"FUL","name":"Fulham FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.689,"away":0.133,"draw":0.178}},{"id":"soccer-ALA-DEP-2026-11-21","sport":"soccer","comp":"La Liga","start":"2026-11-21T13:00:00Z","home":{"abbr":"ALA","name":"Deportivo Alaves"},"away":{"abbr":"DEP","name":"RC Deportivo de A Coruna"},"status":"scheduled","src":"Sportradar","prob":{"home":0.43,"away":0.28,"draw":0.29}},{"id":"soccer-COM-CAG-2026-11-21","sport":"soccer","comp":"Serie A","start":"2026-11-21T14:00:00Z","home":{"abbr":"COM","name":"Como 1907"},"away":{"abbr":"CAG","name":"Cagliari Calcio"},"status":"scheduled","src":"Sportradar","prob":{"home":0.749,"away":0.098,"draw":0.153}},{"id":"soccer-LAZ-LEC-2026-11-21","sport":"soccer","comp":"Serie A","start":"2026-11-21T14:00:00Z","home":{"abbr":"LAZ","name":"Lazio Rome"},"away":{"abbr":"LEC","name":"US Lecce"},"status":"scheduled","src":"Sportradar","prob":{"home":0.692,"away":0.127,"draw":0.181}},{"id":"soccer-LEV-PAD-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T14:30:00Z","home":{"abbr":"LEV","name":"Bayer Leverkusen"},"away":{"abbr":"PAD","name":"SC Paderborn 07"},"status":"scheduled","src":"Sportradar","prob":{"home":0.758,"away":0.102,"draw":0.14}},{"id":"soccer-SGE-TSG-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T14:30:00Z","home":{"abbr":"SGE","name":"Eintracht Frankfurt"},"away":{"abbr":"TSG","name":"TSG Hoffenheim"},"status":"scheduled","src":"Sportradar","prob":{"home":0.404,"away":0.357,"draw":0.239}},{"id":"soccer-UNI-RBL-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T14:30:00Z","home":{"abbr":"UNI","name":"Union Berlin"},"away":{"abbr":"RBL","name":"RB Leipzig"},"status":"scheduled","src":"Sportradar","prob":{"home":0.179,"away":0.616,"draw":0.205}},{"id":"soccer-BMG-BVB-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T14:30:00Z","home":{"abbr":"BMG","name":"Borussia Monchengladbach"},"away":{"abbr":"BVB","name":"Borussia Dortmund"},"status":"scheduled","src":"Sportradar","prob":{"home":0.193,"away":0.595,"draw":0.212}},{"id":"soccer-SVE-SCF-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T14:30:00Z","home":{"abbr":"SVE","name":"SV 07 Elversberg"},"away":{"abbr":"SCF","name":"SC Freiburg"},"status":"scheduled","src":"Sportradar","prob":{"home":0.274,"away":0.475,"draw":0.251}},{"id":"soccer-AVL-SUN-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T15:00:00Z","home":{"abbr":"AVL","name":"Aston Villa"},"away":{"abbr":"SUN","name":"Sunderland AFC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.528,"away":0.221,"draw":0.251}},{"id":"soccer-BOU-NFO-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T15:00:00Z","home":{"abbr":"BOU","name":"AFC Bournemouth"},"away":{"abbr":"NFO","name":"Nottingham Forest"},"status":"scheduled","src":"Sportradar","prob":{"home":0.488,"away":0.25,"draw":0.262}},{"id":"soccer-CFC-LEE-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T15:00:00Z","home":{"abbr":"CFC","name":"Chelsea FC"},"away":{"abbr":"LEE","name":"Leeds United"},"status":"scheduled","src":"Sportradar","prob":{"home":0.512,"away":0.236,"draw":0.252}},{"id":"soccer-COV-CRY-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T15:00:00Z","home":{"abbr":"COV","name":"Coventry City"},"away":{"abbr":"CRY","name":"Crystal Palace"},"status":"scheduled","src":"Sportradar","prob":{"home":0.397,"away":0.339,"draw":0.264}},{"id":"soccer-TOT-IPS-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T15:00:00Z","home":{"abbr":"TOT","name":"Tottenham Hotspur"},"away":{"abbr":"IPS","name":"Ipswich Town"},"status":"scheduled","src":"Sportradar","prob":{"home":0.631,"away":0.165,"draw":0.204}},{"id":"soccer-RVC-VCF-2026-11-21","sport":"soccer","comp":"La Liga","start":"2026-11-21T15:15:00Z","home":{"abbr":"RVC","name":"Rayo Vallecano"},"away":{"abbr":"VCF","name":"Valencia CF"},"status":"scheduled","src":"Sportradar","prob":{"home":0.496,"away":0.233,"draw":0.271}},{"id":"soccer-NIC-PSG-2026-11-21","sport":"soccer","comp":"Ligue 1","start":"2026-11-21T16:15:00Z","home":{"abbr":"NIC","name":"OGC Nice"},"away":{"abbr":"PSG","name":"Paris Saint-Germain"},"status":"scheduled","src":"Sportradar","prob":{"home":0.156,"away":0.664,"draw":0.18}},{"id":"ncaaf-VMI-FUR-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T17:00:00Z","home":{"abbr":"VMI","name":"VMI Keydets"},"away":{"abbr":"FUR","name":"Furman Paladins"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-HC-FOR-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T17:00:00Z","home":{"abbr":"HC","name":"Holy Cross Crusaders"},"away":{"abbr":"FOR","name":"Fordham Rams"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-PRIN-PENN-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T17:00:00Z","home":{"abbr":"PRIN","name":"Princeton Tigers"},"away":{"abbr":"PENN","name":"Penn Quakers"},"status":"scheduled","src":"Sportradar"},{"id":"ncaaf-CLMB-COR-2026-11-21","sport":"ncaaf","comp":"College Football","start":"2026-11-21T17:00:00Z","home":{"abbr":"CLMB","name":"Columbia Lions"},"away":{"abbr":"COR","name":"Cornell Big Red"},"status":"scheduled","src":"Sportradar"},{"id":"soccer-PAR-ROM-2026-11-21","sport":"soccer","comp":"Serie A","start":"2026-11-21T17:00:00Z","home":{"abbr":"PAR","name":"Parma Calcio"},"away":{"abbr":"ROM","name":"AS Roma"},"status":"scheduled","src":"Sportradar","prob":{"home":0.095,"away":0.752,"draw":0.153}},{"id":"soccer-NEW-ARS-2026-11-21","sport":"soccer","comp":"Premier League","start":"2026-11-21T17:30:00Z","home":{"abbr":"NEW","name":"Newcastle United"},"away":{"abbr":"ARS","name":"Arsenal FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.168,"away":0.612,"draw":0.22}},{"id":"soccer-SEV-RBB-2026-11-21","sport":"soccer","comp":"La Liga","start":"2026-11-21T17:30:00Z","home":{"abbr":"SEV","name":"Sevilla FC"},"away":{"abbr":"RBB","name":"Real Betis Seville"},"status":"scheduled","src":"Sportradar","prob":{"home":0.318,"away":0.413,"draw":0.269}},{"id":"soccer-SCH-VFB-2026-11-21","sport":"soccer","comp":"Bundesliga","start":"2026-11-21T17:30:00Z","home":{"abbr":"SCH","name":"Schalke 04"},"away":{"abbr":"VFB","name":"VfB Stuttgart"},"status":"scheduled","src":"Sportradar","prob":{"home":0.243,"away":0.526,"draw":0.231}},{"id":"soccer-NE-PHI-2026-11-21","sport":"soccer","comp":"MLS","start":"2026-11-21T19:00:00Z","home":{"abbr":"NE","name":"New England Revolution"},"away":{"abbr":"PHI","name":"Philadelphia Union"},"status":"scheduled","src":"Sportradar","prob":{"home":0.31,"away":0.43,"draw":0.26}},{"id":"soccer-NAP-TOR-2026-11-21","sport":"soccer","comp":"Serie A","start":"2026-11-21T19:45:00Z","home":{"abbr":"NAP","name":"SSC Napoli"},"away":{"abbr":"TOR","name":"Torino FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.648,"away":0.15,"draw":0.202}},{"id":"soccer-RCL-TFC-2026-11-21","sport":"soccer","comp":"Ligue 1","start":"2026-11-21T19:45:00Z","home":{"abbr":"RCL","name":"Racing Club De Lens"},"away":{"abbr":"TFC","name":"Toulouse FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.528,"away":0.234,"draw":0.238}},{"id":"soccer-LIL-OL-2026-11-21","sport":"soccer","comp":"Ligue 1","start":"2026-11-21T19:45:00Z","home":{"abbr":"LIL","name":"Lille OSC"},"away":{"abbr":"OL","name":"Olympique Lyon"},"status":"scheduled","src":"Sportradar","prob":{"home":0.41,"away":0.304,"draw":0.286}},{"id":"soccer-ASM-AUX-2026-11-21","sport":"soccer","comp":"Ligue 1","start":"2026-11-21T19:45:00Z","home":{"abbr":"ASM","name":"AS Monaco"},"away":{"abbr":"AUX","name":"AJ Auxerre"},"status":"scheduled","src":"Sportradar","prob":{"home":0.679,"away":0.138,"draw":0.183}},{"id":"soccer-RCS-STB-2026-11-21","sport":"soccer","comp":"Ligue 1","start":"2026-11-21T19:45:00Z","home":{"abbr":"RCS","name":"Strasbourg Alsace"},"away":{"abbr":"STB","name":"Stade Brest 29"},"status":"scheduled","src":"Sportradar","prob":{"home":0.427,"away":0.314,"draw":0.259}},{"id":"soccer-RMA-RCC-2026-11-21","sport":"soccer","comp":"La Liga","start":"2026-11-21T20:00:00Z","home":{"abbr":"RMA","name":"Real Madrid"},"away":{"abbr":"RCC","name":"RC Celta de Vigo"},"status":"scheduled","src":"Sportradar","prob":{"home":0.817,"away":0.066,"draw":0.117}},{"id":"soccer-DAL-POR-2026-11-21","sport":"soccer","comp":"MLS","start":"2026-11-21T21:00:00Z","home":{"abbr":"DAL","name":"FC Dallas"},"away":{"abbr":"POR","name":"Portland Timbers"},"status":"scheduled","src":"Sportradar","prob":{"home":0.491,"away":0.271,"draw":0.238}},{"id":"soccer-MIA-CLB-2026-11-21","sport":"soccer","comp":"MLS","start":"2026-11-21T23:00:00Z","home":{"abbr":"MIA","name":"Inter Miami CF"},"away":{"abbr":"CLB","name":"Columbus Crew"},"status":"scheduled","src":"Sportradar","prob":{"home":0.609,"away":0.193,"draw":0.198}},{"id":"soccer-JUV-VEN-2026-11-22","sport":"soccer","comp":"Serie A","start":"2026-11-22T11:30:00Z","home":{"abbr":"JUV","name":"Juventus Turin"},"away":{"abbr":"VEN","name":"Venezia FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.71,"away":0.115,"draw":0.175}},{"id":"soccer-BAR-VIL-2026-11-22","sport":"soccer","comp":"La Liga","start":"2026-11-22T13:00:00Z","home":{"abbr":"BAR","name":"FC Barcelona"},"away":{"abbr":"VIL","name":"Villarreal CF"},"status":"scheduled","src":"Sportradar","prob":{"home":0.813,"away":0.079,"draw":0.108}},{"id":"soccer-HUL-BRI-2026-11-22","sport":"soccer","comp":"Premier League","start":"2026-11-22T14:00:00Z","home":{"abbr":"HUL","name":"Hull City"},"away":{"abbr":"BRI","name":"Brighton & Hove Albion"},"status":"scheduled","src":"Sportradar","prob":{"home":0.151,"away":0.647,"draw":0.202}},{"id":"soccer-BFC-UDI-2026-11-22","sport":"soccer","comp":"Serie A","start":"2026-11-22T14:00:00Z","home":{"abbr":"BFC","name":"Bologna FC"},"away":{"abbr":"UDI","name":"Udinese Calcio"},"status":"scheduled","src":"Sportradar","prob":{"home":0.556,"away":0.195,"draw":0.249}},{"id":"soccer-SAS-GEN-2026-11-22","sport":"soccer","comp":"Serie A","start":"2026-11-22T14:00:00Z","home":{"abbr":"SAS","name":"Sassuolo Calcio"},"away":{"abbr":"GEN","name":"Genoa CFC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.339,"away":0.379,"draw":0.282}},{"id":"soccer-PAR-ANG-2026-11-22","sport":"soccer","comp":"Ligue 1","start":"2026-11-22T14:00:00Z","home":{"abbr":"PAR","name":"Paris FC"},"away":{"abbr":"ANG","name":"Angers SCO"},"status":"scheduled","src":"Sportradar","prob":{"home":0.726,"away":0.106,"draw":0.168}},{"id":"soccer-FCA-M05-2026-11-22","sport":"soccer","comp":"Bundesliga","start":"2026-11-22T14:30:00Z","home":{"abbr":"FCA","name":"FC Augsburg"},"away":{"abbr":"M05","name":"FSV Mainz"},"status":"scheduled","src":"Sportradar","prob":{"home":0.355,"away":0.401,"draw":0.244}},{"id":"soccer-RAC-RSO-2026-11-22","sport":"soccer","comp":"La Liga","start":"2026-11-22T15:15:00Z","home":{"abbr":"RAC","name":"Racing Santander"},"away":{"abbr":"RSO","name":"Real Sociedad San Sebastian"},"status":"scheduled","src":"Sportradar","prob":{"home":0.304,"away":0.456,"draw":0.24}},{"id":"soccer-FCL-REN-2026-11-22","sport":"soccer","comp":"Ligue 1","start":"2026-11-22T16:15:00Z","home":{"abbr":"FCL","name":"FC Lorient"},"away":{"abbr":"REN","name":"Stade Rennais FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.332,"away":0.393,"draw":0.275}},{"id":"soccer-LFC-MUN-2026-11-22","sport":"soccer","comp":"Premier League","start":"2026-11-22T16:30:00Z","home":{"abbr":"LFC","name":"Liverpool FC"},"away":{"abbr":"MUN","name":"Manchester United"},"status":"scheduled","src":"Sportradar","prob":{"home":0.546,"away":0.229,"draw":0.225}},{"id":"soccer-SVW-HSV-2026-11-22","sport":"soccer","comp":"Bundesliga","start":"2026-11-22T16:30:00Z","home":{"abbr":"SVW","name":"Werder Bremen"},"away":{"abbr":"HSV","name":"Hamburger SV"},"status":"scheduled","src":"Sportradar","prob":{"home":0.573,"away":0.206,"draw":0.221}},{"id":"soccer-ACM-FRO-2026-11-22","sport":"soccer","comp":"Serie A","start":"2026-11-22T17:00:00Z","home":{"abbr":"ACM","name":"AC Milan"},"away":{"abbr":"FRO","name":"Frosinone Calcio"},"status":"scheduled","src":"Sportradar","prob":{"home":0.635,"away":0.176,"draw":0.189}},{"id":"soccer-OSA-MCF-2026-11-22","sport":"soccer","comp":"La Liga","start":"2026-11-22T17:30:00Z","home":{"abbr":"OSA","name":"CA Osasuna"},"away":{"abbr":"MCF","name":"Malaga CF"},"status":"scheduled","src":"Sportradar","prob":{"home":0.541,"away":0.205,"draw":0.254}},{"id":"nfl-KC-ARI-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"KC","name":"Kansas City Chiefs"},"away":{"abbr":"ARI","name":"Arizona Cardinals"},"status":"scheduled","src":"Sportradar","prob":{"home":0.926,"away":0.074}},{"id":"nfl-CHI-NO-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"CHI","name":"Chicago Bears"},"away":{"abbr":"NO","name":"New Orleans Saints"},"status":"scheduled","src":"Sportradar","prob":{"home":0.859,"away":0.141}},{"id":"nfl-DET-TB-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"DET","name":"Detroit Lions"},"away":{"abbr":"TB","name":"Tampa Bay Buccaneers"},"status":"scheduled","src":"Sportradar","prob":{"home":0.756,"away":0.244}},{"id":"nfl-DAL-TEN-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"DAL","name":"Dallas Cowboys"},"away":{"abbr":"TEN","name":"Tennessee Titans"},"status":"scheduled","src":"Sportradar","prob":{"home":0.772,"away":0.228}},{"id":"nfl-CAR-BAL-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"CAR","name":"Carolina Panthers"},"away":{"abbr":"BAL","name":"Baltimore Ravens"},"status":"scheduled","src":"Sportradar","prob":{"home":0.563,"away":0.437}},{"id":"nfl-BUF-MIA-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"BUF","name":"Buffalo Bills"},"away":{"abbr":"MIA","name":"Miami Dolphins"},"status":"scheduled","src":"Sportradar","prob":{"home":0.93,"away":0.07}},{"id":"nfl-PHI-PIT-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T18:00:00Z","home":{"abbr":"PHI","name":"Philadelphia Eagles"},"away":{"abbr":"PIT","name":"Pittsburgh Steelers"},"status":"scheduled","src":"Sportradar","prob":{"home":0.336,"away":0.664}},{"id":"soccer-ATA-INT-2026-11-22","sport":"soccer","comp":"Serie A","start":"2026-11-22T19:45:00Z","home":{"abbr":"ATA","name":"Atalanta BC"},"away":{"abbr":"INT","name":"Inter Milano"},"status":"scheduled","src":"Sportradar","prob":{"home":0.199,"away":0.59,"draw":0.211}},{"id":"soccer-OLM-MAN-2026-11-22","sport":"soccer","comp":"Ligue 1","start":"2026-11-22T19:45:00Z","home":{"abbr":"OLM","name":"Olympique Marseille"},"away":{"abbr":"MAN","name":"Le Mans FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.66,"away":0.151,"draw":0.189}},{"id":"soccer-GET-ATM-2026-11-22","sport":"soccer","comp":"La Liga","start":"2026-11-22T20:00:00Z","home":{"abbr":"GET","name":"Getafe CF"},"away":{"abbr":"ATM","name":"Atletico Madrid"},"status":"scheduled","src":"Sportradar","prob":{"home":0.165,"away":0.594,"draw":0.241}},{"id":"nfl-LAC-NYJ-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T21:05:00Z","home":{"abbr":"LAC","name":"Los Angeles Chargers"},"away":{"abbr":"NYJ","name":"New York Jets"},"status":"scheduled","src":"Sportradar","prob":{"home":0.622,"away":0.378}},{"id":"nfl-DEN-LV-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T21:25:00Z","home":{"abbr":"DEN","name":"Denver Broncos"},"away":{"abbr":"LV","name":"Las Vegas Raiders"},"status":"scheduled","src":"Sportradar","prob":{"home":0.838,"away":0.162}},{"id":"nfl-NYG-JAC-2026-11-22","sport":"nfl","comp":"NFL","start":"2026-11-22T21:25:00Z","home":{"abbr":"NYG","name":"New York Giants"},"away":{"abbr":"JAC","name":"Jacksonville Jaguars"},"status":"scheduled","src":"Sportradar"},{"id":"soccer-CHI-CLT-2026-11-22","sport":"soccer","comp":"MLS","start":"2026-11-22T23:30:00Z","home":{"abbr":"CHI","name":"Chicago Fire"},"away":{"abbr":"CLT","name":"Charlotte FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.58,"away":0.214,"draw":0.206}},{"id":"nfl-SF-MIN-2026-11-23","sport":"nfl","comp":"NFL","start":"2026-11-23T01:20:00Z","home":{"abbr":"SF","name":"San Francisco 49ers"},"away":{"abbr":"MIN","name":"Minnesota Vikings"},"status":"scheduled","src":"Sportradar","tag":"Sunday Night Football"},{"id":"soccer-MON-FIO-2026-11-23","sport":"soccer","comp":"Serie A","start":"2026-11-23T19:45:00Z","home":{"abbr":"MON","name":"AC Monza"},"away":{"abbr":"FIO","name":"ACF Fiorentina"},"status":"scheduled","src":"Sportradar","prob":{"home":0.262,"away":0.489,"draw":0.249}},{"id":"soccer-BRE-EVE-2026-11-23","sport":"soccer","comp":"Premier League","start":"2026-11-23T20:00:00Z","home":{"abbr":"BRE","name":"Brentford FC"},"away":{"abbr":"EVE","name":"Everton FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.453,"away":0.283,"draw":0.264}},{"id":"soccer-LEV-ELC-2026-11-23","sport":"soccer","comp":"La Liga","start":"2026-11-23T20:00:00Z","home":{"abbr":"LEV","name":"Levante UD"},"away":{"abbr":"ELC","name":"Elche CF"},"status":"scheduled","src":"Sportradar","prob":{"home":0.436,"away":0.298,"draw":0.266}},{"id":"soccer-STL-LAFC-2026-11-24","sport":"soccer","comp":"MLS","start":"2026-11-24T01:00:00Z","home":{"abbr":"STL","name":"Saint Louis City SC"},"away":{"abbr":"LAFC","name":"Los Angeles FC"},"status":"scheduled","src":"Sportradar","prob":{"home":0.386,"away":0.354,"draw":0.26}},{"id":"nfl-WAS-CIN-2026-11-24","sport":"nfl","comp":"NFL","start":"2026-11-24T01:15:00Z","home":{"abbr":"WAS","name":"Washington Commanders"},"away":{"abbr":"CIN","name":"Cincinnati Bengals"},"status":"scheduled","src":"Sportradar","tag":"Monday Night Football"},{"id":"soccer-BOG-ASK-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T17:45:00Z","home":{"abbr":"BOG","name":"Bodoe/Glimt"},"away":{"abbr":"ASK","name":"LASK Linz"},"status":"scheduled","src":"Sportradar","prob":{"home":0.63,"away":0.184,"draw":0.186}},{"id":"soccer-GAL-AVL-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T17:45:00Z","home":{"abbr":"GAL","name":"Galatasaray Istanbul"},"away":{"abbr":"AVL","name":"Aston Villa"},"status":"scheduled","src":"Sportradar","prob":{"home":0.364,"away":0.394,"draw":0.242}},{"id":"soccer-ARS-BVB-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"ARS","name":"Arsenal FC"},"away":{"abbr":"BVB","name":"Borussia Dortmund"},"status":"scheduled","src":"Sportradar","prob":{"home":0.69,"away":0.125,"draw":0.185}},{"id":"soccer-COM-AEK-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"COM","name":"Como 1907"},"away":{"abbr":"AEK","name":"AEK Athens"},"status":"scheduled","src":"Sportradar","prob":{"home":0.727,"away":0.114,"draw":0.159}},{"id":"soccer-FEY-FCP-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"FEY","name":"Feyenoord Rotterdam"},"away":{"abbr":"FCP","name":"FC Porto"},"status":"scheduled","src":"Sportradar","prob":{"home":0.344,"away":0.4,"draw":0.256}},{"id":"soccer-MCI-NAP-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"MCI","name":"Manchester City"},"away":{"abbr":"NAP","name":"SSC Napoli"},"status":"scheduled","src":"Sportradar","prob":{"home":0.776,"away":0.09,"draw":0.134}},{"id":"soccer-RBL-RCL-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"RBL","name":"RB Leipzig"},"away":{"abbr":"RCL","name":"Racing Club De Lens"},"status":"scheduled","src":"Sportradar","prob":{"home":0.672,"away":0.152,"draw":0.176}},{"id":"soccer-RMA-PSV-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"RMA","name":"Real Madrid"},"away":{"abbr":"PSV","name":"PSV Eindhoven"},"status":"scheduled","src":"Sportradar","prob":{"home":0.815,"away":0.078,"draw":0.107}},{"id":"soccer-SLO-RBB-2026-11-24","sport":"soccer","comp":"Champions League","start":"2026-11-24T20:00:00Z","home":{"abbr":"SLO","name":"SK Slovan Bratislava"},"away":{"abbr":"RBB","name":"Real Betis Seville"},"status":"scheduled","src":"Sportradar","prob":{"home":0.088,"away":0.777,"draw":0.135}},{"id":"soccer-SJ-HOU-2026-11-25","sport":"soccer","comp":"MLS","start":"2026-11-25T03:00:00Z","home":{"abbr":"SJ","name":"San Jose Earthquakes"},"away":{"abbr":"HOU","name":"Houston Dynamo"},"status":"scheduled","src":"Sportradar","prob":{"home":0.437,"away":0.297,"draw":0.266}},{"id":"soccer-SBH-BAR-2026-11-25","sport":"soccer","comp":"Champions League","start":"2026-11-25T17:45:00Z","home":{"abbr":"SBH","name":"Sabah Masazir"},"away":{"abbr":"BAR","name":"FC Barcelona"},"status":"scheduled","src":"Sportradar","prob":{"home":0.042,"away":0.892,"draw":0.066}},{"id":"nfl-LA-GB-2026-11-26","sport":"nfl","comp":"NFL","start":"2026-11-26T01:00:00Z","home":{"abbr":"LA","name":"Los Angeles Rams"},"away":{"abbr":"GB","name":"Green Bay Packers"},"status":"scheduled","src":"Sportradar"}],"players":[{"id":"cunningham-pts","gid":"nba-SAS-DET-2026-11-18","name":"Cade Cunningham","team":"DET","stat":"pts","avg":23.9,"status":"active","note":"","boost":0},{"id":"cunningham-ast","gid":"nba-SAS-DET-2026-11-18","name":"Cade Cunningham","team":"DET","stat":"ast","avg":9.9,"status":"active","note":"","boost":0},{"id":"cunningham-reb","gid":"nba-SAS-DET-2026-11-18","name":"Cade Cunningham","team":"DET","stat":"reb","avg":5.6,"status":"active","note":"","boost":0},{"id":"wembanyama-pts","gid":"nba-SAS-DET-2026-11-18","name":"Victor Wembanyama","team":"SAS","stat":"pts","avg":25.0,"status":"active","note":"","boost":0},{"id":"wembanyama-reb","gid":"nba-SAS-DET-2026-11-18","name":"Victor Wembanyama","team":"SAS","stat":"reb","avg":11.5,"status":"active","note":"","boost":0},{"id":"brunson-pts","gid":"nba-TOR-NYK-2026-11-18","name":"Jalen Brunson","team":"NYK","stat":"pts","avg":27.0,"status":"active","note":"","boost":0},{"id":"brunson-ast","gid":"nba-TOR-NYK-2026-11-18","name":"Jalen Brunson","team":"NYK","stat":"ast","avg":6.5,"status":"active","note":"","boost":0},{"id":"towns-pts","gid":"nba-TOR-NYK-2026-11-18","name":"Karl-Anthony Towns","team":"NYK","stat":"pts","avg":21.0,"status":"active","note":"","boost":0},{"id":"towns-reb","gid":"nba-TOR-NYK-2026-11-18","name":"Karl-Anthony Towns","team":"NYK","stat":"reb","avg":11.5,"status":"active","note":"","boost":0},{"id":"ingram-pts","gid":"nba-TOR-NYK-2026-11-18","name":"Brandon Ingram","team":"TOR","stat":"pts","avg":21.0,"status":"active","note":"","boost":0},{"id":"barnes-pts","gid":"nba-TOR-NYK-2026-11-18","name":"Scottie Barnes","team":"TOR","stat":"pts","avg":19.5,"status":"questionable","note":"Day-to-day","boost":0},{"id":"edwards-pts","gid":"nba-MIN-POR-2026-11-18","name":"Anthony Edwards","team":"MIN","stat":"pts","avg":27.5,"status":"active","note":"","boost":0},{"id":"randle-pts","gid":"nba-MIN-POR-2026-11-18","name":"Julius Randle","team":"MIN","stat":"pts","avg":20.0,"status":"active","note":"","boost":0},{"id":"gobert-reb","gid":"nba-MIN-POR-2026-11-18","name":"Rudy Gobert","team":"MIN","stat":"reb","avg":11.0,"status":"active","note":"","boost":0},{"id":"avdija-pts","gid":"nba-MIN-POR-2026-11-18","name":"Deni Avdija","team":"POR","stat":"pts","avg":21.0,"status":"active","note":"","boost":0},{"id":"dončić-pts","gid":"nba-LAL-CHA-2026-11-18","name":"Luka Dončić","team":"LAL","stat":"pts","avg":31.0,"status":"questionable","note":"Day-to-day","boost":0},{"id":"dončić-ast","gid":"nba-LAL-CHA-2026-11-18","name":"Luka Dončić","team":"LAL","stat":"ast","avg":8.5,"status":"questionable","note":"Day-to-day","boost":0},{"id":"reaves-pts","gid":"nba-LAL-CHA-2026-11-18","name":"Austin Reaves","team":"LAL","stat":"pts","avg":22.0,"status":"active","note":"","boost":0},{"id":"ball-pts","gid":"nba-LAL-CHA-2026-11-18","name":"LaMelo Ball","team":"CHA","stat":"pts","avg":21.0,"status":"active","note":"","boost":0},{"id":"ball-ast","gid":"nba-LAL-CHA-2026-11-18","name":"LaMelo Ball","team":"CHA","stat":"ast","avg":7.5,"status":"active","note":"","boost":0},{"id":"mcdavid-hpts","gid":"nhl-FLA-EDM-2026-11-18","name":"Connor McDavid","team":"EDM","stat":"hpts","avg":1.55,"status":"active","note":"","boost":0},{"id":"mcdavid-sog","gid":"nhl-FLA-EDM-2026-11-18","name":"Connor McDavid","team":"EDM","stat":"sog","avg":3.6,"status":"active","note":"","boost":0},{"id":"draisaitl-hpts","gid":"nhl-FLA-EDM-2026-11-18","name":"Leon Draisaitl","team":"EDM","stat":"hpts","avg":1.3,"status":"active","note":"","boost":0},{"id":"reinhart-sog","gid":"nhl-FLA-EDM-2026-11-18","name":"Sam Reinhart","team":"FLA","stat":"sog","avg":3.0,"status":"active","note":"","boost":0},{"id":"kucherov-hpts","gid":"nhl-TB-WSH-2026-11-18","name":"Nikita Kucherov","team":"TB","stat":"hpts","avg":1.45,"status":"active","note":"","boost":0},{"id":"kaprizov-hpts","gid":"nhl-MIN-NSH-2026-11-18","name":"Kirill Kaprizov","team":"MIN","stat":"hpts","avg":1.2,"status":"active","note":"","boost":0},{"id":"kaprizov-sog","gid":"nhl-MIN-NSH-2026-11-18","name":"Kirill Kaprizov","team":"MIN","stat":"sog","avg":3.8,"status":"active","note":"","boost":0},{"id":"eichel-hpts","gid":"nhl-VGK-DAL-2026-11-18","name":"Jack Eichel","team":"VGK","stat":"hpts","avg":1.2,"status":"active","note":"","boost":0},{"id":"rantanen-sog","gid":"nhl-VGK-DAL-2026-11-18","name":"Mikko Rantanen","team":"DAL","stat":"sog","avg":3.1,"status":"active","note":"","boost":0},{"id":"matthews-sog","gid":"nhl-CHI-TOR-2026-11-18","name":"Auston Matthews","team":"TOR","stat":"sog","avg":4.0,"status":"active","note":"","boost":0},{"id":"bedard-sog","gid":"nhl-CHI-TOR-2026-11-18","name":"Connor Bedard","team":"CHI","stat":"sog","avg":3.0,"status":"active","note":"","boost":0},{"id":"pastrňák-sog","gid":"nhl-BOS-LA-2026-11-18","name":"David Pastrňák","team":"BOS","stat":"sog","avg":3.9,"status":"active","note":"","boost":0},{"id":"thompson-sog","gid":"nhl-PHI-BUF-2026-11-18","name":"Tage Thompson","team":"BUF","stat":"sog","avg":3.5,"status":"active","note":"","boost":0},{"id":"haaland-sot","gid":"soccer-DEN-NOR-2026-11-17","name":"Erling Haaland","team":"NOR","stat":"sot","avg":1.6,"status":"active","note":"","boost":0},{"id":"lewandowski-sot","gid":"soccer-POL-SWE-2026-11-17","name":"Robert Lewandowski","team":"POL","stat":"sot","avg":1.3,"status":"active","note":"","boost":0},{"id":"isak-sot","gid":"soccer-POL-SWE-2026-11-17","name":"Alexander Isak","team":"SWE","stat":"sot","avg":1.2,"status":"active","note":"","boost":0},{"id":"fox-pts","gid":"nba-SAS-DET-2026-11-18","name":"De'Aaron Fox","team":"SAS","stat":"pts","avg":19.0,"status":"active","note":"","boost":0},{"id":"fox-ast","gid":"nba-SAS-DET-2026-11-18","name":"De'Aaron Fox","team":"SAS","stat":"ast","avg":6.0,"status":"active","note":"","boost":0},{"id":"castle-pts","gid":"nba-SAS-DET-2026-11-18","name":"Stephon Castle","team":"SAS","stat":"pts","avg":15.0,"status":"active","note":"","boost":0},{"id":"duren-reb","gid":"nba-SAS-DET-2026-11-18","name":"Jalen Duren","team":"DET","stat":"reb","avg":10.5,"status":"active","note":"","boost":0},{"id":"thompson-reb","gid":"nba-SAS-DET-2026-11-18","name":"Ausar Thompson","team":"DET","stat":"reb","avg":6.5,"status":"active","note":"","boost":0},{"id":"bridges-pts","gid":"nba-TOR-NYK-2026-11-18","name":"Mikal Bridges","team":"NYK","stat":"pts","avg":16.5,"status":"active","note":"","boost":0},{"id":"barrett-pts","gid":"nba-TOR-NYK-2026-11-18","name":"RJ Barrett","team":"TOR","stat":"pts","avg":19.0,"status":"active","note":"","boost":0},{"id":"poeltl-reb","gid":"nba-TOR-NYK-2026-11-18","name":"Jakob Poeltl","team":"TOR","stat":"reb","avg":9.5,"status":"active","note":"","boost":0},{"id":"hart-reb","gid":"nba-TOR-NYK-2026-11-18","name":"Josh Hart","team":"NYK","stat":"reb","avg":8.0,"status":"questionable","note":"Day-to-day","boost":0},{"id":"mcdaniels-pts","gid":"nba-MIN-POR-2026-11-18","name":"Jaden McDaniels","team":"MIN","stat":"pts","avg":14.0,"status":"active","note":"","boost":0},{"id":"reid-pts","gid":"nba-MIN-POR-2026-11-18","name":"Naz Reid","team":"MIN","stat":"pts","avg":13.5,"status":"active","note":"","boost":0},{"id":"sharpe-pts","gid":"nba-MIN-POR-2026-11-18","name":"Shaedon Sharpe","team":"POR","stat":"pts","avg":19.0,"status":"active","note":"","boost":0},{"id":"grant-pts","gid":"nba-MIN-POR-2026-11-18","name":"Jerami Grant","team":"POR","stat":"pts","avg":15.0,"status":"active","note":"","boost":0},{"id":"randle-ast","gid":"nba-MIN-POR-2026-11-18","name":"Julius Randle","team":"MIN","stat":"ast","avg":4.8,"status":"active","note":"","boost":0},{"id":"bridges-pts","gid":"nba-LAL-CHA-2026-11-18","name":"Miles Bridges","team":"CHA","stat":"pts","avg":18.0,"status":"active","note":"","boost":0},{"id":"bridges-reb","gid":"nba-LAL-CHA-2026-11-18","name":"Miles Bridges","team":"CHA","stat":"reb","avg":7.0,"status":"active","note":"","boost":0},{"id":"ayton-reb","gid":"nba-LAL-CHA-2026-11-18","name":"Deandre Ayton","team":"LAL","stat":"reb","avg":9.0,"status":"active","note":"","boost":0},{"id":"zubac-reb","gid":"nba-LAC-UTA-2026-11-18","name":"Ivica Zubac","team":"LAC","stat":"reb","avg":11.0,"status":"active","note":"","boost":0}],"lineups":{"checked":null,"basis":"Normal / recent lineups and recent-season averages. Rechecked daily at ~6 AM PT and before each game."}}</script>
 <script>
@@ -217,7 +257,7 @@ const pct=(p,d=0)=>(p*100).toFixed(d)+'%';
 const cents=p=>Math.max(1,Math.min(99,Math.round(p*100)))+'¢';
 // ---------------- odds maths (all prices shown in the app go through fmtOdds / fmtPrice) ----------------
 const PMIN=1e-4;
-const p2am=p=>{p=clamp(p,PMIN,1-PMIN);const a=p>=.5?-100*p/(1-p):100*(1-p)/p;return Math.round(a);};
+const p2am=p=>{p=clamp(p,PMIN,1-PMIN);const a=Math.round(p>=.5?-100*p/(1-p):100*(1-p)/p);return a===-100?100:a;}; // even money prints +100 everywhere
 const fmtAm=a=>(a>0?'+':'')+a;
 const am2dec=a=>a>0?1+a/100:1+100/(-a);
 const p2dec=p=>1/clamp(p,PMIN,1);
@@ -225,7 +265,12 @@ const dec2p=d=>d>0?1/d:0;
 const dec2am=d=>d>=2?Math.round((d-1)*100):-Math.round(100/(d-1));
 const ev=(p,dec)=>p*dec-1;                                             // expected profit per 1 staked
 const kelly=(p,dec,fraction=1)=>dec>1?Math.max(0,(p*dec-1)/(dec-1))*fraction:0; // share of bankroll
-function fracStr(x){ // x = decimal-1 > 0 -> smallest-denominator fraction within 1% (else best up to /100)
+// standard UK bookmaker fractions (what a punter expects to see: -110 = 10/11, 2.05 = 21/20)
+const FRAC_LADDER='1/100 1/50 1/33 1/25 1/20 1/16 1/14 1/12 1/10 1/9 1/8 1/7 1/6 1/5 2/9 1/4 2/7 3/10 1/3 4/11 2/5 4/9 1/2 8/15 4/7 8/13 4/6 8/11 4/5 5/6 10/11 20/21 1/1 21/20 11/10 6/5 5/4 11/8 3/2 13/8 7/4 15/8 2/1 9/4 5/2 11/4 3/1 10/3 7/2 4/1 9/2 5/1 11/2 6/1 13/2 7/1 15/2 8/1 17/2 9/1 10/1 11/1 12/1 14/1 16/1 18/1 20/1 25/1 33/1 40/1 50/1 66/1 80/1 100/1 125/1 150/1 200/1 250/1 300/1 400/1 500/1 750/1 1000/1'
+  .split(' ').map(t=>{const [n,d]=t.split('/').map(Number);return [n,d,n/d];});
+function fracStr(x){ // x = decimal-1 > 0 -> nearest ladder rung within 2%, else smallest-denominator fraction within 1% (best up to /100)
+  let r=null;for(const L of FRAC_LADDER){const e=Math.abs(L[2]-x)/x;if(!r||e<r.e)r={L,e};}
+  if(r.e<=.02)return r.L[0]===1&&r.L[1]===1?'Evens':r.L[0]+'/'+r.L[1];
   let best=null;for(let d=1;d<=100;d++){const n=Math.max(1,Math.round(x*d)),e=Math.abs(n/d-x)/x;if(!best||e<best.e-1e-12)best={n,d,e};if(e<.01)break;}
   return best.n+'/'+best.d;}
 const probStr=p=>p<.01?(p*100).toFixed(2)+'%':p<.1?(p*100).toFixed(1)+'%':Math.round(p*100)+'%';
@@ -242,18 +287,25 @@ function fmtOdds(p,fmt){ // fair price for probability p in the current (or give
   if(f==='american')return fmtAm(p2am(p));
   if(f==='prob')return probStr(p);
   return fmtPrice(1/p,f);}
-function parseOdds(str){ // any format -> decimal price (>1) or null. +250 / -120 American, 2.5 decimal, 3/2 fractional, 40% probability, "evens"
-  const s=String(str??'').trim().toLowerCase().replace(/[\s,]/g,'').replace(/[−–]/g,'-');if(!s)return null;
+function parseOdds(str,fmt){ // any format -> decimal price (>1) or null. +250 / -120 American, 2.5 decimal, 3/2 fractional, 40% probability, "evens"
+  // fmt (default: the user's odds format) only decides what a BARE unsigned number means: American 150 = +150, decimal 150 = 150.0,
+  // probability 40 = 40%. Signed numbers are always American. "1,85" is a decimal comma; "2,000" is a thousands separator.
+  const f=ODDSFMTS.some(x=>x[0]===fmt)?fmt:oddsFmt;let s=String(str??'').trim().toLowerCase().replace(/[−–]/g,'-');
+  if(/^[+-]?\d+,\d{1,2}$/.test(s.replace(/\s/g,'')))s=s.replace(',','.');
+  s=s.replace(/\s/g,'').replace(/,(?=\d{3}(\D|$))/g,'');if(!s||s.includes(','))return null;
   if(/^(evens?|evs|ev)$/.test(s))return 2;
   let m;
   if((m=s.match(/^(\d*\.?\d+)%$/))){const p=+m[1]/100;return p>0&&p<1?1/p:null;}
   if((m=s.match(/^(\d*\.?\d+)\/(\d*\.?\d+)$/))){const n=+m[1],d=+m[2];return n>0&&d>0?1+n/d:null;}
   if((m=s.match(/^([+-])(\d*\.?\d+)$/))){const v=+m[2];if(v<100)return null;return m[1]==='+'?1+v/100:1+100/v;}
-  if((m=s.match(/^(\d*\.?\d+)$/))){const v=+m[1];if(v>=100)return 1+v/100;return v>1?v:null;} // bare 100+ = American, 1-100 = decimal
+  if((m=s.match(/^(\d*\.?\d+)$/))){const v=+m[1];
+    if(f==='prob')return v>0&&v<100?100/v:null;          // bare 40 in % mode = 40%
+    if(f==='american'&&v>=100)return 1+v/100;             // bare 150 in American mode = +150
+    return v>1?v:null;}                                   // decimal / fractional mode (and American < 100): a decimal price
   return null;}
 const hue=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h;};
 const abBox=(t)=>`<span class="ab" style="background:hsl(${hue(t.abbr+t.name)} 55% 42%)">${esc(t.abbr.slice(0,4))}</span>`;
-let toastT;function toast(m){const t=$('toast');t.innerHTML=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
+let toastT;function toast(m,ms){const t=$('toast');t.innerHTML=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),ms||2600);}
 const store={get(k,d){try{return JSON.parse(localStorage.getItem('fm2.'+k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem('fm2.'+k,JSON.stringify(v))}catch(e){}}};
 
 // ---------------- data ----------------
@@ -264,8 +316,10 @@ const now=()=>Date.now();
 const startMs=g=>Date.parse(g.start);
 const started=g=>now()>=startMs(g);
 const isFinal=g=>g.status==='closed'&&g.score;
-const priced=g=>!!g.prob&&!started(g)&&!isFinal(g);
-const openG=g=>!!g&&!started(g)&&!isFinal(g); // player props don't need team win odds
+const VOID_RE=/^(postponed|cancel+ed|suspended|abandoned|void)$/i;
+const isVoid=g=>!!g&&VOID_RE.test(g.status||''); // postponed / cancelled: not bettable, legs on it are void
+const priced=g=>!!g.prob&&!started(g)&&!isFinal(g)&&!isVoid(g);
+const openG=g=>!!g&&!started(g)&&!isFinal(g)&&!isVoid(g); // player props don't need team win odds
 function when(g){const d=new Date(g.start);const today=new Date();const tm=d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
   const dd=Math.round((new Date(d.toDateString())-new Date(today.toDateString()))/864e5);
   return (dd===0?'Today':dd===1?'Tomorrow':d.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'}))+' · '+tm;}
@@ -278,25 +332,30 @@ function mulberry32(a){a>>>=0;return ()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>
 function pois(l,k){let p=Math.exp(-l);for(let i=1;i<=k;i++)p*=l/i;return p;}
 function invNorm(p){const a=[-39.6968302866538,220.946098424521,-275.928510446969,138.357751867269,-30.6647980661472,2.50662827745924],b=[-54.4760987982241,161.585836858041,-155.698979859887,66.8013118877197,-13.2806815528857],c=[-.00778489400243029,-.322396458041136,-2.40075827716184,-2.54973253934373,4.37466414146497,2.93816398269878],d=[.00778469570904146,.32246712907004,2.445134137143,3.75440866190742];const q=p<.02425?Math.sqrt(-2*Math.log(p)):p>1-.02425?Math.sqrt(-2*Math.log(1-p)):0;if(p<.02425)return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);if(p>1-.02425)return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);const r=p-.5,s=r*r;return(((((a[0]*s+a[1])*s+a[2])*s+a[3])*s+a[4])*s+a[5])*r/(((((b[0]*s+b[1])*s+b[2])*s+b[3])*s+b[4])*s+1);}
 /* SOCCER = exact Dixon-Coles (1997) score matrix.
-   P(h,a) ∝ Pois(h;λh)·Pois(a;λa)·τ(h,a) with τ(0,0)=1−λh·λa·ρ, τ(0,1)=1+λh·ρ, τ(1,0)=1+λa·ρ, τ(1,1)=1−ρ, τ=1 otherwise.
+   P(h,a) ∝ Pois(h;λh)·Pois(a;λa)·τ(h,a)·(1+δ if h=a) with τ(0,0)=1−λh·λa·ρ, τ(0,1)=1+λh·ρ, τ(1,0)=1+λa·ρ, τ(1,1)=1−ρ, τ=1 otherwise.
    Grid is 0..10 goals per side (11×11), renormalised to sum to exactly 1.
-   FITTING (deterministic, ~1 ms per game, memoised by the provider numbers):
-   The provider gives two free numbers (home, draw; away = rest) and the model has three (λh, λa, ρ), so one is pinned.
-     1. ρ = −0.08 (a typical DC value). Then, by nested bisection,
-          inner: split s = λh/(λh+λa) so the matrix's H/(H+A) equals the provider's home/(home+away);
-          outer: total T = λh+λa so the matrix's draw chance equals the provider's draw (draws fall as T rises).
-     2. If that total leaves the plausible 1.8–4.2 goal band (heavy favourites with tiny provider draw chances),
-        T is held at the band edge and ρ is solved instead (bisection on ρ in [−0.3, 0.3]; draws fall as ρ rises).
-        If even that cannot reach the draw chance, T is freed again with ρ at the bound.
-     3. If the feed ever provides g.total (expected goals), T = g.total and ρ is solved; on failure we fall back to 1–2.
+   FITTING (deterministic, ~1-3 ms per game, memoised by the provider numbers + league):
+   The provider gives two free numbers (home, draw; away = rest). A draw price alone is a poor guide to the total: books shade the
+   draw on mismatches, so solving the total from it alone ran ~6 pts high on Over 2.5 vs real Nov-2026 O/U 2.5 lines (8 of 8 high).
+     method 'draw+league prior' (normal case):
+       1. Td = total implied by the draw at ρ = −0.08 (nested bisection, clamped 1.8–4.6).
+       2. T = clamp(½·Td + ½·LGT[league], 2.0, 4.0), LGT = typical goals per match of the competition (leagueT()).
+       3. ρ is bisected in [−0.2, 0.05] so the matrix's draw equals the provider's draw; an inner bisection on the split
+          s = λh/T keeps H/(H+A) equal to the provider's home/(home+away).
+       4. '+diag': if even ρ at its bound cannot reach the draw (very lopsided 1X2), ρ stays at that bound and a diagonal factor
+          δ ∈ [−0.6, 0.6] (draw cells × (1+δ)) is bisected instead, so 1X2 is still reproduced exactly.
+       Checked on 8 fixtures with real O/U 2.5 prices: O2.5 RMSE 0.070 → 0.026, bias +0.063 → +0.010.
+     'feed total': if the feed provides g.total (expected goals), T = g.total and ρ is solved in [−0.3, 0.3].
+     'no-draw-price': a provider without a draw price gets T = 2.6, ρ = −0.08.
    ρ is always clamped so every τ stays ≥ 0. Result: provider 1X2 reproduced to ~1e-9; every soccer market and every
    same-game joint is an exact sum over the matrix cells (no Monte-Carlo noise).
-   NHL = same matrix idea for REGULATION: independent Poisson with diagonal (tie) inflation δ=0.43 (lifts regulation
-   ties from ~17% to the NHL-typical ~22%), 5.7 regulation goals. Split s is bisected so that
+   NHL = same matrix idea for REGULATION: independent Poisson with diagonal (tie) inflation δ=0.43 (regulation ties ≈ 22%,
+   the NHL norm), 6.0 regulation goals (final ≈ 6.2 incl. the OT/SO goal, the 2025-26 league rate) or, when the feed has a
+   game total, the regulation total whose final-score mean equals it. Split s is bisected so that
    P(home leads after 60) + P(tie)·q = provider home chance, where the OT/shootout share q = 0.5+0.6·(r−0.5),
    r = home share of decisive regulation results (stronger team favoured, capped 30–70%). The final score adds one goal
    to the OT/SO winner, so totals and win-by markets settle on the final score like a sportsbook. */
-const GN=11,NC=GN*GN,RHO0=-.08,TLO=1.8,THI=4.2,NHL_TREG=5.7,NHL_DIAG=.43;
+const GN=11,NC=GN*GN,RHO0=-.08,RLO=-.2,RHI=.05,NHL_TREG=6.0,NHL_DIAG=.43;
 const _ph=new Float64Array(GN),_pa=new Float64Array(GN);
 function poisPmf(l,out){out[0]=Math.exp(-l);for(let k=1;k<GN;k++)out[k]=out[k-1]*l/k;return out;}
 const rhoOK=(lh,la,r)=>Math.max(-.98/Math.max(lh,la,1e-9),Math.min(r,.98/Math.max(lh*la,1e-9),.98));
@@ -308,35 +367,70 @@ function dcFill(lh,la,rho,diag,P){ // fills P (Float64Array NC), returns {H,D,A}
   let H=0,D=0,A=0;const inv=1/s;
   for(let h=0;h<GN;h++)for(let a=0;a<GN;a++){const i=h*GN+a,p=P[i]*inv;P[i]=p;if(h>a)H+=p;else if(h===a)D+=p;else A+=p;}
   return {H,D,A};}
+// typical goals per match by competition (both teams), used as the prior for the match total. Comp names are normalised the
+// same way soccer.js does, with its aliases, so a renamed comp in the feed ("UEFA Champions League", "LaLiga") still matches.
+const LGT={'premier league':2.85,'la liga':2.6,'serie a':2.65,'bundesliga':3.1,'ligue 1':2.85,'champions league':3.1,'europa league':2.8,
+  'conference league':2.8,'mls':3.0,'liga mx':2.75,'eredivisie':3.15,'primeira liga':2.6},LGT_DEF=2.8;
+const normComp=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/['’`.]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const LG_ALIAS={'uefa champions league':'champions league','ucl':'champions league','english premier league':'premier league','epl':'premier league',
+  'barclays premier league':'premier league','laliga':'la liga','laliga ea sports':'la liga','la liga ea sports':'la liga','primera division':'la liga',
+  'liga ea sports':'la liga','serie a tim':'serie a','serie a enilive':'serie a','italian serie a':'serie a','1 bundesliga':'bundesliga',
+  'german bundesliga':'bundesliga','ligue 1 mcdonalds':'ligue 1','ligue 1 uber eats':'ligue 1','french ligue 1':'ligue 1','uefa europa league':'europa league',
+  'uel':'europa league','uefa conference league':'conference league','uefa europa conference league':'conference league','europa conference league':'conference league',
+  'uecl':'conference league','major league soccer':'mls','dutch eredivisie':'eredivisie','vriendenloterij eredivisie':'eredivisie','liga portugal':'primeira liga',
+  'liga portugal betclic':'primeira liga','liga nos':'primeira liga','portuguese primeira liga':'primeira liga','liga bbva mx':'liga mx','liga mx apertura':'liga mx','liga mx clausura':'liga mx'};
+function leagueT(comp){const c=normComp(comp);return LGT[LG_ALIAS[c]||c]??LGT_DEF;}
 const fitMemo=new Map();
 function fitSoccer(g){
-  const P=g.prob,t=P.home+P.away+(P.draw||0),H=P.home/t,D=(P.draw||0)/t,A=P.away/t,r=H/(H+A);
-  const mk=[H,D,A,g.total||''].join(',');if(fitMemo.has(mk))return fitMemo.get(mk);
+  if(g.line&&g.line.O>0)return fitLine(g); // the user's own book prices (see 'your book's prices')
+  const P=g.prob,t=P.home+P.away+(P.draw||0),H=P.home/t,D=(P.draw||0)/t,A=P.away/t,r=H/(H+A),LT=leagueT(g.comp);
+  const mk=[H,D,A,g.total||'',LT].join(',');if(fitMemo.has(mk))return fitMemo.get(mk);
   const S=new Float64Array(NC);
-  const split=(T,rho)=>{let lo=.002,hi=.998,x,lh=0,la=0,rr=0;for(let i=0;i<36;i++){const s=(lo+hi)/2;lh=T*s;la=T-lh;rr=rhoOK(lh,la,rho);x=dcFill(lh,la,rr,0,S);(x.H/(x.H+x.A)<r)?lo=s:hi=s;}return {lh,la,rho:rr,...x};};
+  const split=(T,rho,dg=0)=>{let lo=.002,hi=.998,x,lh=0,la=0,rr=0;for(let i=0;i<36;i++){const s=(lo+hi)/2;lh=T*s;la=T-lh;rr=rhoOK(lh,la,rho);x=dcFill(lh,la,rr,dg,S);(x.H/(x.H+x.A)<r)?lo=s:hi=s;}return {lh,la,rho:rr,diag:dg,...x};};
   const byT=rho=>{let lo=.3,hi=9,x;for(let i=0;i<36;i++){const T=(lo+hi)/2;x=split(T,rho);x.D>D?lo=T:hi=T;}return x;};
   const byRho=(T,lo,hi)=>{let x;for(let i=0;i<36;i++){const rho=(lo+hi)/2;x=split(T,rho);x.D>D?lo=rho:hi=rho;}return x;};
   const ok=x=>Math.abs(x.D-D)<1e-5;
-  let x=null,method='';
+  let x=null,method='',Tprior=null;
   if(!(D>.01)){x=split(2.6,RHO0);method='no-draw-price';}
   if(!x&&g.total>.5&&g.total<7){x=byRho(g.total,-.3,.3);method='feed total';if(!ok(x))x=null;}
-  if(!x){x=byT(RHO0);method='rho fixed';const T=x.lh+x.la;
-    if(T>THI){x=byRho(THI,RHO0,.3);method='total capped';if(!ok(x)){x=byT(.3);method='rho capped';}}
-    else if(T<TLO){x=byRho(TLO,-.3,RHO0);method='total floored';if(!ok(x)){x=byT(-.3);method='rho capped';}}}
-  const m={kind:'goals',lh:x.lh,la:x.la,rho:x.rho,diag:0,method,err:Math.max(Math.abs(x.H-H),Math.abs(x.D-D),Math.abs(x.A-A))};
+  if(!x){const x0=byT(RHO0),Td=clamp(x0.lh+x0.la,1.8,4.6),T=clamp(.5*Td+.5*LT,2.0,4.0);Tprior=LT;
+    x=byRho(T,RLO,RHI);method='draw+league prior';
+    if(Math.abs(x.D-D)>1e-6){ // ρ is pinned at a bound: the model still has too many draws at RHI (or too few at RLO)
+      const rb=x.D>D?RHI:RLO;let lo=-.6,hi=.6;
+      for(let i=0;i<40;i++){const dg=(lo+hi)/2;x=split(T,rb,dg);x.D<D?lo=dg:hi=dg;}method='draw+league prior +diag';}}
+  const m={kind:'goals',lh:x.lh,la:x.la,rho:x.rho,diag:x.diag||0,method,leagueT:Tprior,err:Math.max(Math.abs(x.H-H),Math.abs(x.D-D),Math.abs(x.A-A))};
   fitMemo.set(mk,m);return m;}
 function fitNHL(g){
-  const P=g.prob,ph=P.home/(P.home+P.away),T=NHL_TREG,S=new Float64Array(NC);
-  let lo=.05,hi=.95,x,q=.5;
-  for(let i=0;i<40;i++){const s=(lo+hi)/2;x=dcFill(T*s,T*(1-s),0,NHL_DIAG,S);const r=x.H/(x.H+x.A);q=clamp(.5+.6*(r-.5),.3,.7);(x.H+x.D*q<ph)?lo=s:hi=s;}
-  const s=(lo+hi)/2;return {kind:'goals',lh:T*s,la:T*(1-s),rho:0,diag:NHL_DIAG,otHome:q,method:'nhl regulation + OT split',err:Math.abs(x.H+x.D*q-ph)};}
-const SD={nba:12.5,nfl:13.5,ncaaf:16},TOTDEF={nba:228,nfl:44,ncaaf:52},TSD={nba:17,nfl:13,ncaaf:16};
+  const P=g.prob,ph=P.home/(P.home+P.away),S=new Float64Array(NC);
+  const solve=T=>{let lo=.05,hi=.95,x,q=.5;
+    for(let i=0;i<40;i++){const s=(lo+hi)/2;x=dcFill(T*s,T*(1-s),0,NHL_DIAG,S);const r=x.H/(x.H+x.A);q=clamp(.5+.6*(r-.5),.3,.7);(x.H+x.D*q<ph)?lo=s:hi=s;}
+    let et=0;for(let h=0;h<GN;h++)for(let a=0;a<GN;a++)et+=(h+a)*S[h*GN+a];
+    return {s:(lo+hi)/2,x,q,ef:et+x.D};}; // ef = expected FINAL total (regulation goals + the OT/SO winner's goal)
+  let T=NHL_TREG,R,method='nhl regulation + OT split';
+  if(g.total>3&&g.total<10){let lo=2,hi=10;for(let i=0;i<30;i++){T=(lo+hi)/2;R=solve(T);R.ef<g.total?lo=T:hi=T;}method+=' · feed total';}
+  R=solve(T);const {s,x,q}=R;
+  return {kind:'goals',lh:T*s,la:T*(1-s),rho:0,diag:NHL_DIAG,otHome:q,method,err:Math.abs(x.H+x.D*q-ph)};}
+/* NBA / NFL / NCAAF: home margin d and total t. NBA = normal margin (sd 12.5). NFL / NCAAF = integer margins with football's
+   key numbers: P(d=k) ∝ φ((k−μ)/sd)·w(|k|) (3 and 7 most common, then 10, 14, 6, 4; ties rare), μ bisected so that
+   P(d>0)+½P(d=0) = provider home chance; NCAAF uses half the key-number boosts. Calibrated so a pick'em game lands on exactly 3
+   ~15% and exactly 7 ~9% of the time. Total = normal around the feed's game total; without one it is the league-average line,
+   widened by the spread of real game lines (LINESD) and kept out of auto parlays (nopool, gen). */
+const SD={nba:12.5,nfl:12,ncaaf:16},TOTDEF={nba:228,nfl:44,ncaaf:52},TSD={nba:17,nfl:13,ncaaf:16},LINESD={nba:8,nfl:4,ncaaf:8};
+const KEYW={0:.06,1:.8,2:.75,3:2.6,4:1.15,5:.9,6:1.2,7:1.8,8:1.05,9:.85,10:1.3,11:.9,12:.9,13:.9,14:1.3,15:.85,16:.9,17:1.2,18:.95,19:.8,20:1.05,21:1.25,24:1.15,28:1.1},KMAX=80;
+function keyMargin(ph,sd,half){ // integer margin pmf on [-KMAX, KMAX] for football
+  const w=new Float64Array(2*KMAX+1);for(let k=-KMAX;k<=KMAX;k++){let v=KEYW[Math.abs(k)]??1;if(half&&k!==0)v=1+(v-1)/2;w[k+KMAX]=v;}
+  const pm=new Float64Array(2*KMAX+1);let lo=-60,hi=60,mu=0;
+  for(let it=0;it<50;it++){mu=(lo+hi)/2;let s=0,h=0;for(let i=0;i<pm.length;i++){const z=(i-KMAX-mu)/sd,p=Math.exp(-z*z/2)*w[i];pm[i]=p;s+=p;if(i>KMAX)h+=p;else if(i===KMAX)h+=p/2;}h/=s;h<ph?lo=mu:hi=mu;}
+  let s=0;for(let i=0;i<pm.length;i++){const z=(i-KMAX-mu)/sd;pm[i]=Math.exp(-z*z/2)*w[i];s+=pm[i];}for(let i=0;i<pm.length;i++)pm[i]/=s;
+  return {mu,pm};}
 function fit(g){
   if(!g||!g.prob)return null;if(g._m)return g._m;
   const P=g.prob;let m;
   if(g.sport==='soccer')m=fitSoccer(g);
   else if(g.sport==='nhl')m=fitNHL(g);
-  else {const tot=P.home+P.away,ph=clamp(P.home/tot,.01,.99),sd=SD[g.sport]||13;m={kind:'margin',mu:sd*invNorm(ph),sd,T:g.total||TOTDEF[g.sport]||50,tsd:TSD[g.sport]||14};}
+  else {const tot=P.home+P.away,ph=clamp(P.home/tot,.01,.99),sd=SD[g.sport]||13,gen=!(g.total>0),t0=TSD[g.sport]||14,ls=LINESD[g.sport]||8;
+    m={kind:'margin',mu:sd*invNorm(ph),sd,T:gen?TOTDEF[g.sport]||50:g.total,tsd:gen?Math.sqrt(t0*t0+ls*ls):t0,genTotal:gen};
+    if(g.sport==='nfl'||g.sport==='ncaaf'){const K=keyMargin(ph,sd,g.sport==='ncaaf');m.mu=K.mu;m.pm=K.pm;m.kmax=KMAX;m.disc=true;}}
   g._m=m;return m;
 }
 // exact score matrix (soccer: full time; NHL: regulation). P[h*n+a] = chance of h-a. Cached per game.
@@ -355,12 +449,20 @@ function outcomes(g){
     else{H.push(h);A.push(a);Pp.push(p);}}
   return g._o={h:Int8Array.from(H),a:Int8Array.from(A),p:Float64Array.from(Pp),n:Pp.length};}
 const NSIM=100000; // Monte-Carlo runs per game for margin sports (NBA / NFL / NCAAF). Never lower this.
+// The sims are deterministic (seed = hashStr(id), parameters from fit), so they are cached by id + parameters at module level:
+// an hourly reload that replaces the game objects reuses them instead of re-running 100k sims per game (load() prunes old ids).
+const SIMC=new Map();
+const simSig=(g,m)=>[g.id,m.mu,m.sd,m.T,m.tsd,m.disc?1:0].join('|');
 function sim(g){ // seeded, lazy, cached: margin + total for 100,000 games
   if(g._s)return g._s;const m=fit(g);if(!m||m.kind!=='margin')return null;
+  const sig=simSig(g,m);if(SIMC.has(sig))return g._s=SIMC.get(sig);
   const N=NSIM,mg=new Float32Array(N),tt=new Float32Array(N),seed=hashStr(g.id),R=mulberry32(seed);
+  let cdf=null;if(m.disc){cdf=new Float64Array(m.pm.length);let c=0;for(let i=0;i<cdf.length;i++){c+=m.pm[i];cdf[i]=c;}cdf[cdf.length-1]=1;}
   for(let i=0;i<N;i++){let x,y,r2;do{x=2*R()-1;y=2*R()-1;r2=x*x+y*y;}while(r2>=1||r2===0); // Marsaglia polar: two independent N(0,1)
-    const k=Math.sqrt(-2*Math.log(r2)/r2);mg[i]=m.mu+m.sd*x*k;tt[i]=m.T+m.tsd*y*k;}
-  g._s={N,mg,tt,kind:'margin',seed};return g._s;
+    const k=Math.sqrt(-2*Math.log(r2)/r2);tt[i]=m.T+m.tsd*y*k;
+    if(cdf){const u=R();let lo=0,hi=cdf.length-1;while(lo<hi){const md=(lo+hi)>>1;if(cdf[md]<u)lo=md+1;else hi=md;}mg[i]=lo-m.kmax;} // integer margin
+    else mg[i]=m.mu+m.sd*x*k;}
+  const s={N,mg,tt,kind:'margin',seed,sig,bm:{}};SIMC.set(sig,s);g._s=s;return s;
 }
 // ---------------- markets ----------------
 // each market: {group, key, label, desc, f, anch?, nopool?}. Goals sports: f(h,a) on the FINAL score.
@@ -373,12 +475,12 @@ function marketsFor(g){
   if(g.sport==='soccer'){
     const W='Winner',DC='Double chance',WB='Win by / handicap',TG='Total goals',BT='Both teams to score',TM='Team goals',CSH='Clean sheet',CS='Correct score',CB='Combos';
     add(W,'H',`${H} win`,(h,a)=>h>a);add(W,'D','Draw',(h,a)=>h===a);add(W,'A',`${A} win`,(h,a)=>a>h);
-    add(DC,'DC1X',`${H} or draw`,(h,a)=>h>=a,'Double chance');add(DC,'DCX2',`${A} or draw`,(h,a)=>a>=h,'Double chance');add(DC,'DC12',`${H} or ${A}`,(h,a)=>h!==a,'Either team wins, no draw');
+    add(DC,'DC1X',`${H} or draw (1X)`,(h,a)=>h>=a,'Double chance');add(DC,'DCX2',`${A} or draw (X2)`,(h,a)=>a>=h,'Double chance');add(DC,'DC12',`${H} or ${A} (no draw)`,(h,a)=>h!==a,'Double chance 12: either team wins');
     add(WB,'H2',`${H} win by 2+ goals`,(h,a)=>h-a>=2,'Handicap −1.5');add(WB,'A2',`${A} win by 2+ goals`,(h,a)=>a-h>=2,'Handicap −1.5');
     add(WB,'H+1.5',`${H} +1.5`,(h,a)=>h-a>=-1,'Win, draw or lose by 1');add(WB,'A+1.5',`${A} +1.5`,(h,a)=>a-h>=-1,'Win, draw or lose by 1');
     for(const L of [.5,1.5,2.5,3.5,4.5])add(TG,'O'+L,`Over ${L} goals`,(h,a)=>h+a>L);
     for(const L of [1.5,2.5,3.5,4.5])add(TG,'U'+L,`Under ${L} goals`,(h,a)=>h+a<L);
-    add(BT,'BTTS','Both teams score',(h,a)=>h>0&&a>0,'Yes');add(BT,'BTTSN','Not both teams score',(h,a)=>!(h>0&&a>0),'No: at least one side blanks');
+    add(BT,'BTTS','BTTS: Yes',(h,a)=>h>0&&a>0,'Both teams score');add(BT,'BTTSN','BTTS: No',(h,a)=>!(h>0&&a>0),'At least one side blanks');
     for(const L of [.5,1.5,2.5])add(TM,'HO'+L,`${H} over ${L} goals`,(h)=>h>L,`${Math.ceil(L)}+ ${H} goals`);
     for(const L of [.5,1.5,2.5])add(TM,'AO'+L,`${A} over ${L} goals`,(h,a)=>a>L,`${Math.ceil(L)}+ ${A} goals`);
     add(CSH,'HCS',`${H} clean sheet`,(h,a)=>a===0,`${A} don't score`);add(CSH,'ACS',`${A} clean sheet`,(h)=>h===0,`${H} don't score`);
@@ -393,17 +495,21 @@ function marketsFor(g){
   } else if(g.sport==='nhl'){
     add('Winner','H',`${H} win`,(h,a)=>h>a,'Overtime counts',{anch:1});add('Winner','A',`${A} win`,(h,a)=>a>h,'Overtime counts',{anch:1});
     add('Win by','H2',`${H} win by 2+ goals`,(h,a)=>h-a>=2,null,{anch:1});add('Win by','A2',`${A} win by 2+ goals`,(h,a)=>a-h>=2,null,{anch:1});
-    for(const L of [3.5,4.5,5.5])add('Total goals','O'+L,`Over ${L} goals`,(h,a)=>h+a>L,'Final score incl. OT');
-    for(const L of [5.5,6.5,7.5])add('Total goals','U'+L,`Under ${L} goals`,(h,a)=>h+a<L,'Final score incl. OT');
+    // no game total in the feed -> league-average scoring: shown (labelled) but kept out of auto parlays
+    const gen=!(g.total>0),td=gen?'League-average scoring, no game line · incl. OT':'Final score incl. OT',to=gen?{nopool:1,gen:1}:null;
+    for(const L of [3.5,4.5,5.5])add('Total goals','O'+L,`Over ${L} goals`,(h,a)=>h+a>L,td,to);
+    for(const L of [5.5,6.5,7.5])add('Total goals','U'+L,`Under ${L} goals`,(h,a)=>h+a<L,td,to);
   } else {
-    const m=fit(g)||{T:TOTDEF[g.sport]};const T=m.T||TOTDEF[g.sport]||50;
+    const m=fit(g)||{T:TOTDEF[g.sport]};const T=m.T||TOTDEF[g.sport]||50,gen=!(g.total>0);
     const big=g.sport==='nba'?[5.5,9.5,14.5]:g.sport==='nfl'?[3.5,7.5,13.5]:[6.5,10.5,16.5];
+    // NFL alt lines right next to the key numbers 3 and 7 are the ones a margin model misprices most: shown, not auto-picked
+    const keyGuard=L=>g.sport==='nfl'&&(L===3.5||L===7.5)?{nopool:1}:null;
     // thr = {v:'d'|'t', s:±1, L}: market wins when s·v > L (lets the 100k-sim bitmasks be built in a tight loop)
     add('Winner','H',`${H} win`,(d)=>d>0,null,{anch:1,thr:{v:'d',s:1,L:0}});add('Winner','A',`${A} win`,(d)=>d<0,null,{anch:1,thr:{v:'d',s:-1,L:0}});
-    for(const L of big){add('Win by','H'+L,`${H} win by ${Math.ceil(L)}+`,(d)=>d>L,null,{anch:1,thr:{v:'d',s:1,L}});add('Win by','A'+L,`${A} win by ${Math.ceil(L)}+`,(d)=>-d>L,null,{anch:1,thr:{v:'d',s:-1,L}});}
-    const st=g.sport==='nba'?[15,8,0]:[10,5,0];
-    for(const k of st){const L=half(T-k);add('Total points','O'+L,`Over ${L} total points`,(d,t)=>t>L,null,{thr:{v:'t',s:1,L}});}
-    for(const k of [...st].reverse()){const L=half(T+k);add('Total points','U'+L,`Under ${L} total points`,(d,t)=>t<L,null,{thr:{v:'t',s:-1,L:-L}});}
+    for(const L of big){add('Win by','H'+L,`${H} win by ${Math.ceil(L)}+`,(d)=>d>L,null,{anch:1,thr:{v:'d',s:1,L},...keyGuard(L)});add('Win by','A'+L,`${A} win by ${Math.ceil(L)}+`,(d)=>-d>L,null,{anch:1,thr:{v:'d',s:-1,L},...keyGuard(L)});}
+    const st=g.sport==='nba'?[15,8,0]:[10,5,0],td=gen?'League-average total, no game line in the feed':null,to=gen?{nopool:1,gen:1}:{};
+    for(const k of st){const L=half(T-k);add('Total points','O'+L,`Over ${L} total points`,(d,t)=>t>L,td,{thr:{v:'t',s:1,L},...to});}
+    for(const k of [...st].reverse()){const L=half(T+k);add('Total points','U'+L,`Under ${L} total points`,(d,t)=>t<L,td,{thr:{v:'t',s:-1,L:-L},...to});}
   }
   g._mk=M;g._mkMap=Object.fromEntries(M.map(x=>[x.key,x]));return M;
 }
@@ -451,8 +557,9 @@ function probOf(g,keys){ // chance that every leg in `keys` (all in game g) hits
 }
 // margin sports: one bit per simulated game per market (Uint32Array, 12.5 KB each), so joints are AND + popcount
 function popcnt(x){x-=(x>>>1)&0x55555555;x=(x&0x33333333)+((x>>>2)&0x33333333);x=(x+(x>>>4))&0x0f0f0f0f;return Math.imul(x,0x01010101)>>>24;}
-function simBits(g,key){const s=sim(g);if(!s)return null;const c=g._bm||(g._bm={});if(c[key]!==undefined)return c[key];
-  const m=mkOf(g,key);if(!m)return c[key]=null;const f=m.f,N=s.N,mg=s.mg,tt=s.tt,B=new Uint32Array((N+31)>>>5);
+function simBits(g,key){const s=sim(g);if(!s)return null;const m=mkOf(g,key);if(!m)return null;
+  const c=s.bm,ck=key+(m.thr?'@'+m.thr.v+m.thr.s+m.thr.L:'');if(c[ck]!==undefined)return c[ck];key=ck;
+  const f=m.f,N=s.N,mg=s.mg,tt=s.tt,B=new Uint32Array((N+31)>>>5);
   if(m.thr){const X=m.thr.v==='d'?mg:tt,L=m.thr.L;if(m.thr.s>0){for(let i=0;i<N;i++)if(X[i]>L)B[i>>>5]|=1<<(i&31);}else{for(let i=0;i<N;i++)if(-X[i]>L)B[i>>>5]|=1<<(i&31);}}
   else for(let i=0;i<N;i++)if(f(mg[i],tt[i]))B[i>>>5]|=1<<(i&31);
   return c[key]=B;}
@@ -504,20 +611,33 @@ function emit(ev,arg){for(const fn of (EVT[ev]||[]).slice()){try{fn(arg)}catch(e
 let tab=store.get('tab','trending'),subf='All',q='',theme=store.get('theme','light'),win=store.get('win','3d');
 let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('saved',[]);
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};
-const TABS=[['trending','🔥 Trending'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['parlays','🎯 Parlays'],['soccer','⚽ Soccer'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['mine','⭐ My Parlays'],['lab','⚡ Sharp Lab']];
+// Tabs sit in a fixed order so related ones stay together: find a bet → your bets → games by sport → tools.
+// Known keys (including module tabs: soccerparlays, odds, sim) always take their place here; other keys use registerTab's `after`.
+const TAB_ORDER=['trending','soccerparlays','parlays','props','fantasy','mine','soccer','nba','nfl','nhl','ncaaf','odds','sim','lab'];
+const TABS=[['trending','🔥 Trending'],['parlays','🎯 Best Parlays'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['mine','⭐ My Parlays'],['soccer','⚽ Soccer Games'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['lab','⚡ Sharp Lab']];
 const CUSTOM={},tabParams={};
 function registerTab(t){
   if(!t||!t.key||typeof t.render!=='function'){console.warn('SB.registerTab needs {key,label,render}');return false;}
   const i=TABS.findIndex(x=>x[0]===t.key);if(i>=0)TABS.splice(i,1);
-  let pos=TABS.length;if(t.after){const j=TABS.findIndex(x=>x[0]===t.after);if(j>=0)pos=j+1;}
+  let pos=TABS.length;const ci=TAB_ORDER.indexOf(t.key);
+  if(ci>=0){const j=TABS.findIndex(x=>TAB_ORDER.indexOf(x[0])>ci);if(j>=0)pos=j;}
+  else if(t.after){const j=TABS.findIndex(x=>x[0]===t.after);if(j>=0)pos=j+1;}
   TABS.splice(pos,0,[t.key,t.label||t.key]);CUSTOM[t.key]=t;
-  if(booted){renderTabs();if(tab===t.key&&!sheetOpen())render();}
+  renderTabs(); // always: a tab registered before boot must get its button straight away (no pop-in after load)
+  if(booted&&tab===t.key&&!sheetOpen())render();
   return true;}
 function goTab(key,params){tab=key;subf='All';store.set('tab',tab);tabParams[key]=params||{};if(sheetOpen())closeSheet(true);renderTabs();render();window.scrollTo(0,0);}
-function applyTheme(){document.documentElement.classList.toggle('dark',theme==='dark');document.body.classList.toggle('dark',theme==='dark');}
+function applyTheme(){const d=theme==='dark';document.documentElement.classList.toggle('dark',d);document.body.classList.toggle('dark',d);$('themeBtn').setAttribute('aria-pressed',String(d));}
 $('themeBtn').onclick=()=>{theme=theme==='dark'?'light':'dark';store.set('theme',theme);applyTheme();emit('theme',theme);};
 $('q').oninput=e=>{q=e.target.value.toLowerCase().trim();render();};
-function renderTabs(){$('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-t="${esc(k)}">${esc(l)}</button>`).join('');}
+function renderTabs(){const T=$('tabs');
+  T.innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-t="${esc(k)}"${tab===k?' aria-current="page"':''}>${esc(l)}</button>`).join('');
+  // keep the active tab in view (centred) when the strip scrolls sideways (phones); rects, not offsetLeft (header is sticky)
+  const on=T.querySelector('.tab.on');if(on&&T.scrollWidth>T.clientWidth+1){const tr=T.getBoundingClientRect(),r=on.getBoundingClientRect();T.scrollLeft+=r.left-tr.left-(tr.width-r.width)/2;}
+  tabFade();}
+function tabFade(){const T=$('tabs');T.classList.toggle('fadeL',T.scrollLeft>4);T.classList.toggle('fadeR',T.scrollLeft+T.clientWidth<T.scrollWidth-4);}
+$('tabs').addEventListener('scroll',tabFade,{passive:true});
+window.addEventListener('resize',tabFade);
 $('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;goTab(b.dataset.t,{});};
 // odds format control (header)
 $('oddsFmt').innerHTML=ODDSFMTS.map(([k,s,l])=>`<option value="${k}" title="${esc(l)}">${esc(s)}</option>`).join('');$('oddsFmt').value=oddsFmt;
@@ -529,10 +649,14 @@ function refreshView(){ // re-render whatever is on screen (keeps the sheet open
   else render();
   renderSlipBar();}
 function inSlip(gid,key){return slip.some(L=>L.gid===gid&&L.key===key);}
-function legOpen(g,key){if(!g)return false;if(isP(key))return openG(g);if(String(key).includes(':'))return !!legType(key)&&openG(g);return priced(g);}
+// a leg stays open while its game is bettable AND its market still exists (a moved total line drops the old key instead of
+// leaving a 0% leg that makes the whole parlay look impossible)
+function legOpen(g,key){if(!g)return false;if(isP(key))return openG(g);if(String(key).includes(':'))return !!legType(key)&&openG(g);return priced(g)&&!!mkOf(g,key);}
+const isCS=k=>/^CS/.test(String(k));
 function toggleLeg(gid,key){
   const g=gameById(gid);if(!legOpen(g,key))return false;
   const i=slip.findIndex(L=>L.gid===gid&&L.key===key);
+  if(i<0&&isCS(key)&&slip.some(L=>L.gid===gid&&isCS(L.key))){toast('Two correct scores from one match can\'t both happen. Remove the other score first.');return false;}
   if(i>=0){slip.splice(i,1);if(baseKey===gid+'|'+key)baseKey=null;}
   else{slip.push({gid,key,label:legLabel({gid,key}),sport:g.sport});if(slip.length>=6)toast('⚠️ 6+ legs. Each leg you add lowers your chance of hitting.');}
   saveSlip();renderSlipBar();emit('slip',slip);return i<0;
@@ -540,30 +664,48 @@ function toggleLeg(gid,key){
 function setSlip(legs,bk){
   slip=(legs||[]).map(L=>{const g=gameById(L.gid);return g?{gid:L.gid,key:L.key,label:L.label||legLabel(L),sport:L.sport||g.sport}:null;}).filter(L=>L&&legOpen(gameById(L.gid),L.key));
   baseKey=bk!=null?bk:(slip[0]?slip[0].gid+'|'+slip[0].key:null);saveSlip();renderSlipBar();emit('slip',slip);return slip;}
+// replace the slip with a ready-made parlay, but never silently throw away legs the user picked: toast with Undo
+let undoSlip=null;
+function replaceSlip(legs,bk){
+  const prev=slip.map(L=>({...L})),pb=baseKey,sig=a=>a.map(l=>l.gid+'|'+l.key).sort().join(',');
+  setSlip(legs,bk);
+  if(prev.length&&sig(prev)!==sig(slip)){undoSlip={prev,pb};toast(`Replaced your ${prev.length}-leg slip · <button type="button" class="linkbtn" id="undoSlip" style="margin:-10px 0;padding:10px 6px">Undo</button>`,7000);}
+  else undoSlip=null;
+  return slip;}
+$('toast').addEventListener('click',e=>{if(!e.target.closest('#undoSlip')||!undoSlip)return;const u=undoSlip;undoSlip=null;setSlip(u.prev,u.pb);
+  $('toast').classList.remove('on');toast(`Restored your ${slip.length}-leg slip`);if(sheetOpen()&&sheetState&&sheetState.type==='slip')openSlip();});
 function matchQ(g){if(!q)return true;return (g.home.name+' '+g.away.name+' '+g.home.abbr+' '+g.away.abbr+' '+g.comp).toLowerCase().includes(q);}
 function inWin(g){const h={'24h':24,'3d':72,'7d':168}[win]||168;return startMs(g)-now()<=h*3600e3;}
 
 // ---------------- market cards ----------------
+// in % format the price IS the chance, so buttons say "Add" instead of repeating it (the aria-label keeps the price)
+const btnPx=p=>oddsFmt==='prob'?'Add':fmtOdds(p);
+// display-only price for one market row / heatmap cell: below 0.5% the model can't price reliably, so cap the label
+const TINY=.005;
+function mktPx(p){if(p>=TINY)return fmtOdds(p);return {american:'+20000+',decimal:'200+',fractional:'200/1+',prob:'<0.5%'}[oddsFmt]||'—';}
+const pctRow=p=>p<TINY&&p>0?'<0.5%':pct(p,p<.1?1:0);
 function card(g){
-  const P=g.prob,fin=isFinal(g),st=started(g)&&!fin,can=priced(g);
+  const P=g.prob,fin=isFinal(g),vd=isVoid(g),st=started(g)&&!fin&&!vd,can=priced(g);
   const rows=[[g.home,'H',P?.home],...(g.sport==='soccer'?[[{abbr:'DRAW',name:'Draw'},'D',P?.draw]]:[]),[g.away,'A',P?.away]];
   const tot=P?(P.home+P.away+(P.draw||0)):1;
   const bar=P?`<div class="bar">${rows.map(([t,k,p],i)=>`<div style="width:${p/tot*100}%;background:${i===0?'var(--accent2)':k==='D'?'var(--line)':'#0a0a0a'}"></div>`).join('')}</div>`:'';
   return `<div class="mk">
-   <div class="mkhead" data-open="${g.id}"><span class="lg">${esc(g.comp)}${g.tag?` <span class="badge b-tag">${esc(g.tag)}</span>`:''}${g.src&&g.src!=='Sportradar'?' <span class="badge b-est">EST</span>':''}</span><span>${fin?'Final':st?'<span class="badge b-live">STARTED</span>':esc(when(g))}</span></div>
+   <div class="mkhead" data-open="${g.id}"><span class="lg">${esc(g.comp)}${g.tag?` <span class="badge b-tag">${esc(g.tag)}</span>`:''}${g.src&&g.src!=='Sportradar'?' <span class="badge b-est">EST</span>':''}</span><span>${fin?'Final':vd?`<span class="badge b-void">${esc(String(g.status).toUpperCase())}</span>`:st?'<span class="badge b-live">STARTED</span>':esc(when(g))}${/^delayed$/i.test(g.status||'')?' <span class="badge b-est">DELAYED</span>':''}</span></div>
    ${bar}
    ${rows.map(([t,k,p])=>`<div class="orow"><div class="team" data-open="${g.id}">${k==='D'?'<span class="ab" style="background:var(--dim)">X</span>':abBox(t)}<span class="tn">${esc(t.name)}</span></div>
      <span class="pct">${fin?(k==='D'?'':(k==='H'?g.score.home:g.score.away)):P?pct(p/tot):'—'}</span>
-     ${fin?'<span></span>':`<button class="yes ${inSlip(g.id,k)?'in':''}" data-leg="${g.id}|${k}" ${can?'':'disabled'}>${P&&can?'Yes '+fmtOdds(p/tot):st?'Closed':'Soon'}</button>`}</div>`).join('')}
-   <div class="mkfoot"><span>${P?(g.src==='Sportradar'?'Win chance · Sportradar':'Win chance · Safe Bets estimate'):'Prices posting soon'}</span><a data-open="${g.id}">${can?marketsFor(g).length+' markets ›':'Details ›'}</a></div>
+     ${fin?'<span></span>':`<button class="yes ${inSlip(g.id,k)?'in':''}" data-leg="${g.id}|${k}" ${can?'':'disabled'}${P&&can?` aria-label="${esc((k==='D'?'Draw':t.name+' win')+' at '+fmtOdds(p/tot))}"`:''}>${P&&can?(oddsFmt==='prob'?'Add':'Yes '+fmtOdds(p/tot)):vd?'Off':st?'Closed':'Soon'}</button>`}</div>`).join('')}
+   <div class="mkfoot"><span>${P?(g.src==='Sportradar'?'Win chance · Sportradar':'Win chance · Safe Bets estimate'):'Prices posting soon'}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</span><button type="button" class="linkbtn" data-open="${esc(g.id)}" aria-label="${esc((can?'All '+marketsFor(g).length+' markets':'Details')+' for '+g.home.name+' vs '+g.away.name)}">${can?marketsFor(g).length+' markets ›':'Details ›'}</button></div>
   </div>`;
 }
 document.addEventListener('click',e=>{
-  const lg=e.target.closest('[data-leg]');if(lg){const [gid,key]=lg.dataset.leg.split('|');toggleLeg(gid,key);
+  const lg=e.target.closest('[data-leg]');if(lg){const s0=lg.dataset.leg,i0=s0.indexOf('|'),gid=s0.slice(0,i0),key=s0.slice(i0+1),had=inSlip(gid,key);toggleLeg(gid,key);
     document.querySelectorAll(`[data-leg="${CSS.escape(lg.dataset.leg)}"]`).forEach(b=>b.classList.toggle('in',inSlip(gid,key)));
-    if(lg.closest('#sheet')&&lg.dataset.no!=null){}return;}
+    // inside a sheet the slip bar is easy to miss: say what happened
+    if(lg.closest('#sheet')&&had!==inSlip(gid,key))toast(`${had?'Removed':'Added'} ${esc(legLabel({gid,key}))} · ${slip.length} leg${slip.length===1?'':'s'}`);
+    return;}
   const op=e.target.closest('[data-open]');if(op&&!e.target.closest('#sheet')){openGame(op.dataset.open);return;}
-  const ap=e.target.closest('[data-addp]');if(ap){const P=autoCache[ap.dataset.addp];if(P){setSlip(P.legs.map(L=>({...L})),P.legs[0].gid+'|'+P.legs[0].key);openSlip();}return;}
+  const ap=e.target.closest('[data-addp]');if(ap){const P=autoCache[ap.dataset.addp];if(P){replaceSlip(P.legs.map(L=>({...L})),P.legs[0].gid+'|'+P.legs[0].key);openSlip();}return;}
 });
 
 // ---------------- auto parlays (RoyBets method: base → connect → keep it small) ----------------
@@ -632,14 +774,16 @@ function renderSub(tab){
 $('sub').onclick=e=>{const w=e.target.closest('[data-win]');if(w){win=w.dataset.win;store.set('win',win);autoCache={};render();return;}
   const b=e.target.closest('[data-sub]');if(!b)return;subf=b.dataset.sub;render();};
 function dayBucket(g){const d=new Date(g.start),t=new Date();const dd=Math.round((new Date(d.toDateString())-new Date(t.toDateString()))/864e5);return dd<=0?'Today':dd===1?'Tomorrow':'Later';}
-function updatedLine(){const u=DATA.updated?new Date(DATA.updated):null;return `<div class="updated"><i></i>Real schedules · updated ${u?u.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'—'} · refreshes hourly</div>`;}
+function updatedLine(){const u=DATA.updated?new Date(DATA.updated):null,stale=lastGood&&now()-lastGood>25*60e3;
+  return `<div class="updated"><i></i>Real schedules · updated ${u?u.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'—'} · refreshes hourly${stale?` · last good check ${new Date(lastGood).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:''}</div>`;}
 function render(){
-  booted=true;
+  booted=true;pendingRender=false;
   // a stored tab whose module has not registered (yet) shows Trending until it does
   const view=TABS.some(x=>x[0]===tab)?tab:'trending';
   renderSub(view);const M=$('main');
+  $('labHost').hidden=view!=='lab';
   if(CUSTOM[view]){try{CUSTOM[view].render(M,tabParams[view]||{});}catch(e){console.error(e);M.innerHTML='<div class="empty">This tool could not load. Try another tab.</div>';}return;}
-  if(view==='lab'){M.innerHTML=`${updatedLine()}<h2>Sharp Lab <small>100-book line-move scanner (simulated prices)</small></h2><iframe class="labframe" src="lab.html" title="Sharp Lab"></iframe>`;return;}
+  if(view==='lab'){renderLab(M);return;}
   if(view==='mine'){renderMine();return;}
   if(view==='parlays'){renderParlays();return;}
   if(view==='fantasy'){renderFantasy();return;}
@@ -652,6 +796,12 @@ function render(){
   M.innerHTML=updatedLine()+(P?`<h2>Easiest ${SPORTNAME[sp]} parlay <small>base → connect → keep it small</small></h2>${parlayCard('sp-'+sp,`${SPORTNAME[sp]} · Easy hit`,P)}`:'')+
     `<h2>${SPORTNAME[sp]} markets <small>${list.length} games</small></h2>`+(list.length?`<div class="grid">${list.map(card).join('')}</div>`:`<div class="empty">No games match.</div>`);
 }
+// Sharp Lab: lab.html is heavy (it runs on this page's thread), so it loads only on request, once, into one iframe that lives
+// outside #main and is shown / hidden. Re-renders (tab switches, the 10-minute refresh) never reload it.
+let labFrame=null;
+function renderLab(M){
+  M.innerHTML=`${updatedLine()}<h2>Sharp Lab <small>100-book line-move scanner (simulated prices)</small></h2>`+(labFrame?'':`<div class="panel"><div class="why" style="margin-top:0">The lab is a separate, heavier tool. It can take a few seconds to start on a phone.</div><button class="btn full" id="labLoad" type="button">Load Sharp Lab</button></div>`);
+  if(!labFrame)$('labLoad').onclick=()=>{labFrame=document.createElement('iframe');labFrame.className='labframe';labFrame.title='Sharp Lab';labFrame.src='lab.html';$('labHost').appendChild(labFrame);renderLab(M);};}
 function renderTrending(){
   const soon=gamesFor(g=>priced(g)&&inWin(g)).slice(0,10);
   const locks=[];for(const g of DATA.games){if(!priced(g)||!inWin(g))continue;const m=marketsFor(g);for(const k of ['H','A']){if(!m.find(x=>x.key===k))continue;const p=p1(g,k);if(p>=.8&&p<=.95)locks.push({g,k,p,label:m.find(x=>x.key===k).label});}}
@@ -659,7 +809,7 @@ function renderTrending(){
   const mixed=buildMixed(.55,3,.72);
   $('main').innerHTML=updatedLine()+picksHTML(2)+
    `<h2>Parlay of the day <small>easy-hit mix</small></h2>${parlayCard('trend-mixed','Mixed · Easy hit',mixed)}`+
-   `<h2>Strongest single picks <small>by model win chance</small></h2><div class="panel" style="padding:4px 14px">${locks.slice(0,8).map(x=>`<div class="mrow"><div class="lbl" data-open="${x.g.id}" style="cursor:pointer">${esc(x.label)}<small>${esc(x.g.home.abbr)} vs ${esc(x.g.away.abbr)} · ${esc(x.g.comp)} · ${esc(when(x.g))}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes ${inSlip(x.g.id,x.k)?'in':''}" data-leg="${x.g.id}|${x.k}">${fmtOdds(x.p)}</button></div>`).join('')||'<div class="empty" style="border:0">No strong picks in this window.</div>'}</div>`+
+   `<h2>Strongest single picks <small>by model win chance</small></h2><div class="panel" style="padding:4px 14px">${locks.slice(0,8).map(x=>`<div class="mrow"><div class="lbl" data-open="${x.g.id}" style="cursor:pointer">${esc(x.label)}<small>${esc(x.g.home.abbr)} vs ${esc(x.g.away.abbr)} · ${esc(x.g.comp)} · ${esc(when(x.g))}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes ${inSlip(x.g.id,x.k)?'in':''}" data-leg="${x.g.id}|${x.k}" aria-label="${esc(x.label+' at '+fmtOdds(x.p))}">${btnPx(x.p)}</button></div>`).join('')||'<div class="empty" style="border:0">No strong picks in this window.</div>'}</div>`+
    `<h2>Up next <small>across every sport</small></h2><div class="grid">${soon.map(card).join('')||'<div class="empty">Nothing in this window.</div>'}</div>`;
 }
 function renderParlays(){
@@ -678,15 +828,45 @@ function renderParlays(){
   }
   $('main').innerHTML=html;
 }
+// ---------------- My Parlays: a small bet ledger ----------------
+// Saved parlays keep each leg's sport / teams / start (so they render after the game leaves the hourly feed) and the final score
+// once seen (s.res), so they still grade later. Legs the engine can't settle (scorers, props, half-time) get ✓/✗ buttons.
+function stubGame(L){if(!L.sport||!L.home)return null;return {id:L.gid,sport:L.sport,comp:L.comp||'',start:L.start||'',home:{abbr:L.home,name:L.home},away:{abbr:L.away,name:L.away},status:'closed'};}
+function legResult(s,L){ // true | false | 'void' | null (pending / unknown)
+  if(L.manual===true||L.manual===false)return L.manual;
+  const g=gameById(L.gid);if(g&&isVoid(g))return 'void';
+  if(g&&isFinal(g)){const r=evalActual(g,L.key);if(r!=null)return r;}
+  const res=s.res&&s.res[L.gid];if(res&&!g){const st=stubGame(L);if(st){try{const r=evalMarket(st,L.key,res.h,res.a);if(r!=null)return r;}catch(e){}}}
+  return null;}
+function legNeedsManual(s,L){if(legResult(s,L)!==null)return false;const g=gameById(L.gid);if(g)return isFinal(g);
+  const t=Date.parse(L.start||'');return isFinite(t)&&now()>t+3*3600e3;}
+function parlayStatus(s){ // {st:'won'|'lost'|'void'|'pending', done, live}
+  if(!s.legs||!s.legs.length)return {st:'void',done:0,live:0};let done=0,lost=false,voids=0;
+  for(const L of s.legs){const r=legResult(s,L);if(r===true)done++;else if(r===false)lost=true;else if(r==='void')voids++;}
+  const live=s.legs.length-voids;
+  if(lost)return {st:'lost',done,live};if(!live)return {st:'void',done,live};if(done===live)return {st:'won',done,live};return {st:'pending',done,live};}
 function renderMine(){
-  const rows=saved.map((s,i)=>{let st='Pending',cls='h-mid',done=0,lost=false;
-    for(const L of s.legs){const g=gameById(L.gid);const r=g?evalActual(g,L.key):null;if(r===true)done++;if(r===false)lost=true;}
-    if(lost){st='Lost';cls='h-lo';}else if(done===s.legs.length){st='Won 🎉';cls='h-hi';}else if(done)st=`${done}/${s.legs.length} hit`;
-    return `<div class="pc"><div class="pchead"><span class="pctitle">${s.legs.length}-leg parlay</span><span class="hit ${cls}">${st}</span></div>
-     ${s.legs.map(L=>{const g=gameById(L.gid);const r=g?evalActual(g,L.key):null;return `<div class="leg"><span class="legdot">${r===true?'✓':r===false?'✗':'•'}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${g?esc(g.home.abbr+' vs '+g.away.abbr+' · '+when(g)):'Game no longer listed'}</span></div></div>`;}).join('')}
-     <div class="pcfoot"><div class="odds mono">${pct(s.p)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}</small></div><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
-  $('main').innerHTML=updatedLine()+`<h2>My parlays <small>${saved.length} saved</small></h2>`+(rows.length?`<div class="grid">${rows.join('')}</div>`:`<div class="empty">Save a parlay from the builder and it will grade itself here as games finish.</div>`);
+  let changed=false;
+  for(const s of saved)for(const L of s.legs||[]){const g=gameById(L.gid);if(g&&isFinal(g)){s.res=s.res||{};const r=s.res[L.gid];
+    if(!r||r.h!==g.score.home||r.a!==g.score.away){s.res[L.gid]={h:+g.score.home,a:+g.score.away};changed=true;}}}
+  if(changed)store.set('saved',saved);
+  let n=0,w=0,staked=0,pl=0,exp=0,money=0;
+  const rows=saved.map((s,i)=>{const S=parlayStatus(s);
+    if(S.st==='won'||S.st==='lost'){n++;exp+=+s.p||0;if(S.st==='won')w++;if(s.stake>0&&s.dec>1){money++;staked+=s.stake;pl+=S.st==='won'?s.stake*(s.dec-1):-s.stake;}}
+    const tag={won:['Won 🎉','h-hi'],lost:['Lost','h-lo'],void:['Void','h-mid'],pending:[S.done?`${S.done}/${S.live} hit`:'Pending','h-mid']}[S.st];
+    return `<div class="pc"><div class="pchead"><span class="pctitle">${(s.legs||[]).length}-leg parlay</span><span class="hit ${tag[1]}">${tag[0]}</span></div>
+     ${(s.legs||[]).map((L,j)=>{const g=gameById(L.gid)||stubGame(L),r=legResult(s,L),man=L.manual===true||L.manual===false,need=legNeedsManual(s,L);
+       const res=s.res&&s.res[L.gid];
+       return `<div class="leg"><span class="legdot">${r===true?'✓':r===false?'✗':r==='void'?'–':'•'}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${g?esc(g.home.abbr+' vs '+g.away.abbr+(res?` · ${res.h}-${res.a}`:'')+' · '+(g.start?when(g):'')):'Game no longer listed'}${r==='void'?' · void':''}${man?' · graded by you':''}</span>
+         ${need?`<div class="grade"><button type="button" data-grade="${i}|${j}|1">✓ hit</button><button type="button" data-grade="${i}|${j}|0">✗ missed</button></div>`:man?`<div class="grade"><button type="button" data-grade="${i}|${j}|x">Undo</button></div>`:''}</div></div>`;}).join('')}
+     <div class="pcfoot"><div class="odds mono">${pct(+s.p||0)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}${s.stake>0?' · $'+s.stake+' stake':''}</small></div><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
+  const roi=staked>0?pl/staked:null;
+  const sum=saved.length?`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${w}/${n}</b><span>Won / settled</span></div><div class="kpi"><b class="mono" style="color:${pl>0?'var(--yes)':pl<0?'var(--no)':'var(--text)'}">${money?(pl<0?'−$':'$')+Math.abs(pl).toFixed(2):'—'}</b><span>Profit / loss${money?` on $${staked.toFixed(0)}`:''}</span></div><div class="kpi"><b class="mono">${roi==null?'—':signPct(roi)}</b><span>ROI</span></div></div>
+     <div class="note">${n?`Model expected ${exp.toFixed(1)} wins from ${n} settled parlay${n>1?'s':''} (the hit chances when you saved them); you won ${w}.`:'Nothing settled yet.'} Profit counts parlays saved with a stake and your book's price.</div></div>`:'';
+  $('main').innerHTML=updatedLine()+`<h2>My parlays <small>${saved.length} saved</small></h2>`+sum+(rows.length?`<div class="grid">${rows.join('')}</div>`:`<div class="empty">Save a parlay from the builder and it will grade itself here as games finish.</div>`);
   $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{saved.splice(+b.dataset.del,1);store.set('saved',saved);renderMine();});
+  $('main').querySelectorAll('[data-grade]').forEach(b=>b.onclick=()=>{const [i,j,v]=b.dataset.grade.split('|'),L=saved[+i]&&saved[+i].legs[+j];if(!L)return;
+    if(v==='x')delete L.manual;else L.manual=v==='1';store.set('saved',saved);renderMine();});
 }
 
 // ---------------- ticket engine (fantasy, NBA props, high-yield) ----------------
@@ -701,7 +881,7 @@ function ticketPool(o,hours){
     const L=o.target?legs.reduce((b,x)=>Math.abs(x.p-o.target)<Math.abs(b.p-o.target)?x:b):legs.sort((a,b)=>a.p-b.p)[0];
     pool.push({gid:g.id,key:L.key,label:L.label,p:L.p,sport:g.sport,who:pl.name,team:pl.team,stat:pl.stat,kind:'player',boost:pl.boost});}
   if(!o.propsOnly)for(const g of DATA.games){if(!priced(g)||startMs(g)>lim||!o.sports.includes(g.sport))continue;
-    const best={};for(const m of marketsFor(g)){const p=p1(g,m.key);if(p<o.minP||p>.95)continue;const sc=o.target?-Math.abs(p-o.target):-p;
+    const best={};for(const m of marketsFor(g)){if(m.nopool)continue;const p=p1(g,m.key);if(p<o.minP||p>.95)continue;const sc=o.target?-Math.abs(p-o.target):-p;
       if(!best[m.group]||sc>best[m.group].sc)best[m.group]={gid:g.id,key:m.key,label:m.label,p,sport:g.sport,kind:'game',sc};}
     Object.values(best).forEach(x=>pool.push(x));}
   return pool;
@@ -784,7 +964,7 @@ function renderProps(){
   const props=(DATA.players||[]).map(pl=>({pl,g:gameById(pl.gid)})).filter(x=>x.g&&x.g.sport==='nba'&&openG(x.g)).sort((a,b)=>startMs(a.g)-startMs(b.g)||a.pl.name.localeCompare(b.pl.name));
   if(props.length)html+=`<h2>Build your own <small>tap a price to add it</small></h2><div class="panel" style="padding:2px 14px">${props.map(({pl,g})=>{const legs=playerLegs(pl).filter(x=>x.p>=.55);if(!legs.length)return '';
      const pick=[legs[0],legs[Math.floor(legs.length/2)],legs[legs.length-1]].filter((x,i,a)=>a.indexOf(x)===i);
-     return pick.map(L=>`<div class="mrow"><div class="lbl">${esc(L.label)}${pl.status!=='active'?`<span class="warnflag">${esc(pl.note||pl.status)}</span>`:''}${pl.boost?'<span class="link">NEXT MAN UP</span>':''}<small>${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when(g))} · avg ${pl.avg}</small></div><span class="mono" style="font-weight:800">${pct(L.p)}</span><span></span><button class="yes ${inSlip(g.id,L.key)?'in':''}" data-leg="${g.id}|${L.key}">${fmtOdds(L.p)}</button></div>`).join('');}).join('')}</div>`;
+     return pick.map(L=>`<div class="mrow"><div class="lbl">${esc(L.label)}${pl.status!=='active'?`<span class="warnflag">${esc(pl.note||pl.status)}</span>`:''}${pl.boost?'<span class="link">NEXT MAN UP</span>':''}<small>${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when(g))} · avg ${pl.avg}</small></div><span class="mono" style="font-weight:800">${pct(L.p)}</span><span></span><button class="yes ${inSlip(g.id,L.key)?'in':''}" data-leg="${g.id}|${L.key}" aria-label="${esc(L.label+' at '+fmtOdds(L.p))}">${btnPx(L.p)}</button></div>`).join('');}).join('')}</div>`;
   $('main').innerHTML=html;if($('fzNew'))$('fzNew').onclick=()=>{fzSeed+=2;renderProps();};
 }
 // ---------------- built parlays (researched, loaded from props.json) ----------------
@@ -805,7 +985,7 @@ function picksHTML(limit){
   const picks=(DATA.picks||[]).filter(P=>pickLegs(P).length);if(!picks.length)return '';
   const list=limit?picks.filter(P=>pickLegs(P).every(L=>openG(L.g))).slice(0,limit):picks;
   if(!list.length)return '';
-  if(limit)return `<h2>Built NBA parlays <small>low lines · researched</small> <a data-gotab="props">See all ›</a></h2><div class="grid">${list.map(pickCard).join('')}</div>`;
+  if(limit)return `<h2>Built NBA parlays <small>low lines · researched</small> <button type="button" class="linkbtn" data-gotab="props">See all ›</button></h2><div class="grid">${list.map(pickCard).join('')}</div>`;
   const groups=[...new Set(list.map(P=>P.group||'Parlays'))];
   return `<div class="lineup"><span>🎯</span><div><b>Built parlays.</b> Low point lines, a strong base leg first, no two teammates on the same stat, no injured or doubtful players. Unders are marked. Hit chances are model estimates from season averages, not sportsbook prices.</div></div>`+
     groups.map(gr=>`<h2>${esc(gr)}</h2><div class="grid">${list.filter(P=>(P.group||'Parlays')===gr).sort((a,b)=>pickLegs(a).filter(L=>!openG(L.g)).length-pickLegs(b).filter(L=>!openG(L.g)).length).map(pickCard).join('')}</div>`).join('');
@@ -819,57 +999,180 @@ function wireFz(){
 }
 
 // ---------------- game sheet ----------------
-let sheetState=null;
+// The sheet is a modal dialog: focus moves in (✕ button), Escape / ✕ / backdrop close it, the page behind is inert (no tabbing
+// out, no scrolling), and focus returns to the opener. openSheet is also called while the sheet is already open (re-renders):
+// then it keeps the opener and only refocuses ✕ if the focused element was replaced.
+let sheetState=null,lastFocus=null,pendingRender=false;
 function sheetOpen(){return $('sheet').classList.contains('on');}
-function openSheet(html,state){$('sheetBody').innerHTML=html;$('sheet').classList.add('on');$('bg').classList.add('on');$('sheet').scrollTop=0;sheetState=state||{type:'html'};}
-function closeSheet(noRender){$('sheet').classList.remove('on');$('bg').classList.remove('on');sheetState=null;if(noRender!==true)render();}
+const BEHIND=['header','#sub','#main','#labHost','footer'];
+function setBehind(v){for(const sel of BEHIND){const el=document.querySelector(sel);if(el)el.inert=v;}}
+function openSheet(html,state){
+  const sh=$('sheet'),was=sheetOpen();if(!was)lastFocus=document.activeElement;
+  $('sheetBody').innerHTML=html;sh.classList.add('on');sh.inert=false;$('bg').classList.add('on');sh.scrollTop=0;sheetState=state||{type:'html'};
+  sh.setAttribute('aria-label',(state&&state.label)||'Details');setBehind(true);document.body.classList.add('sheet-open');
+  if(!sh.contains(document.activeElement))requestAnimationFrame(()=>{if(sheetOpen()&&!sh.contains(document.activeElement))$('sheetX').focus({preventScroll:true});});}
+function closeSheet(noRender){
+  const sh=$('sheet'),was=sheetOpen();sh.classList.remove('on');sh.inert=true;$('bg').classList.remove('on');sheetState=null;
+  setBehind(false);document.body.classList.remove('sheet-open');
+  if(noRender!==true||pendingRender)render();
+  const lf=lastFocus;lastFocus=null;
+  if(was&&noRender!==true&&lf&&lf!==document.body){ // the opener may have been re-rendered: find its replacement
+    let t=lf.isConnected?lf:null;const k=lf.dataset&&lf.dataset.open;
+    if(!t&&k)t=document.querySelector(`#main .linkbtn[data-open="${CSS.escape(k)}"]`)||document.querySelector(`#main [data-open="${CSS.escape(k)}"]`);
+    if(t&&t.focus)t.focus({preventScroll:true});}}
 $('bg').onclick=()=>closeSheet();
-function mrowHTML(g,x,can){const p=p1(g,x.key),id=g.id+'|'+x.key;
-  return `<div class="mrow"><div class="lbl">${esc(x.label)}${x.desc?`<small>${esc(x.desc)}</small>`:''}</div><span class="mono" style="font-weight:800">${pct(p,p<.01?1:0)}</span><span></span>
-    <button class="yes ${inSlip(g.id,x.key)?'in':''}" data-leg="${esc(id)}" ${can?'':'disabled'} aria-label="${esc(x.label+' at '+fmtOdds(p))}">${fmtOdds(p)}</button></div>`;}
+$('sheetX').onclick=()=>closeSheet();
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sheetOpen()){e.preventDefault();closeSheet();}});
+function mrowHTML(g,x,can){const p=p1(g,x.key),id=g.id+'|'+x.key,tiny=p<TINY,ok=can&&!tiny;
+  return `<div class="mrow"><div class="lbl">${esc(x.label)}${x.desc?`<small>${esc(x.desc)}</small>`:''}</div><span class="mono" style="font-weight:800">${pctRow(p)}</span><span></span>
+    <button class="yes ${inSlip(g.id,x.key)?'in':''}" data-leg="${esc(id)}" ${ok?'':'disabled'}${tiny?' title="Too unlikely to price reliably"':''} aria-label="${esc(x.label+(tiny?', under 0.5%, too unlikely to price reliably':' at '+fmtOdds(p)))}">${tiny?mktPx(p):btnPx(p)}</button></div>`;}
 function csGridHTML(g,can,mk){ // correct-score heatmap: rows = home goals, columns = away goals; tap a cell to add it
   const H=g.home.abbr,A=g.away.abbr,R=[0,1,2,3,4];let mx=0;const P={};
   for(const h of R)for(const a of R){const p=p1(g,`CS${h}-${a}`);P[h+'-'+a]=p;if(p>mx)mx=p;}
-  let out=`<div class="note" style="margin-top:2px">Rows = <b>${esc(H)}</b> goals, columns = <b>${esc(A)}</b> goals. Darker = more likely. Tap a score to add it.</div><div class="csg"><span class="ch">${esc(H.slice(0,3))}</span>${R.map(a=>`<span class="ch">${a}</span>`).join('')}`;
+  let out=`<div class="note" style="margin-top:2px">Rows = <b>${esc(H)}</b> goals, columns = <b>${esc(A)}</b> goals. Darker = more likely. ${oddsFmt==='prob'?'':'Each cell shows the chance and the fair price. '}Tap a score to add it.</div><div class="csg"><span class="ch">${esc(H.slice(0,3))}</span>${R.map(a=>`<span class="ch">${a}</span>`).join('')}`;
   for(const h of R){out+=`<span class="ch">${h}</span>`;
-    for(const a of R){const k=`CS${h}-${a}`,p=P[h+'-'+a],w=Math.round(6+59*p/(mx||1));
-      out+=`<button class="csc ${inSlip(g.id,k)?'in':''}" data-leg="${esc(g.id+'|'+k)}" ${can?'':'disabled'} style="background:color-mix(in srgb,var(--accent2) ${w}%,transparent)" title="${esc(`${H} ${h}-${a} ${A} · ${pct(p,1)} · fair ${fmtOdds(p)}`)}" aria-label="${esc(`${H} ${h}-${a} ${A}, ${pct(p,1)}, fair price ${fmtOdds(p)}`)}"><b>${h}-${a}</b><span>${pct(p,1)}</span></button>`;}}
+    for(const a of R){const k=`CS${h}-${a}`,p=P[h+'-'+a],w=Math.round(6+59*p/(mx||1)),ok=can&&p>=TINY;
+      out+=`<button class="csc ${inSlip(g.id,k)?'in':''}" data-leg="${esc(g.id+'|'+k)}" ${ok?'':'disabled'} style="background:color-mix(in srgb,var(--accent2) ${w}%,transparent)" title="${esc(`${H} ${h}-${a} ${A} · ${pct(p,1)} · fair ${mktPx(p)}`)}" aria-label="${esc(`${H} ${h}-${a} ${A}, ${pct(p,1)}, fair price ${mktPx(p)}`)}"><b>${h}-${a}</b><span>${pctRow(p)}</span>${oddsFmt==='prob'?'':`<span class="csp">${esc(mktPx(p))}</span>`}</button>`;}}
   out+=`</div><div style="margin-top:8px">${mk.filter(x=>x.group==='Correct score'&&!x.cs).map(x=>mrowHTML(g,x,can)).join('')}</div>`;
   return out;}
+
+// ---------------- your book's prices (soccer): refit every market to the 1X2 + O/U 2.5 (+BTTS) the user types ----------------
+// Stored as decimals in store 'lines' = {gid:{h,d,a,o,u,by,bn,at}}. applyLines() puts g.line = de-vigged {H,D,A?,O,B?} on each
+// game (also after every reload, which replaces the game objects); fitSoccer then uses fitLine(). No network, no odds feed.
+let LINES=(()=>{const v=store.get('lines',{});return v&&typeof v==='object'&&!Array.isArray(v)?v:{};})();
+function lineFrom(rec){ // raw decimals -> de-vigged line (shin) or {err}
+  if(!rec)return null;const okp=x=>x>1&&isFinite(x),L={margin:{}};
+  if(!okp(rec.o)||!okp(rec.u))return {err:'Over 2.5 and Under 2.5 are both needed.'};
+  const two=(a,b,nm)=>{const S=1/a+1/b;if(S<.995||S>1.25)return `${nm}: these two prices imply ${pct(S,1)} in total. A real book is 100-125%; check you typed both from one book.`;return null;};
+  let e=two(rec.o,rec.u,'Over/Under');if(e)return {err:e};
+  [L.O]=noVig([rec.o,rec.u],'shin');L.margin.ou=1/rec.o+1/rec.u-1;
+  const n3=[rec.h,rec.d,rec.a].filter(okp).length;
+  if(n3===3){const S=1/rec.h+1/rec.d+1/rec.a;if(S<.995||S>1.35)return {err:`1X2: these prices imply ${pct(S,1)} in total. A real book is 100-135%.`};
+    [L.H,L.D,L.A]=noVig([rec.h,rec.d,rec.a],'shin');L.margin.x12=S-1;}
+  else if(n3)return {err:'Fill all three of Home, Draw and Away, or leave all three blank to use the provider\'s win chances.'};
+  const nb=[rec.by,rec.bn].filter(okp).length;
+  if(nb===2){e=two(rec.by,rec.bn,'BTTS');if(e)return {err:e};[L.B]=noVig([rec.by,rec.bn],'shin');L.margin.btts=1/rec.by+1/rec.bn-1;}
+  else if(nb)return {err:'Fill both BTTS Yes and BTTS No, or neither.'};
+  return L;}
+function applyLines(d){ // put stored lines on a games array; prune lines for games long gone
+  const ids=new Set(d.games.map(g=>g.id));let pruned=false;
+  for(const gid of Object.keys(LINES)){const r=LINES[gid];if(!ids.has(gid)&&now()-(+r.at||0)>3*864e5){delete LINES[gid];pruned=true;}}
+  if(pruned)store.set('lines',LINES);
+  for(const g of d.games){if(g.sport!=='soccer')continue;const L=lineFrom(LINES[g.id]);if(L&&!L.err)g.line=L;else delete g.line;}}
+function invalidateGame(g){for(const k of ['_m','_sm','_o','_mask','_pairs','_s'])delete g[k];pCache.clear();autoCache={};}
+const lineMemo=new Map();
+function fitLine(g){ // ρ on a grid, T bisected so P(over 2.5) = book; keep the ρ whose draw (and BTTS) best match
+  const L=g.line,P=g.prob,t=P.home+P.away+(P.draw||0),H=L.H??P.home/t,D=L.D??(P.draw||0)/t,A=L.A??P.away/t,r=H/(H+A),O=L.O,B=L.B;
+  const mk=[H,D,A,'L',O,B??''].join(',');if(lineMemo.has(mk))return lineMemo.get(mk);
+  const S=new Float64Array(NC);
+  const split=(T,rho)=>{let lo=.002,hi=.998,x,lh=0,la=0,rr=0;for(let i=0;i<36;i++){const s=(lo+hi)/2;lh=T*s;la=T-lh;rr=rhoOK(lh,la,rho);x=dcFill(lh,la,rr,0,S);(x.H/(x.H+x.A)<r)?lo=s:hi=s;}
+    let o=0,b=0;for(let h=0;h<GN;h++)for(let a=0;a<GN;a++){const p=S[h*GN+a];if(h+a>2)o+=p;if(h&&a)b+=p;}return {lh,la,rho:rr,o,b,...x};};
+  let best=null;
+  for(let k=0;k<=50;k++){const rho=-.15+k*.005;let lo=1.2,hi=5,x;for(let i=0;i<30;i++){const T=(lo+hi)/2;x=split(T,rho);x.o<O?lo=T:hi=T;}
+    const sc=(x.D-D)**2+(B!=null?(x.b-B)**2:0);if(!best||sc<best.sc)best={sc,x};}
+  const x=best.x,m={kind:'goals',lh:x.lh,la:x.la,rho:x.rho,diag:0,method:'your book',
+    err:Math.max(Math.abs(x.H-H),Math.abs(x.D-D),Math.abs(x.A-A),Math.abs(x.o-O),B!=null?Math.abs(x.b-B):0)};
+  lineMemo.set(mk,m);return m;}
+function bookPanelHTML(g){
+  const r=LINES[g.id]||{},v=k=>r[k]>1?fmtPrice(r[k]):'',H=esc(g.home.abbr),A=esc(g.away.abbr);
+  const inp=(k,lab,ph)=>`<label class="fl"><span>${lab}</span><input type="text" data-bk="${k}" value="${esc(v(k))}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false" inputmode="text"></label>`;
+  return `<details class="panel bookin" id="bookBox"${g.line?' open':''}><summary style="cursor:pointer;font-weight:800">📥 Price from your book${g.line?' <span class="ybk">IN USE</span>':''}</summary>
+   <div class="ts" style="margin:6px 0 0">Type your book's prices, in any format. We remove the margin and price every other market from them. Use your sharpest book. This can't change what your book pays.</div>
+   <div class="tgrid">${inp('o','Over 2.5 *',fmtPrice(1.9))}${inp('u','Under 2.5 *',fmtPrice(1.95))}</div>
+   <div class="tgrid3">${inp('h',H+' win','optional')}${inp('d','Draw','optional')}${inp('a',A+' win','optional')}</div>
+   <div class="tgrid">${inp('by','BTTS Yes','optional')}${inp('bn','BTTS No','optional')}</div>
+   <div id="bookOut" class="kvs"></div>
+   <div class="inrow" style="margin-top:8px"><button class="btn" id="bookUse" type="button">Use these prices</button>${g.line?'<button class="btn ghost" id="bookClr" type="button">Clear</button>':''}</div>
+   <div class="note">Blank 1X2 = keep the provider's win chances. Your prices stay on this device.</div></details>`;}
+function wireBookPanel(g){
+  const box=$('bookBox');if(!box)return;
+  const read=()=>{const rec={at:Date.now()};box.querySelectorAll('[data-bk]').forEach(i=>{const d=parseOdds(i.value);if(d)rec[i.dataset.bk]=d;else if(i.value.trim())rec[i.dataset.bk]=NaN;});return rec;};
+  const show=()=>{const rec=read(),bad=Object.entries(rec).find(([k,v])=>k!=='at'&&!(v>1));
+    if(bad){$('bookOut').innerHTML=`<div class="why bookbad">Can't read that price. Try +150, -120, 2.5, 3/2 or 40%.</div>`;return null;}
+    if(!(rec.o||rec.u||rec.h||rec.d||rec.a||rec.by||rec.bn)){$('bookOut').innerHTML='';return null;}
+    const L=lineFrom(rec);if(!L||L.err){$('bookOut').innerHTML=`<div class="why bookbad">${esc(L?L.err:'')}</div>`;return null;}
+    const kv=(l,v)=>`<div class="kv"><span>${l}</span><b>${v}</b></div>`;
+    $('bookOut').innerHTML=kv('Book margin, O/U 2.5',pct(L.margin.ou,1))+kv('Fair Over 2.5',pct(L.O,1))+(L.H!=null?kv('Book margin, 1X2',pct(L.margin.x12,1))+kv(`Fair ${esc(g.home.abbr)} / draw / ${esc(g.away.abbr)}`,`${pct(L.H)} / ${pct(L.D)} / ${pct(L.A)}`):'')+(L.B!=null?kv('Book margin, BTTS',pct(L.margin.btts,1))+kv('Fair BTTS Yes',pct(L.B,1)):'');
+    return {rec,L};};
+  box.addEventListener('input',e=>{if(e.target.closest('[data-bk]'))show();});
+  if(LINES[g.id])show();
+  $('bookUse').onclick=()=>{const r=show();if(!r)return;LINES[g.id]=r.rec;store.set('lines',LINES);g.line=r.L;invalidateGame(g);emit('data',DATA);
+    const m=fit(g);toast(m.err>.02?`Fitted, but these prices don't fit together well (${(m.err*100).toFixed(1)} pts off). Check they're from one book.`:'Every market now priced from your book');openGame(g.id);renderSlipBar();};
+  if($('bookClr'))$('bookClr').onclick=()=>{delete LINES[g.id];store.set('lines',LINES);delete g.line;invalidateGame(g);emit('data',DATA);toast('Back to the provider\'s prices');openGame(g.id);renderSlipBar();};}
+
+// ---------------- same-game pairs (soccer): which two legs win together / pull apart, and their fair joint price ----------------
+const PAIR_KEYS=['H','D','A','DC1X','DCX2','O1.5','O2.5','O3.5','U2.5','U3.5','BTTS','BTTSN','HO0.5','HO1.5','AO0.5','AO1.5','HCS','ACS','A+1.5','H+1.5'];
+function pairFam(k){if(k.startsWith('G:'))return k;if(/^[OU]\d/.test(k))return 'tot';if(/^(H|D|A|DC1X|DCX2|DC12)$/.test(k))return 'res';if(k.startsWith('BTTS'))return 'btts';
+  if(/^HO/.test(k)||k==='ACS')return 'hg';if(/^AO/.test(k)||k==='HCS')return 'ag';if(/\+1\.5$/.test(k))return 'hcp';return k;}
+function bestPairs(g){
+  if(g._pairs)return g._pairs;const keys=PAIR_KEYS.filter(k=>mkOf(g,k));
+  try{if(LEGTYPES.has('G')&&window.__soccer&&__soccer.model){const R=__soccer.model(g.id); // top 2 anytime scorers per side
+    for(const s of ['home','away']){const ps=((R&&R[s]&&R[s].players)||[]).map(x=>({k:'G:'+x.id,p:p1(g,'G:'+x.id)})).filter(x=>isFinite(x.p)&&x.p>0).sort((a,b)=>b.p-a.p).slice(0,2);for(const x of ps)keys.push(x.k);}}}catch(e){}
+  const pr=[];
+  for(let i=0;i<keys.length;i++)for(let j=i+1;j<keys.length;j++){const a=keys[i],b=keys[j];if(pairFam(a)===pairFam(b))continue;
+    const pa=p1(g,a),pb=p1(g,b),pj=probOf(g,[a,b]);
+    if(!(pj>=1e-6)||pj>=Math.min(pa,pb)-1e-6||pj<.1||pj>.9)continue; // exclusive, nested (one implies the other) or extreme
+    const lift=pj/(pa*pb);if(isFinite(lift))pr.push({a,b,pa,pb,pj,lift});}
+  pr.sort((x,y)=>y.lift-x.lift);
+  return g._pairs={together:pr.filter(x=>x.lift>=1.05).slice(0,5),apart:pr.filter(x=>x.lift<=.85).slice(-3).reverse()};}
+function pairsHTML(g,can){
+  const P=bestPairs(g);if(!P.together.length&&!P.apart.length)return '';
+  const lab=k=>legLabel({gid:g.id,key:k});
+  const row=(x,add)=>`<div class="prow"><div class="pl">${esc(lab(x.a))} + ${esc(lab(x.b))}<small>${x.lift.toFixed(2)}× vs multiplying (${pct(x.pa)} × ${pct(x.pb)})</small></div><div class="pn">${pct(x.pj)}<small>${oddsFmt==='prob'?'together':'fair '+esc(fmtOdds(x.pj))}</small></div>${add&&can?`<button class="padd" type="button" data-pair="${esc(g.id+'|'+x.a+'|'+x.b)}" aria-label="${esc('Add '+lab(x.a)+' and '+lab(x.b))}">+</button>`:'<span></span>'}</div>`;
+  return `<div class="sec">Best same-game pairs</div><div class="panel pairs" style="padding:4px 14px">
+    ${P.together.length?`<div class="ts" style="margin:8px 0 2px">Win together</div>${P.together.map(x=>row(x,true)).join('')}`:''}
+    ${P.apart.length?`<div class="ts" style="margin:10px 0 2px">Pull apart</div>${P.apart.map(x=>row(x,false)).join('')}`:''}
+    <div class="note" style="margin-bottom:8px">Bet builders price these together and add a margin. If your book's same-game price beats our fair price, that's value. Model estimate.</div></div>`;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pair]');if(!b)return;const [gid,a,c]=b.dataset.pair.split('|');let n=0;
+  for(const k of [a,c])if(!inSlip(gid,k)&&toggleLeg(gid,k))n++;
+  document.querySelectorAll('#sheet [data-leg]').forEach(x=>{const s0=x.dataset.leg,i=s0.indexOf('|');x.classList.toggle('in',inSlip(s0.slice(0,i),s0.slice(i+1)));});
+  toast(n?`Added ${n} leg${n>1?'s':''} · ${slip.length} in your parlay`:'Both legs are already in your parlay');});
+
 function openGame(id){
-  const g=gameById(id);if(!g)return;const can=priced(g);
-  let html=`<div class="mkhead" style="cursor:default"><span>${esc(g.comp)}${g.tag?' · '+esc(g.tag):''}</span><span>${isFinal(g)?'Final':esc(when(g))}</span></div>
+  const g=gameById(id);
+  if(!g){if(sheetOpen()&&sheetState&&sheetState.type==='game'&&sheetState.id===id)closeSheet(true);return;} // game left the feed
+  const can=priced(g),lbl=`${g.home.name} vs ${g.away.name}`,soc=g.sport==='soccer';
+  let html=`<div class="mkhead" style="cursor:default"><span>${esc(g.comp)}${g.tag?' · '+esc(g.tag):''}</span><span>${isFinal(g)?'Final':isVoid(g)?esc(String(g.status).toUpperCase()):esc(when(g))}</span></div>
    <div style="display:flex;align-items:center;gap:10px;margin:12px 0 4px">${abBox(g.home)}<b style="font-size:19px">${esc(g.home.name)}</b></div>
    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">${abBox(g.away)}<b style="font-size:19px">${esc(g.away.name)}</b></div>`;
   if(isFinal(g))html+=`<div class="panel"><b style="font-size:22px">${g.score.home} – ${g.score.away}</b><div class="note">Final score</div></div>`;
-  if(!g.prob){openSheet(html+`<div class="empty">Win chances for this game post closer to start time. The app refreshes every hour.</div><button class="btn full ghost" id="closeS">Close</button>`,{type:'game',id});$('closeS').onclick=()=>closeSheet();return;}
+  if(isVoid(g))html+=`<div class="panel" style="border-color:var(--no)"><b>This game is ${esc(String(g.status).toLowerCase())}.</b> <span style="color:var(--mute)">It can't be bet here, and legs on it count as void.</span></div>`;
+  if(!g.prob){openSheet(html+`<div class="empty">Win chances for this game post closer to start time. The app refreshes every hour.</div><button class="btn full ghost" id="closeS">Close</button>`,{type:'game',id,label:lbl});$('closeS').onclick=()=>closeSheet();return;}
   const m=fit(g);
   if(m.kind==='goals'){
     const M=scoreMatrix(g),nhl=M.otHome!=null,cells=[];let tie=0;
     for(let h=0;h<GN;h++)for(let a=0;a<GN;a++){const p=M.P[h*GN+a];cells.push([h+'-'+a,p]);if(h===a)tie+=p;}
     const top=cells.sort((x,y)=>y[1]-x[1]).slice(0,5);
-    html+=`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${M.eh.toFixed(2)}</b><span>${esc(g.home.abbr)} expected goals${nhl?' (60 min)':''}</span></div><div class="kpi"><b class="mono">${M.ea.toFixed(2)}</b><span>${esc(g.away.abbr)} expected goals${nhl?' (60 min)':''}</span></div>${nhl?`<div class="kpi"><b class="mono">${pct(tie)}</b><span>Chance of overtime</span></div>`:`<div class="kpi"><b class="mono">Exact</b><span>Score-grid model, no sim noise</span></div>`}</div>
+    const meth=nhl?'':`<details class="method"><summary>Method</summary>Dixon-Coles score grid (ρ ${m.rho.toFixed(3)}${m.diag?`, draw factor ${m.diag.toFixed(3)}`:''}; fit: ${esc(m.method)}).${m.leagueT?` The match total is anchored half-way between what the draw price implies and the ${m.leagueT.toFixed(2)} goals per match typical of this competition.`:''} Win/draw/win chances reproduced to within ${(m.err*100).toFixed(m.err<5e-4?3:1)} pts.</details>`;
+    html+=`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${M.eh.toFixed(2)}</b><span>${esc(g.home.abbr)} expected goals${nhl?' (60 min)':' (model)'}</span></div><div class="kpi"><b class="mono">${M.ea.toFixed(2)}</b><span>${esc(g.away.abbr)} expected goals${nhl?' (60 min)':' (model)'}</span></div>${nhl?`<div class="kpi"><b class="mono">${pct(tie)}</b><span>Chance of overtime</span></div>`:`<div class="kpi"><b class="mono">Exact</b><span>every market from one score table</span></div>`}</div>
      <div class="sec" style="margin-top:12px">Most likely ${nhl?'regulation ':''}scores</div><div class="scores">${top.map(([k,p])=>`<div><b class="mono">${k}</b><span>${pct(p,1)}</span></div>`).join('')}</div>
-     <div class="note">${nhl?`Regulation score grid fitted to the win chances; a tie goes to OT/shootout (${esc(g.home.abbr)} wins ${pct(M.otHome)} of those).`:`Dixon-Coles score grid (ρ ${m.rho.toFixed(3)}) fitted to the provider's 1X2 chances. Every market below is an exact sum over this grid.`}</div></div>`;
+     <div class="note">${nhl?`Regulation score grid fitted to the win chances; a tie goes to OT/shootout (${esc(g.home.abbr)} wins ${pct(M.otHome)} of those).`:`${g.line?`Fitted to the prices you entered (${pct(g.line.margin.ou,1)} margin removed from O/U 2.5${g.line.H!=null?`, ${pct(g.line.margin.x12,1)} from 1X2`:''}). `:"Built from each team's win and draw chances. "}Every market below is added up from the same score table.`}${meth}</div></div>`;
+    if(soc&&can)html+=bookPanelHTML(g);
   } else {
     const s=sim(g);let blow=0;for(let i=0;i<s.N;i++)if(Math.abs(s.mg[i])>=14)blow++;
     const fav=m.mu>=0?g.home.abbr:g.away.abbr;
-    html+=`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${fav} ${Math.abs(m.mu).toFixed(1)}</b><span>Projected margin</span></div><div class="kpi"><b class="mono">${pct(blow/s.N)}</b><span>Chance of 14+ pt game</span></div><div class="kpi"><b class="mono">${NSIM.toLocaleString()}</b><span>Simulated games</span></div></div></div>`;
+    html+=`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${fav} ${Math.abs(m.mu).toFixed(1)}</b><span>Projected margin</span></div><div class="kpi"><b class="mono">${pct(blow/s.N)}</b><span>Chance of 14+ pt game</span></div><div class="kpi"><b class="mono">${NSIM.toLocaleString()}</b><span>Simulated games</span></div></div>${m.disc?'<div class="note">Margins land on whole points, weighted to football\'s key numbers (3, 7, 10, 14).</div>':''}</div>`;
   }
   if(g.src!=='Sportradar')html+=`<div class="panel" style="border-color:var(--amber)"><b>Estimate.</b> <span style="color:var(--mute)">No provider odds for this match yet, so win chances are Safe Bets' rating estimate. Treat with extra care.</span></div>`;
   const mk=marketsFor(g),groups=[...new Set(mk.map(x=>x.group))];
-  for(const gr of groups){html+=`<div class="sec">${esc(gr)}</div><div class="panel" style="padding:${gr==='Correct score'?'10px 12px':'2px 14px'}">`+
-    (gr==='Correct score'?csGridHTML(g,can,mk):mk.filter(x=>x.group===gr).map(x=>mrowHTML(g,x,can)).join(''))+`</div>`;}
-  html+=`<div class="note">% = our model's chance it happens. Buttons show the fair price (${esc(ODDSFMTS.find(x=>x[0]===oddsFmt)[2])}); change the format at the top. ${can?'Tap one to add it to your parlay.':'This game has started.'} If your sportsbook pays more than the fair price, that's value.</div><button class="btn full ghost" id="closeS">Close</button>`;
-  openSheet(html,{type:'game',id});$('closeS').onclick=()=>closeSheet();
+  for(const gr of groups){const gen=mk.some(x=>x.group===gr&&x.gen);
+    html+=`<div class="sec">${esc(gr)}${gen?' <span style="text-transform:none;letter-spacing:0;font-weight:600">· league average, no game line in the feed</span>':''}</div><div class="panel" style="padding:${gr==='Correct score'?'10px 12px':'2px 14px'}">`+
+    (gr==='Correct score'?csGridHTML(g,can,mk):mk.filter(x=>x.group===gr).map(x=>mrowHTML(g,x,can)).join(''))+
+    (gen?`<div class="note" style="margin-bottom:8px">No game total in the feed yet, so this ladder uses the league-average total with extra spread. It is left out of the auto parlays. Check your book's line.</div>`:'')+`</div>`;}
+  if(soc&&can)html+=pairsHTML(g,can);
+  html+=`<div class="note">% = our model's chance it happens. ${oddsFmt==='prob'?'In % format the price is the chance itself; a book offering a lower implied chance is value.':`Buttons show the fair price (${esc(ODDSFMTS.find(x=>x[0]===oddsFmt)[2])}); change the format at the top.`} ${can?'Tap one to add it to your parlay.':'This game is closed for betting.'} If your sportsbook pays more than the fair price, that's value.</div><button class="btn full ghost" id="closeS">Close</button>`;
+  openSheet(html,{type:'game',id,label:lbl});$('closeS').onclick=()=>closeSheet();
+  if(soc&&can)wireBookPanel(g);
 }
 
 // ---------------- slip / parlay builder ----------------
-let bookPx='',legPx={},bankroll=+store.get('bankroll',100)||100,kfrac=store.get('kellyFrac',.25);
+let bookPx='',legPx={},stakeTxt='',bankroll=+store.get('bankroll',100)||100,kfrac=store.get('kellyFrac',.25);
 if(!(kfrac>=0&&kfrac<=1))kfrac=.25;
 const money=x=>(x<0?'−$':'$')+Math.abs(x).toFixed(2);
 const signPct=(x,d=1)=>(x>0?'+':x<0?'−':'')+Math.abs(x*100).toFixed(d)+'%';
-function minPriceLine(p){return `Bet only at <b class="mono">${fmtOdds(p)}</b> or better.`;}
+// in % format a "better" price is a LOWER implied chance, so say that instead of the ambiguous "or better"
+function minPriceLine(p){return oddsFmt==='prob'?`Only bet if the book's implied chance is <b class="mono">${probStr(p)}</b> or lower (${probStr(p/1.05)} or lower = a 5% edge).`:`Bet only at <b class="mono">${fmtOdds(p)}</b> or better.`;}
+const orBetter=p=>oddsFmt==='prob'?`${probStr(p)} or lower`:`${fmtOdds(p)} or better`; // p = the break-even chance
 function liveSlip(){return slip.filter(L=>legOpen(gameById(L.gid),L.key));}
 function renderSlipBar(){
   slip=liveSlip();
@@ -880,7 +1183,7 @@ function renderSlipBar(){
 $('slipbar').onclick=()=>openSlip();
 function openSlip(){
   slip=liveSlip();
-  if(!slip.length){toast('Add legs by tapping a price');return;}
+  if(!slip.length){if(sheetOpen()&&sheetState&&sheetState.type==='slip')closeSheet(true);toast('Add legs by tapping a price');return;}
   const pr=parlayProb(slip);
   const legP=slip.map(L=>p1(gameById(L.gid),L.key));
   let bi=slip.findIndex(L=>L.gid+'|'+L.key===baseKey);if(bi<0){bi=legP.indexOf(Math.max(...legP));}
@@ -891,7 +1194,7 @@ function openSlip(){
   const connected=slip.filter((L,i)=>i!==bi&&slip.some((M,j)=>j!==slip.indexOf(L)&&M.gid===L.gid)).length;
   const boost=pr.indep>0?pr.p/pr.indep:1;
   const tips=[];
-  tips.push(baseP>=.75?['ok','✓',`<b>Base:</b> <span>${esc(legLabel(base))} (${pct(baseP)}). Strong start.</span>`]:baseP>=.62?['warn','!',`<b>Base is soft</b> <span>(${pct(baseP)}). Look for a leg you're more sure of, or go smaller.</span>`]:['bad','✗',`<b>No real base.</b> <span>Best leg is only ${pct(baseP)}. Bet a single or a 2-leg instead.</span>`]);
+  tips.push(baseP>=.75?['ok','✓',`<b>Anchor leg:</b> <span>${esc(legLabel(base))} (${pct(baseP)}). Strong start.</span>`]:baseP>=.62?['warn','!',`<b>Anchor leg is soft</b> <span>(${pct(baseP)}). Look for a leg you're more sure of, or go smaller.</span>`]:['bad','✗',`<b>No strong anchor leg.</b> <span>Your most likely leg is only ${pct(baseP)}. Bet a single or a 2-leg instead.</span>`]);
   tips.push(slip.length<=3?['ok','✓',`<b>${slip.length} legs.</b> <span>Small parlays hit far more often.</span>`]:slip.length===4?['warn','!',`<b>4 legs.</b> <span>Still OK, but each extra leg cuts your chances.</span>`]:['bad','✗',`<b>${slip.length} legs is a lot.</b> <span>This is how parlays lose by one leg. Trim the weakest.</span>`]);
   tips.push(pr.p===0?['bad','✗',`<b>Conflicting legs.</b> <span>These can't all win together.</span>`]:connected?['ok','✓',`<b>Connected legs: ${connected}.</b> <span>Same-game legs that move together${boost>1.01?`, worth +${pct(boost-1)} vs. random legs`:boost<.99?`, though some pull against each other (${pct(boost-1)})`:''}.</span>`]:['warn','!',`<b>No connected legs.</b> <span>Try adding a leg from the base's game that helps it win.</span>`]);
   {const seen={},clash=[];for(const L of slip){if(!isP(L.key))continue;const pl=playerById(L.key.split(':')[1]);if(!pl)continue;const k=L.gid+'|'+pl.team+'|'+pl.stat;if(seen[k])clash.push(seen[k]+' and '+pl.name);else seen[k]=pl.name;}
@@ -901,23 +1204,24 @@ function openSlip(){
   openSheet(`<div class="r" style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:20px">Parlay builder</b><button class="btn ghost" id="clearSlip" style="padding:8px 12px;font-size:13.5px">Clear</button></div>
    <div class="panel" style="margin-top:12px"><div class="kpis"><div class="kpi"><b class="mono" style="color:var(--yes)">${pct(pr.p,1)}</b><span>Chance to hit</span></div><div class="kpi"><b class="mono">${pr.p>0?fmtOdds(pr.p):'—'}</b><span>Fair odds</span></div><div class="kpi"><b class="mono">${slip.length}</b><span>Legs</span></div></div>
    ${pr.p>0?`<div class="note">${minPriceLine(pr.p)} Model estimate, not a guarantee.</div>`:''}</div>
-   <div class="sec">Legs <span style="text-transform:none;font-weight:600;letter-spacing:0">· ★ = your base</span></div>
+   <div class="sec">Legs <span style="text-transform:none;font-weight:600;letter-spacing:0">· ★ = your anchor leg (the one you're most sure of)</span></div>
    <div class="panel" style="padding:4px 14px">${order.map(i=>{const L=slip[i],g=gameById(L.gid),id=L.gid+'|'+L.key,isB=i===bi,conn=!isB&&L.gid===base.gid;
-     return `<div class="leg" style="align-items:center"><button class="star ${isB?'on':''}" data-star="${esc(id)}">★</button><div class="legtxt"><b>${esc(legLabel(L))}${conn?'<span class="link">CONNECTED</span>':''}</b><span>${esc(g.home.abbr)} vs ${esc(g.away.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(legP[i])}</span><button class="x" data-rm="${esc(id)}">✕</button></div>`;}).join('')}</div>
+     return `<div class="leg" style="align-items:center"><button class="star ${isB?'on':''}" data-star="${esc(id)}" aria-pressed="${isB}" aria-label="${esc((isB?'Anchor leg: ':'Make anchor leg: ')+legLabel(L))}">★</button><div class="legtxt"><b>${esc(legLabel(L))}${conn?'<span class="link">CONNECTED</span>':''}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</b><span>${esc(g.home.abbr)} vs ${esc(g.away.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(legP[i])}</span><button class="x" data-rm="${esc(id)}" aria-label="${esc('Remove '+legLabel(L))}">✕</button></div>`;}).join('')}</div>
    <div class="sec">How your chances shrink</div>
    <div class="panel"><div class="steps">${steps.map(p=>`<div style="height:${Math.max(4,p*100)}%"><span>${pct(p)}</span></div>`).join('')}</div><div class="steplbl">${steps.map((p,i)=>`<span>${i+1} leg${i?'s':''}</span>`).join('')}</div>
    ${slip.length>=3&&weakest!=null?`<button class="btn full ghost" id="trimBtn">Trim weakest leg → ${pct(parlayProb(slip.filter((L,i)=>i!==weakest)).p)} to hit</button>`:''}</div>
    <div class="sec">Coach</div><div class="panel" style="padding:4px 14px">${tips.map(([c,i,t])=>`<div class="coach"><span class="ic ${c}">${i}</span><div>${t}</div></div>`).join('')}</div>
    <div class="sec">Check your sportsbook's price</div>
-   <div class="panel"><div class="inrow"><input type="text" id="bookOdds" placeholder="Book price: +250, 3.5, 5/2, 28%" value="${esc(bookPx)}" autocomplete="off" spellcheck="false"><button class="btn" id="chkBtn">Check</button></div>
+   <div class="panel"><div class="inrow"><input type="text" id="bookOdds" placeholder="Book price, e.g. ${esc(fmtPrice(3.5))}" aria-label="Your sportsbook's price for this parlay" value="${esc(bookPx)}" autocomplete="off" spellcheck="false"><button class="btn" id="chkBtn">Check</button></div>
     <div class="tgrid" style="margin-top:8px"><label class="fl"><span>Bankroll ($)</span><input type="number" id="bankroll" min="0" step="1" value="${bankroll}"></label><label class="fl"><span>Kelly fraction (0-1)</span><input type="number" id="kfrac" min="0" max="1" step="0.05" value="${kfrac}"></label></div>
+    <label class="fl" style="margin-top:8px"><span>Your stake ($) · saved with the parlay for profit / ROI in My Parlays</span><input type="number" id="stake" class="stakein" min="0" step="1" value="${esc(stakeTxt)}" placeholder="10"></label>
     <div id="chkOut" class="why"></div><div class="kvs" id="minOut"></div></div>
    <div class="sec">Leg-by-leg book prices <span style="text-transform:none;font-weight:600;letter-spacing:0">· optional</span></div>
    <div class="panel"><div class="ts" style="margin:0 0 4px">Enter your book's price for each leg. Many books price a parlay by multiplying the legs; same-game legs that win together are worth less than that, legs that pull apart are worth more.</div>
     ${order.map((i,n)=>{const L=slip[i],id=L.gid+'|'+L.key;return `<div class="lpx"><div class="lt">${esc(legLabel(L))}<small id="lpxe${n}">fair ${fmtOdds(legP[i])}</small></div><input type="text" data-lpx="${esc(id)}" data-n="${n}" value="${esc(legPx[id]||'')}" placeholder="${esc(fmtOdds(legP[i]))}" autocomplete="off" spellcheck="false" aria-label="Book price for ${esc(legLabel(L))}"></div>`;}).join('')}
     <div id="naiveOut" class="kvs"></div></div>
    <button class="btn full" id="saveP">Save to My Parlays</button><button class="btn full ghost" id="copyP">Copy legs</button>
-   <div class="note">Parlay method inspired by RoyBets (@ComboProps). Same-game legs are priced together, not just multiplied: exactly from the score grid for soccer and NHL, and over ${NSIM.toLocaleString()} seeded simulations for NBA, NFL and college football. Hit chances are model estimates.</div>`,{type:'slip'});
+   <div class="note">Parlay method inspired by RoyBets (@ComboProps). The anchor leg (★) is your most likely leg; the others should help it, not fight it. Same-game legs are priced together, not just multiplied: exactly from the score grid for soccer and NHL, and over ${NSIM.toLocaleString()} seeded simulations for NBA, NFL and college football. Hit chances are model estimates.</div>`,{type:'slip',label:'Parlay builder'});
   const S=$('sheetBody');
   S.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{const [gid,key]=b.dataset.rm.split('|');toggleLeg(gid,key);if(slip.length)openSlip();else closeSheet();});
   S.querySelectorAll('[data-star]').forEach(b=>b.onclick=()=>{baseKey=b.dataset.star;saveSlip();openSlip();});
@@ -926,10 +1230,11 @@ function openSlip(){
   const p=pr.p;
   const check=()=>{
     const dec=parseOdds(bookPx);
-    $('minOut').innerHTML=p>0?`<div class="kv"><span>Break-even (fair) price</span><b>${fmtOdds(p)}</b></div><div class="kv"><span>+EV only at</span><b>${fmtOdds(p)} or better</b></div><div class="kv"><span>5% edge needs</span><b>${fmtPrice(1.05/p)} or better</b></div>`:'';
+    $('minOut').innerHTML=p>0?`<div class="kv"><span>Break-even (fair) price</span><b>${fmtOdds(p)}</b></div><div class="kv"><span>${oddsFmt==='prob'?"+EV only if the book's chance is":'+EV only at'}</span><b>${orBetter(p)}</b></div><div class="kv"><span>5% edge needs</span><b>${orBetter(p/1.05)}</b></div>`:'';
     if(!String(bookPx).trim()){$('chkOut').innerHTML='Type the price your sportsbook offers for this parlay, in any format.';S.dataset.dec='';return;}
     if(!dec){$('chkOut').innerHTML='Enter a price like +250, -120, 3.5, 5/2 or 28%.';S.dataset.dec='';return;}
-    S.dataset.dec=dec;const e=ev(p,dec),edge=p-1/dec,st=bankroll*kelly(p,dec,kfrac);
+    S.dataset.dec=dec;const e=ev(p,dec),edge=p-1/dec,st=bankroll*kelly(p,dec,kfrac);S.dataset.kelly=st>0?Math.max(1,Math.round(st)):'';
+    if($('stake'))$('stake').placeholder=st>0?String(Math.max(1,Math.round(st))):'10';
     $('chkOut').innerHTML=`<div class="kvs" style="margin-top:6px">
       <div class="kv"><span>Book price</span><b>${fmtPrice(dec)}</b></div>
       <div class="kv"><span>Book's implied chance (break-even)</span><b>${pct(1/dec,1)}</b></div>
@@ -956,8 +1261,16 @@ function openSlip(){
   $('kfrac').oninput=e=>{const v=+e.target.value;if(v>=0&&v<=1){kfrac=v;store.set('kellyFrac',kfrac);check();}};
   S.querySelectorAll('[data-lpx]').forEach(inp=>inp.oninput=()=>{legPx[inp.dataset.lpx]=inp.value;naive();});
   check();naive();
-  $('saveP').onclick=()=>{const dec=+S.dataset.dec||null;saved.push({legs:slip.map(L=>({gid:L.gid,key:L.key,label:legLabel(L)})),p:pr.p,odds:dec?dec2am(dec):null,dec,at:Date.now()});store.set('saved',saved);toast('Saved to My Parlays');};
-  $('copyP').onclick=()=>{const txt=order.map(i=>{const L=slip[i],g=gameById(L.gid);return `${legLabel(L)} (${g.home.abbr} vs ${g.away.abbr})`;}).join('\n')+`\nHit chance ${pct(pr.p)} (model estimate) · fair ${fmtOdds(pr.p)}`;
+  if($('stake'))$('stake').oninput=e=>{stakeTxt=e.target.value;};
+  // Save / Copy recompute from the live slip at click time: a data refresh may have dropped legs since the sheet was drawn
+  $('saveP').onclick=()=>{const L=liveSlip();if(!L.length){toast('These legs are no longer available');return;}
+    const P=parlayProb(L).p,dec=+S.dataset.dec||null,sk=+($('stake')&&$('stake').value)||+S.dataset.kelly||null;
+    saved.push({legs:L.map(x=>{const g=gameById(x.gid),P0=g&&g.prob;return {gid:x.gid,key:x.key,label:legLabel(x),p1:p1(g,x.key),sport:g&&g.sport,comp:g&&g.comp,
+      home:g&&g.home.abbr,away:g&&g.away.abbr,start:g&&g.start,snap:P0?[P0.home,P0.draw??null,P0.away]:null};}),
+      p:P,odds:dec?dec2am(dec):null,dec,stake:sk>0?sk:null,at:Date.now()});
+    store.set('saved',saved);toast(`Saved to My Parlays${sk>0?` · $${sk} stake`:''}`);};
+  $('copyP').onclick=()=>{const L=liveSlip();if(!L.length){toast('These legs are no longer available');return;}const P=parlayProb(L).p;
+    const txt=L.map(x=>{const g=gameById(x.gid);return `${legLabel(x)} (${g.home.abbr} vs ${g.away.abbr})`;}).join('\n')+`\nHit chance ${pct(P)} (model estimate) · fair ${fmtOdds(P)}`;
     navigator.clipboard.writeText(txt).then(()=>toast('Copied')).catch(()=>toast('Copy blocked by browser'));};
 }
 
@@ -1068,21 +1381,27 @@ function calcOT(){
                              openG(g) (not started), gameById(id)
    odds                      SB.oddsFormat (getter: 'american'|'decimal'|'fractional'|'prob'), setOddsFormat(f) (persists 'oddsFmt',
                              re-renders, emits 'oddsformat'), fmtOdds(p[,fmt]) fair price for probability p, fmtPrice(dec[,fmt]) a
-                             decimal price, p2am(p) -> int, am2dec(a), p2dec(p), dec2p(d), dec2am(d), fmtAm(a),
-                             parseOdds(str) -> decimal or null ("+250" 3.5, "-120" 1.833, "2.5", "3/2" 2.5, "40%" 2.5, "evens" 2;
-                             a bare number >= 100 is read as American), ev(p,dec) = p*dec-1, kelly(p,dec,fraction=1) = bankroll share,
+                             decimal price (fractional snaps to the UK ladder: 10/11, 21/20, Evens), p2am(p) -> int (even = +100), am2dec(a), p2dec(p), dec2p(d), dec2am(d), fmtAm(a),
+                             parseOdds(str[,fmt]) -> decimal or null ("+250" 3.5, "-120" 1.833, "2.5", "3/2" 2.5, "40%" 2.5,
+                             "evens" 2, "1,85" 1.85, "+1,000" 11). fmt (default: the user's format) decides a BARE number: American
+                             "150" = +150, decimal "150" = 150.0, % "40" = 40%. ev(p,dec) = p*dec-1, kelly(p,dec,fraction=1) = bankroll share,
                              noVig(decs, 'multiplicative'|'additive'|'power'|'shin') -> fair probabilities
-   model                     fit(g) -> null | goals {kind:'goals', lh, la, rho, diag, otHome?(NHL), method, err}
-                                     | margin {kind:'margin', mu, sd, T, tsd}
+   model                     fit(g) -> null | goals {kind:'goals', lh, la, rho, diag, otHome?(NHL), method, leagueT?, err}
+                                     (soccer method: 'draw+league prior' | 'draw+league prior +diag' | 'feed total' | 'your book'
+                                     (user-entered prices, g.line) | 'no-draw-price'; leagueT(comp) = the competition's goals prior)
+                                     | margin {kind:'margin', mu, sd, T, tsd, genTotal (no feed total: league-average T, wider tsd),
+                                     disc?, pm?, kmax? (NFL/NCAAF: integer key-number margin pmf, pm[k+kmax])}
                              scoreMatrix(g) -> null | {n:11, P:Float64Array(121) (P[h*11+a], sums to 1), lh, la, rho, eh, ea,
                                      otHome?, regulation?}. Soccer = full time. NHL = REGULATION grid; ties go to OT/SO, home wins
                                      those with prob otHome and the winner gets +1 goal in the final score.
                              outcomes(g) -> {h:Int8Array, a:Int8Array, p:Float64Array, n} final-score outcomes (soccer = grid
                                      cells; NHL = grid with ties split into OT wins). Joints are sums over these.
-                             simGame(g) -> {N, mg:Float32Array (home margin), tt:Float32Array (total), seed} margin sports only,
+                             simGame(g) -> {N, mg:Float32Array (home margin; whole points for NFL/NCAAF), tt:Float32Array (total), seed}
+                                     margin sports only (cached by id + fit parameters across data reloads),
                                      100,000 runs, mulberry32 seeded by hashStr(g.id) -> identical on every reload. rng(seed),
                                      hashStr(s) are exported for modules that want their own seeded sims.
-                             marketsFor(g) -> [{group, key, label, desc, f, anch?, nopool?, cs?}]   (f(h,a) for goals sports on
+                             marketsFor(g) -> [{group, key, label, desc, f, anch?, nopool?, gen?, cs?}]   nopool = never auto-picked;
+                                     gen = built on a league-average total because the feed has no game line. (f(h,a) for goals sports on
                                      the final score; f(margin,total) for margin sports)
                              p1(g,key) single-leg chance (cached); probOf(g, keys) joint chance that all keys of ONE game hit
                                      (exact for soccer / NHL; 100k sims for margin sports); parlayProb(legs) -> {p, indep}
@@ -1102,15 +1421,18 @@ function calcOT(){
                                      goal. For margin sports custom legs are always independent. Keep prob consistent with cond:
                                      prob(g,k) ≈ Σ P(h,a)·cond(g,k)(h,a). Handler exceptions are caught (leg treated as 0 / indep).
    slip                      SB.slip (getter, array of {gid,key,label,sport}), toggleLeg(gid,key) -> true if added, inSlip(gid,key),
-                             setSlip(legs, baseKey?) (baseKey = "gid|key", defaults to first leg), openSlip(), renderSlipBar(),
+                             setSlip(legs, baseKey?) (baseKey = "gid|key", defaults to first leg), replaceSlip(legs, baseKey?) = setSlip
+                             plus an Undo toast when it throws away a different non-empty slip (use it for "Open in builder"),
+                             openSlip(), renderSlipBar(), isVoid(g) (postponed / cancelled),
                              openGame(gid). A custom leg is addable while its game hasn't started and its type is registered.
    ui                        registerTab({key, label, after?, render(mainEl, params)}) adds a top-level tab after tab `after`
                              (else at the end); re-registering a key replaces it. goTab(key, params) switches tab (closes any
                              sheet) and calls render(mainEl, params); a plain tab click passes {}. render() redraws the view.
-                             openSheet(html), closeSheet() bottom sheet helpers.
+                             openSheet(html[, {label}]), closeSheet() modal bottom-sheet helpers (focus, Escape, inert page).
                              on(event, fn) -> unsubscribe fn. Events: 'data' (DATA, after every data load; a late subscriber
                              gets one call right away), 'slip' (slip array), 'oddsformat' (format), 'theme' ('light'|'dark').
-   Built-in tab keys: trending, props, fantasy, parlays, odds, soccer, nba, nfl, nhl, ncaaf, mine, lab.
+   Built-in tab keys: trending, props, fantasy, parlays, odds, soccer, nba, nfl, nhl, ncaaf, mine, lab. Tab order is fixed by
+   TAB_ORDER (trending, soccerparlays, parlays, props, fantasy, mine, soccer…ncaaf, odds, sim, lab); `after` only places other keys.
    window.__fm2 is the older debug export and stays.
    ============================================================================= */
 const SB={version:2,NSIM,
@@ -1118,29 +1440,66 @@ const SB={version:2,NSIM,
   $,esc,clamp,pct,when,abBox,toast,store,startMs,started,isFinal,priced,openG,gameById,
   get oddsFormat(){return oddsFmt},setOddsFormat,fmtOdds,fmtPrice,p2am,am2dec,p2dec,dec2p,dec2am,fmtAm,parseOdds,ev,kelly,noVig,
   fit,scoreMatrix,outcomes,simGame:sim,rng:mulberry32,hashStr,marketsFor,p1,probOf,parlayProb,legLabel,evalMarket,registerLegType,
-  get slip(){return slip},toggleLeg,inSlip,setSlip,openSlip,renderSlipBar,openGame,
+  get slip(){return slip},toggleLeg,inSlip,setSlip,replaceSlip,openSlip,renderSlipBar,openGame,isVoid,leagueT,
   registerTab,goTab,render,on,openSheet,closeSheet:()=>closeSheet()};
 window.SB=SB;
 
 // ---------------- boot ----------------
-async function load(){
+// Feed hygiene: data.json is written by an outside job every hour. Anything that is not a games ARRAY is a failed fetch; bad
+// entries are dropped or repaired (string probabilities coerced, missing comp filled) instead of breaking the page.
+function sanitizeFeed(d){
+  if(!d||typeof d!=='object'||!Array.isArray(d.games))return null;
+  const team=t=>t&&typeof t==='object'&&t.abbr!=null&&t.name!=null&&String(t.abbr).trim()&&String(t.name).trim();
+  const games=[];
+  for(const g of d.games){
+    if(!g||typeof g!=='object'||typeof g.id!=='string'||!g.id||!SPORTNAME[g.sport]||!Number.isFinite(Date.parse(g.start))||!team(g.home)||!team(g.away))continue;
+    g.home.abbr=String(g.home.abbr);g.home.name=String(g.home.name);g.away.abbr=String(g.away.abbr);g.away.name=String(g.away.name);
+    if(!g.comp)g.comp=SPORTNAME[g.sport];else g.comp=String(g.comp);
+    if(g.prob!=null){const P={};let bad=typeof g.prob!=='object';
+      if(!bad)for(const k of ['home','away','draw']){if(g.prob[k]==null)continue;const v=+g.prob[k];if(!Number.isFinite(v)||v<0)bad=true;else P[k]=v;}
+      if(bad||!(P.home>=0&&P.away>=0)||P.home+P.away+(P.draw||0)<=0||P.home+P.away<=0)delete g.prob;else g.prob=P;}
+    if(g.total!=null){const t=+g.total;if(Number.isFinite(t)&&t>0)g.total=t;else delete g.total;}
+    if(g.score!=null){const h=+(g.score&&g.score.home),a=+(g.score&&g.score.away);if(Number.isFinite(h)&&Number.isFinite(a))g.score={home:h,away:a};else delete g.score;}
+    games.push(g);}
+  d.games=games;return d;}
+async function load(){ // -> true when DATA was replaced
   const get=async f=>{try{const r=await fetch(f,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}return null;};
   // data.json = games feed; props.json = player props + built parlays (kept apart so the hourly data.json refresh never wipes them);
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
   let [d,pr,sc]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json')]);
-  if(!d){try{d=JSON.parse($('seed').textContent);}catch(e){}}
-  if(d&&d.games){
-    if(pr){const ids=new Set((pr.players||[]).map(p=>p.id));d.players=[...(pr.players||[]),...(d.players||[]).filter(p=>!ids.has(p.id))];
-      d.picks=pr.picks||d.picks||[];if(pr.lineups)d.lineups=pr.lineups;}
-    d.players=d.players||[];d.picks=d.picks||[];d.lineups=d.lineups||null;d.scorers=sc||null;
-    DATA=d;pCache.clear();autoCache={};dataLoaded=true;emit('data',DATA);}
+  d=sanitizeFeed(d);
+  if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
+    if(dataLoaded)return false;
+    try{d=sanitizeFeed(JSON.parse($('seed').textContent));}catch(e){}
+    if(!d)return false;}
+  if(!pr&&dataLoaded)pr={players:DATA.players,picks:DATA.picks,lineups:DATA.lineups}; // a failed side file keeps its last good copy
+  if(!sc&&dataLoaded)sc=DATA.scorers;
+  if(pr){const ids=new Set((pr.players||[]).map(p=>p.id));d.players=[...(pr.players||[]),...(d.players||[]).filter(p=>!ids.has(p.id))];
+    d.picks=pr.picks||d.picks||[];if(pr.lineups)d.lineups=pr.lineups;}
+  d.players=d.players||[];d.picks=d.picks||[];d.lineups=d.lineups||null;d.scorers=sc||null;
+  applyLines(d);
+  const ids=new Set(d.games.map(g=>g.id));for(const [k,v] of SIMC)if(!ids.has(k.slice(0,k.indexOf('|'))))SIMC.delete(k);
+  DATA=d;pCache.clear();autoCache={};dataLoaded=true;lastGood=Date.now();emit('data',DATA);return true;
 }
+let lastGood=null;
 registerTab({key:'odds',label:'💰 Odds Tools',after:'parlays',render:renderOddsTools});
 applyTheme();renderTabs();
 const domReady=document.readyState==='loading'?new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true})):Promise.resolve();
 Promise.all([load(),domReady]).then(()=>{const t0=performance.now();render();renderSlipBar();SB.firstRender={at:performance.now(),ms:performance.now()-t0};});
-setInterval(()=>{load().then(()=>{if(!sheetOpen())render();renderSlipBar();});},10*60*1000);
-window.__fm2={get DATA(){return DATA},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+// ---------- background refresh ----------
+// Every 10 minutes: reload; redraw the view AND any open sheet (so Save / the slip never use pruned legs), but never while the
+// user is typing in a field (that would close the phone keyboard): then it waits until focus leaves the field.
+const typingNow=()=>{const a=document.activeElement;return !!(a&&a.matches&&a.matches('input,select,textarea')&&(($('main').contains(a))||$('sheet').contains(a)));};
+function refreshAll(){
+  if(typingNow()){pendingRender=true;renderSlipBar();return;}
+  const st=sheetOpen()&&sheetState?{...sheetState,top:$('sheet').scrollTop}:null;
+  if(!(tab==='lab'&&labFrame))render(); // the lab view has nothing feed-driven to redraw
+  if(st){if(st.type==='game')openGame(st.id);else if(st.type==='slip')openSlip();if(sheetOpen())$('sheet').scrollTop=st.top;}
+  renderSlipBar();}
+function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
+document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
+setInterval(refreshTick,10*60*1000);
+window.__fm2={get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

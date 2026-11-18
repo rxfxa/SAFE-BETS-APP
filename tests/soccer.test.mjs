@@ -160,7 +160,9 @@ try {
         for (let k = 1; k <= 10; k++) { const pa = 1 - Math.pow(1 - a.e, k), pb = 1 - Math.pow(1 - b.e, k); if (!(both[k] < pa * pb)) out.condBad.push(`${a.id}+${b.id} k=${k}`); }
         // unconditionally the grid's team goals are Poisson, so (thinning) the joint is the product of singles, never above it
         const j = SB.probOf(g, [ka, kb]), pr = SB.p1(g, ka) * SB.p1(g, kb);
-        if (!(j <= pr * (1 + 1e-9) && j >= pr * (1 - 2e-3))) out.uncondBad.push(`${a.id}+${b.id} joint ${j} product ${pr}`);
+        // (a fit that needs the draw factor δ — '+diag', ~5 lopsided games — has non-Poisson team marginals, so allow 1% there)
+        const dg = SB.fit(g).diag ? 1e-2 : 1e-9;
+        if (!(j <= pr * (1 + dg) && j >= pr * (1 - Math.max(2e-3, dg)))) out.uncondBad.push(`${a.id}+${b.id} joint ${j} product ${pr}`);
         // scorer + his team winning: strongly positive
         const kw = s === 'home' ? 'H' : 'A', jw = SB.probOf(g, [ka, kw]);
         if (!(jw > SB.p1(g, ka) * SB.p1(g, kw))) out.win.push(`${a.id} + ${kw}`);
@@ -184,14 +186,96 @@ try {
   check('scorer + his team winning: joint above product; parlayProb uses the exact joint', !gs.win.length, gs.win.slice(0, 3).join('; '));
   check('first scorer implies anytime; two different first scorers = 0; unknown player = 0', gs.firstImplies && gs.twoFirsts === 0 && gs.unknown === 0);
   check('team-under legs (SX) match the engine\'s complementary markets', gs.sx < 1e-12, String(gs.sx));
-  check('every scorers.json team in a feed fixture is matched by name', gs.unmatched.every(n => ['AEK Athens', 'SK Slovan Bratislava', 'Valencia CF', 'Puebla', 'Atletico de San Luis', 'Atlante', 'Schalke 04'].includes(n)), gs.unmatched.join(', '));
+  // Valencia CF and Schalke 04 were added to scorers.json (prior-only players); the rest have no data yet
+  check('every scorers.json team in a feed fixture is matched by name', gs.unmatched.every(n => ['AEK Athens', 'SK Slovan Bratislava', 'Puebla', 'Atletico de San Luis', 'Atlante'].includes(n)), gs.unmatched.join(', '));
   check('doubtful players are never auto-picked', !allCards.some(c => c.legs.some(L => L.key === 'G:osimhen-gal')));
+
+  // ---------- regression checks (fix round 1) ----------
+  const rg = await page.evaluate(cards => {
+    const out = {};
+    const games = SB.DATA.games.filter(g => g.sport === 'soccer' && SB.priced(g));
+    const grid = (g, f) => { const M = SB.scoreMatrix(g); let s = 0; for (let h = 0; h < M.n; h++) for (let a = 0; a < M.n; a++) s += M.P[h * M.n + a] * f(h, a); return s; };
+    // settlement basis: anytime = Σ P(h,a)·(1-(1-e)^k) with NO availability factor (books void a scorer bet if he doesn't play)
+    let worst = 0, pairWorst = 0, doubt = [], dfMax = 0, dfWho = '';
+    for (const g of games) { const R = __soccer.model(g.id);
+      for (const s of ['home', 'away']) {
+        for (const x of R[s].players) {
+          const want = grid(g, (h, a) => 1 - Math.pow(1 - x.e, s === 'home' ? h : a));
+          worst = Math.max(worst, Math.abs(SB.p1(g, 'G:' + x.id) - want));
+          if (x.status === 'doubtful') doubt.push(x.id);
+          if (x.pos === 'DF' && SB.p1(g, 'G:' + x.id) > dfMax) { dfMax = SB.p1(g, 'G:' + x.id); dfWho = x.id + '@' + g.id; }
+        }
+        const ps = R[s].players; if (ps.length >= 2) { const T = __soccer.ieTable([ps[0].e, ps[1].e], 10);
+          pairWorst = Math.max(pairWorst, Math.abs(SB.probOf(g, ['G:' + ps[0].id, 'G:' + ps[1].id]) - grid(g, (h, a) => T[s === 'home' ? h : a]))); }
+      } }
+    out.worst = worst; out.pairWorst = pairWorst; out.dfMax = dfMax; out.dfWho = dfWho; out.doubt = doubt;
+    // a doubtful player is priced as if he plays, with fewer minutes (x.75), not halved
+    const sc = JSON.parse(JSON.stringify(SB.DATA.scorers)), gal = games.find(g => g.home.name === 'Galatasaray Istanbul' || g.away.name === 'Galatasaray Istanbul');
+    if (gal) { const R0 = __soccer.model(gal.id), x0 = R0.byId.get('osimhen-gal');
+      sc.teams.find(t => t.abbr === 'GAL').players.find(p => p.id === 'osimhen-gal').status = 'active';
+      const old = SB.DATA.scorers; SB.DATA.scorers = sc; let x1; try { x1 = __soccer.modelOf({ ...gal }).byId.get('osimhen-gal'); } finally { SB.DATA.scorers = old; }
+      out.doubtRatio = x0 && x1 ? x0.e / x1.e : null; }
+    // proven scorer with a slow start: Kane above Diaz, and the Bundesliga scorer + win pick is Kane
+    const bmu = games.find(g => g.home.abbr === 'BMU' && g.away.abbr === 'KOE');
+    out.kane = bmu ? SB.p1(bmu, 'G:kane-bmu') : 0; out.diaz = bmu ? SB.p1(bmu, 'G:diaz-bmu') : 1;
+    out.sgp = (__soccer.sectionParlays('bundesliga', 'scorers').find(P => /same game/.test(P.title)) || { legs: [] }).legs.map(L => L.key).join(',');
+    // auto picks: no DF / GK / doubtful / prior-only scorer; no player or club twice in one scorer parlay
+    out.badPick = []; out.dupe = [];
+    for (const c of cards) { const keys = c.legs.filter(L => L.key.startsWith('G:'));
+      for (const L of keys) { const x = __soccer.model(L.gid).byId.get(L.key.replace('G:1st:', '').replace('G:', ''));
+        if (!x || x.pos === 'DF' || x.pos === 'GK' || x.status !== 'active' || x.priorOnly) out.badPick.push(c.id + ' ' + L.key); }
+      if (c.sec === 'scorers' || c.sec === 'mega') { const ids = keys.map(L => L.key), clubs = keys.map(L => __soccer.model(L.gid).byId.get(L.key.slice(2)).abbr);
+        if (!/same game/i.test(c.title) && (new Set(ids).size !== ids.length || new Set(clubs).size !== clubs.length)) out.dupe.push(c.id + ' ' + ids.join(',')); } }
+    out.allDouble = __soccer.sectionParlays('all', 'scorers').some(P => /double/.test(P.title) && P.legs.length === 2);
+    // Safer tiers: no padding leg while that match has a main-line leg in the band; mean leg chance below the 86% cap
+    out.pad = []; let n = 0, sum = 0;
+    for (const c of cards.filter(c => /Safer/.test(c.title))) for (const L of c.legs) { n++; sum += SB.p1(SB.gameById(L.gid), L.key);
+      if (__soccer.PAD.has(L.key)) { const alt = __soccer.cands(c.sec, L.gid).filter(x => !__soccer.PAD.has(x.key) && x.p >= .72 && x.p <= .86); if (alt.length) out.pad.push(c.id + ' ' + L.key + ' (alt ' + alt[0].key + ')'); } }
+    out.saferMean = sum / n;
+    // exact scores: the two cards share no leg; the favourites card never holds a draw score
+    out.exact = [];
+    for (const lg of ['all', ...__soccer.LEAGUES.map(L => L.id)]) { const ps = __soccer.sectionParlays(lg, 'exact'); if (ps.length < 2) continue;
+      const a = ps[0].legs.map(L => L.gid + L.key), b = ps[1].legs.map(L => L.gid + L.key);
+      if (a.some(k => b.includes(k))) out.exact.push(lg + ' shared leg');
+      if (ps[1].legs.some(L => { const m = /^CS(\d)-(\d)$/.exec(L.key); return !m || m[1] === m[2]; })) out.exact.push(lg + ' draw in favourites card'); }
+    // league names: feed variants map to the right league; foreign / lower leagues don't
+    const want = { 'MLS Cup Playoffs': 'mls', 'MLS Playoffs': 'mls', 'USA MLS': 'mls', 'Champions League, League Phase': 'ucl', 'UEFA Champions League - League Stage': 'ucl',
+      'UEFA Europa League - League Phase': 'uel', 'England - Premier League': 'epl', 'Spanish LaLiga': 'laliga', 'LaLiga Santander': 'laliga', 'Spain Primera Division': 'laliga',
+      'Germany Bundesliga': 'bundesliga', 'Bundesliga 1': 'bundesliga', 'Netherlands Eredivisie': 'eredivisie', 'Portugal Primeira Liga': 'primeira', 'Serie A 2026/27': 'seriea',
+      'French Ligue 1 2026-27': 'ligue1', 'Liga MX': 'x-liga-mx', 'Austrian Bundesliga': 'x-austrian-bundesliga' };
+    const notTop = ['Brazil Serie A', '2. Bundesliga', 'UEFA Europa Conference League', 'Egyptian Premier League', 'Premier League 2', "Women's Champions League", 'AFC Champions League', 'CONCACAF Champions Cup', 'MLS Next Pro', 'Argentina Primera Division', 'LaLiga Hypermotion', 'UEFA Champions League Qualifying'];
+    out.lg = Object.entries(want).filter(([c, id]) => __soccer.leagueOf(c).id !== id).map(([c]) => c + '=' + __soccer.leagueOf(c).id)
+      .concat(notTop.filter(c => !__soccer.leagueOf(c).other).map(c => c + '=' + __soccer.leagueOf(c).id));
+    // team aliases
+    const tf = (n, ab, comp) => (__soccer.teamFor({ name: n, abbr: ab }, { comp }) || {}).team || null;
+    out.alias = [['Lyon', 'LYO', 'Ligue 1', 'Olympique Lyon'], ['FC Koln', 'COL', 'Bundesliga', '1. FC Cologne'], ['Koln', 'COL', 'Bundesliga', '1. FC Cologne'], ['Inter', 'INT', 'Serie A', 'Inter Milano'], ['Inter Miami CF', 'MIA', 'MLS', 'Inter Miami CF']]
+      .filter(([n, ab, comp, t]) => tf(n, ab, comp) !== t).map(x => x[0] + '->' + tf(x[0], x[1], x[2]));
+    return out;
+  }, allCards);
+  check('scorer prices are on a settlement basis: anytime = exact grid sum with no availability factor', rg.worst < 1e-12 && rg.pairWorst < 1e-12, `${rg.worst} / ${rg.pairWorst}`);
+  check('a doubtful player is priced as if he plays with 75% of the minutes (not halved)', rg.doubtRatio != null && Math.abs(rg.doubtRatio - .75) < .02, String(rg.doubtRatio));
+  check('defenders are priced as defenders: every DF anytime chance below 18%', rg.dfMax < .18, `${(rg.dfMax * 100).toFixed(1)}% ${rg.dfWho}`);
+  check('proven scorer prior: Kane above Diaz v Koln, and Kane is the Bundesliga scorer + win pick', rg.kane > rg.diaz && /G:kane-bmu/.test(rg.sgp), `Kane ${rg.kane.toFixed(3)} Diaz ${rg.diaz.toFixed(3)} sgp ${rg.sgp}`);
+  check('auto-picked scorers: no defender, keeper, doubtful or prior-only player', !rg.badPick.length, rg.badPick.slice(0, 3).join('; '));
+  check('scorer parlays never repeat a player or a club; the all-leagues double still builds', !rg.dupe.length && rg.allDouble, rg.dupe.slice(0, 3).join('; '));
+  check('Safer tiers: no padding leg (team o0.5, u4.5, team u2.5) when a main line fits; mean leg chance below 86%', !rg.pad.length && rg.saferMean < .86, `${rg.pad.slice(0, 3).join('; ')} mean ${(rg.saferMean * 100).toFixed(1)}%`);
+  check('exact-score cards: double and favourites card share no leg; favourites card has no draw score', !rg.exact.length, rg.exact.join('; '));
+  check('league name variants map to the right league (and foreign / lower leagues do not)', !rg.lg.length, rg.lg.join('; '));
+  check('team aliases resolve short / local club names', !rg.alias.length, rg.alias.join('; '));
+  check('Lepaul (ankle) is doubtful and never auto-picked', !allCards.some(c => c.legs.some(L => L.key === 'G:lepaul-ren')) && rg.doubt.includes('lepaul-ren'));
 
   // goalscorer board: flags, freshness, lineup note
   await page.evaluate(() => { document.querySelector('[data-sp-lg="ucl"]').click(); document.querySelector('[data-sp-sec="scorers"]').click(); });
   const sb = await page.evaluate(() => ({ fresh: /Lineups are not confirmed/.test(document.querySelector('#main .lineup')?.textContent || '') && /compiled/.test(document.querySelector('#main .lineup').textContent),
     doubt: [...document.querySelectorAll('#main .sprow')].some(r => /Osimhen/.test(r.textContent) && /DOUBTFUL/.test(r.textContent)), nodata: /No scorer data for/.test(document.querySelector('#main').textContent) }));
   check('goalscorers: data freshness + confirm-lineups note, doubtful flag, honest "no scorer data" rows', sb.fresh && sb.doubt && sb.nodata, JSON.stringify(sb));
+  const copy = await page.evaluate(() => { const m = document.querySelector('#main'), t = m.textContent;
+    return { void: /void \(stake back\)/.test(t) && /assume he plays/.test(t), ninety: /90 minutes plus stoppage time/.test(t), expg: /Exp\. goals/.test(t), xg: /\bxG\b/.test(t) }; });
+  check('scorer copy: void-if-he-doesn\'t-play basis, 90-minute settlement, "Exp. goals" (no "xG" label)', copy.void && copy.ninety && copy.expg && !copy.xg, JSON.stringify(copy));
+  const mlsKo = await page.evaluate(() => { document.querySelector('[data-sp-lg="mls"]').click(); document.querySelector('[data-sp-sec="results"]').click();
+    const boards = document.querySelectorAll('#main .spboard'), badges = [...boards].filter(b => /90-MIN RESULT/.test(b.textContent)).length;
+    return { boards: boards.length, badges, intro: /extra time or penalties/.test(document.querySelector('#main').textContent) }; });
+  check('MLS playoff fixtures carry a 90-MIN RESULT badge and the Results intro explains 90-minute settlement', mlsKo.boards > 0 && mlsKo.badges === mlsKo.boards && mlsKo.intro, JSON.stringify(mlsKo));
 
   // "out" players are excluded (swap in a modified copy of the scorer data, price a copy of the game, restore)
   const outEx = await page.evaluate(() => {

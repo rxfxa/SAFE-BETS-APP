@@ -1,8 +1,8 @@
 {
- "updated": "2026-11-18T05:16:50Z",
+ "updated": "2026-11-18T09:00:00Z",
  "season": "2026-27",
  "asOf": "Goal totals as of about 1-9 Nov 2026 (league matchday ~10-12); MLS = 2026 regular-season final totals",
- "note": "League goal totals from web-search snippets; sources often differ by 1-2 goals. Model inputs only; confirm lineups before betting.",
+ "note": "League goal totals from web-search snippets; sources often differ by 1-2 goals. Model inputs only; confirm lineups before betting. prevG / prevApps / prevMins = previous league season (used as the player's prior); prevEst = partly derived. aliases = other names the feed may use.",
  "teams": [
   {
    "team": "AFC Bournemouth",
@@ -206,6 +206,9 @@
    ],
    "sources": [
     "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ],
+   "aliases": [
+    "Brighton"
    ]
   },
   {
@@ -478,7 +481,9 @@
      "apps": 10,
      "uclGoals": 5,
      "status": "active",
-     "note": "9 in 10 PL; 5 UCL goals after MD4"
+     "note": "9 in 10 PL; 5 UCL goals after MD4. 2025-26: 27 PL goals in 35 apps, Golden Boot (premierleague.com)",
+     "prevG": 27,
+     "prevApps": 35
     },
     {
      "id": "cherki-mci",
@@ -492,7 +497,11 @@
    "sources": [
     "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
     "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
-    "https://www.vanguardngr.com/2026/11/full-list-champions-league-tops-scorers-after-matchday-4/"
+    "https://www.vanguardngr.com/2026/11/full-list-champions-league-tops-scorers-after-matchday-4/",
+    "https://www.premierleague.com/en/news/4591856/haaland-wins-202526-premier-league-golden-boot-award"
+   ],
+   "aliases": [
+    "Man City"
    ]
   },
   {
@@ -542,6 +551,10 @@
    "sources": [
     "https://www.espn.com/soccer/team/stats/_/id/360",
     "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27"
+   ],
+   "aliases": [
+    "Man United",
+    "Man Utd"
    ]
   },
   {
@@ -603,6 +616,10 @@
    ],
    "sources": [
     "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ],
+   "aliases": [
+    "Nott'm Forest",
+    "Notts Forest"
    ]
   },
   {
@@ -662,6 +679,10 @@
     "https://www.11v11.com/teams/tottenham-hotspur/tab/stats/option/scorers/",
     "https://www.espn.com/soccer/stats/_/league/eng.1",
     "https://www.livescore.com/en/news/football/premier-league/tottenhams-biggest-problem-is-clear-and-roberto-de-zerbi-cant-fix-it-hotspur-hq/"
+   ],
+   "aliases": [
+    "Tottenham",
+    "Spurs"
    ]
   },
   {
@@ -696,6 +717,11 @@
     "https://www.espn.com/soccer/stats/_/league/nor.1",
     "https://www.eurosport.no/fotball/eliteserien/2026/toppscorer.shtml",
     "https://en.wikipedia.org/wiki/2026_Eliteserien"
+   ],
+   "aliases": [
+    "Bodo/Glimt",
+    "Bodø/Glimt",
+    "FK Bodo/Glimt"
    ]
   },
   {
@@ -795,6 +821,9 @@
     "https://www.espn.com/soccer/stats/_/league/NED.1/view/scoring",
     "https://www.topscorersfootball.com/eredivisie/season-2026/2027",
     "https://www.vavel.com/en-us/data/eredivisie/stats/"
+   ],
+   "aliases": [
+    "Feyenoord"
    ]
   },
   {
@@ -818,6 +847,9 @@
     "https://www.beinsports.com/en-us/soccer/sper-lig/articles/what-happened-to-victor-osimhen-and-why-does-he-need-knee-surgery-2026-11-06",
     "https://turkish-football.com/super-lig-2026-27-complete-table-top-scorers-title-race-january-transfer-window-guide/",
     "https://africasoccer.com/?p=654886"
+   ],
+   "aliases": [
+    "Galatasaray"
    ]
   },
   {
@@ -1119,6 +1151,9 @@
     "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer",
     "https://sports.yahoo.com/articles/lionel-messi-wins-2026-mls-000000223.html",
     "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ],
+   "aliases": [
+    "Inter Miami"
    ]
   },
   {
@@ -1141,6 +1176,9 @@
    "sources": [
     "https://en.wikipedia.org/wiki/2026_Los_Angeles_FC_season",
     "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ],
+   "aliases": [
+    "LAFC"
    ]
   },
   {
@@ -1272,6 +1310,10 @@
    ],
    "sources": [
     "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer"
+   ],
+   "aliases": [
+    "St. Louis City SC",
+    "St Louis City"
    ]
   },
   {
@@ -1338,7 +1380,10 @@
      "apps": 10,
      "pens": true,
      "status": "active",
-     "note": "15 league goals incl. 3 pens (Yahoo after Nov 1; Sports Infos after J12); 19 all comps per Wikipedia season page; status unverified"
+     "note": "15 league goals incl. 3 pens (Yahoo after Nov 1; Sports Infos after J12); 19 all comps per Wikipedia season page; status unverified. 2025-26: 11 La Liga goals in 20 apps / 1,299 min (SportBusy; FotMob says 13)",
+     "prevG": 11,
+     "prevMins": 1299,
+     "prevEst": true
     },
     {
      "id": "yamal-bar",
@@ -1382,7 +1427,9 @@
      "goals": 13,
      "pens": true,
      "status": "active",
-     "note": "13 after J12 (Sports Infos/Wikipedia); Yahoo Nov 1 had 12 incl. 3 pens; status unverified"
+     "note": "13 after J12 (Sports Infos/Wikipedia); Yahoo Nov 1 had 12 incl. 3 pens; status unverified. 2025-26: 25 La Liga goals (Pichichi), 31 apps / 2,604 min (Sofascore, SI)",
+     "prevG": 25,
+     "prevMins": 2604
     },
     {
      "id": "bellingham-rma",
@@ -1419,7 +1466,8 @@
     "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
     "https://www.ski-nordique.net/liga-20262027-classement-des-buteurs-apres-j12-raphinha-toujours-en-tete-mbappe-passe-a-13-buts.6751888-72348.html",
     "https://www.espn.com/soccer/stats/_/league/esp.1",
-    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Real_Madrid_CF_season"
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Real_Madrid_CF_season",
+    "https://www.sofascore.com/news/kylian-mbappes-2025-26-season-52-goals-no-trophies"
    ]
   },
   {
@@ -1473,6 +1521,11 @@
     "https://www.espn.com/soccer/stats/_/league/esp.1",
     "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
     "https://www.laliga.com/en-MX/player/julian-alvarez"
+   ],
+   "aliases": [
+    "Atletico de Madrid",
+    "Atlético Madrid",
+    "Atl. Madrid"
    ]
   },
   {
@@ -1564,6 +1617,10 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/esp.1",
     "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ],
+   "aliases": [
+    "Espanyol",
+    "RCD Espanyol"
    ]
   },
   {
@@ -1676,6 +1733,11 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/esp.1",
     "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ],
+   "aliases": [
+    "Deportivo La Coruna",
+    "Deportivo",
+    "Deportivo de La Coruna"
    ]
   },
   {
@@ -1728,6 +1790,10 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/esp.1"
+   ],
+   "aliases": [
+    "Athletic Club",
+    "Athletic"
    ]
   },
   {
@@ -1750,6 +1816,9 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/esp.1",
     "https://www.laliga.com/en-EG/player/orri-oskarsson"
+   ],
+   "aliases": [
+    "Real Sociedad"
    ]
   },
   {
@@ -1882,6 +1951,10 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/team/stats/_/id/244/real-betis"
+   ],
+   "aliases": [
+    "Real Betis",
+    "Betis"
    ]
   },
   {
@@ -1963,6 +2036,10 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/team/stats/_/id/85/celta-vigo"
+   ],
+   "aliases": [
+    "Celta Vigo",
+    "Celta"
    ]
   },
   {
@@ -2036,6 +2113,10 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1",
     "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Marseille",
+    "Olympique de Marseille"
    ]
   },
   {
@@ -2050,9 +2131,10 @@
      "name": "Esteban Lepaul",
      "pos": "FW",
      "goals": 7,
-     "pens": false,
-     "status": "active",
-     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+     "pens": true,
+     "status": "doubtful",
+     "note": "ankle injury mid-Oct vs Paris FC; MRI 29 Oct; return unconfirmed (Maxifoot/Fantacalcio). Penalty hat-trick vs Paris FC (Rotowire). 2025-26 Ligue 1 top scorer, 21 goals (ligue1.com/maxifoot)",
+     "prevG": 21
     },
     {
      "id": "dia-ren",
@@ -2077,7 +2159,13 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1",
     "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html",
-    "https://www.alsasports.fr/classement-ligue-1/"
+    "https://www.alsasports.fr/classement-ligue-1/",
+    "https://www.maxifoot.fr/classement-buteur-ligue-1-france-2026.htm"
+   ],
+   "lastChecked": "2026-11-18",
+   "aliases": [
+    "Rennes",
+    "Stade Rennais"
    ]
   },
   {
@@ -2174,6 +2262,11 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1",
     "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Brest",
+    "Stade Brestois",
+    "Stade Brestois 29"
    ]
   },
   {
@@ -2196,6 +2289,10 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1",
     "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Lens",
+    "RC Lens"
    ]
   },
   {
@@ -2257,6 +2354,11 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ],
+   "aliases": [
+    "Strasbourg",
+    "RC Strasbourg",
+    "RC Strasbourg Alsace"
    ]
   },
   {
@@ -2307,6 +2409,16 @@
      "note": "from search-result snippet of source table (page fetch blocked); status unverified"
     },
     {
+     "id": "kvaratskhelia-psg",
+     "name": "Khvicha Kvaratskhelia",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "sources conflict: Sports Mole PSG list (to ~10 Oct) has 3, ESPN 1 in 7; conservative ESPN figure used"
+    },
+    {
      "id": "hakimi-psg",
      "name": "Achraf Hakimi",
      "pos": "DF",
@@ -2314,7 +2426,8 @@
      "apps": 8,
      "pens": false,
      "status": "active",
-     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+     "note": "tally unconfirmed: ESPN/AiScore snippets give 3, beIN 2 (Marquinhos); Hakimi absent from the Sports Mole list; status unverified",
+     "est": true
     },
     {
      "id": "marquinhos-psg",
@@ -2324,11 +2437,24 @@
      "apps": 5,
      "pens": false,
      "status": "active",
-     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+     "note": "tally unconfirmed: ESPN/AiScore snippets give 3, beIN 2 (Marquinhos); Hakimi absent from the Sports Mole list; status unverified",
+     "est": true
     }
    ],
    "sources": [
-    "https://www.espn.com/soccer/stats/_/league/fra.1"
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.sportsmole.co.uk/football/psg/top-scorers.html",
+    "https://www.footballwebpages.co.uk/french-ligue-1/20261122"
+   ],
+   "teamGoals": 21,
+   "teamMatches": 9,
+   "teamGoalsNote": "21 goals in 9 league games per a Football Web Pages table snippet (dated early Nov 2026; snapshot date unclear); est",
+   "lastChecked": "2026-11-18",
+   "aliases": [
+    "PSG",
+    "Paris SG",
+    "Paris St-Germain",
+    "Paris St Germain"
    ]
   },
   {
@@ -2382,6 +2508,11 @@
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/fra.1",
     "https://en.wikipedia.org/wiki/2026%E2%80%9327_Olympique_Lyonnais_season"
+   ],
+   "aliases": [
+    "Lyon",
+    "Olympique Lyonnais",
+    "OL Lyon"
    ]
   },
   {
@@ -2512,6 +2643,9 @@
    ],
    "sources": [
     "https://www.deux-zero.com/ligue-1/buteurs-epreuve/edition/2026-2027"
+   ],
+   "aliases": [
+    "Troyes"
    ]
   },
   {
@@ -2640,6 +2774,9 @@
    "sources": [
     "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
     "https://sport.sky.it/calcio/serie-a/classifica-marcatori-serie-a-2026-2027"
+   ],
+   "aliases": [
+    "Roma"
    ]
   },
   {
@@ -2719,12 +2856,22 @@
      "goals": 4,
      "pens": false,
      "status": "active",
-     "note": "from search-result snippet (page fetch blocked); status unverified"
+     "note": "from search-result snippet (page fetch blocked); status unverified. 2025-26: 17 Serie A goals, capocannoniere, missed 8 games (Sky Sport/Fantacalcio); apps derived",
+     "prevG": 17,
+     "prevApps": 30,
+     "prevEst": true
     }
    ],
    "sources": [
     "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
-    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/"
+    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/",
+    "https://sport.sky.it/calcio/serie-a/2026/05/26/serie-a-capocannoniere-meno-gol"
+   ],
+   "aliases": [
+    "Inter",
+    "Internazionale",
+    "Inter Milan",
+    "FC Internazionale Milano"
    ]
   },
   {
@@ -2807,6 +2954,9 @@
     "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
     "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/",
     "https://one-versus-one.com/en/rankings/serie-a/top-scorers"
+   ],
+   "aliases": [
+    "Napoli"
    ]
   },
   {
@@ -2848,6 +2998,10 @@
     "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
     "https://one-versus-one.com/en/rankings/serie-a/top-scorers",
     "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
+   ],
+   "aliases": [
+    "Lazio",
+    "SS Lazio"
    ]
   },
   {
@@ -3120,7 +3274,10 @@
     "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
    ],
    "teamGoals": 15,
-   "teamMatches": 11
+   "teamMatches": 11,
+   "aliases": [
+    "Juventus"
+   ]
   },
   {
    "team": "US Lecce",
@@ -3230,6 +3387,10 @@
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "SV Werder Bremen",
+    "Bremen"
    ]
   },
   {
@@ -3262,6 +3423,10 @@
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Leverkusen",
+    "Bayer 04 Leverkusen"
    ]
   },
   {
@@ -3288,7 +3453,9 @@
      "apps": 9,
      "pens": true,
      "status": "active",
-     "note": "4 goals in 9 games (ESPN/fussballdaten/DFB); regular penalty taker; status unverified"
+     "note": "4 goals in 9 games (ESPN/fussballdaten/DFB); regular penalty taker; status unverified. 2025-26: 36 Bundesliga goals in 31 apps (bundesliga.com)",
+     "prevG": 36,
+     "prevApps": 31
     },
     {
      "id": "diaz-bmu",
@@ -3305,7 +3472,18 @@
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer",
     "https://www.espn.com/soccer/stats/_/league/ger.1",
-    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger"
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://www.bundesliga.com/en/bundesliga/news/harry-kane-2025-26-numbers-england-bauern-munich-goals-records-messi-38301",
+    "https://fcbayern.com/en/news/2026/05/harry-kane-crowned-bundesliga-top-scorer-for-third-year-running"
+   ],
+   "prevTeamGoals": 122,
+   "prevTeamMatches": 34,
+   "prevTeamNote": "122 Bundesliga goals in 2025-26, a league record (fcbayern.com)",
+   "aliases": [
+    "Bayern Munchen",
+    "FC Bayern Munchen",
+    "Bayern",
+    "FC Bayern"
    ]
   },
   {
@@ -3338,6 +3516,9 @@
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Frankfurt"
    ]
   },
   {
@@ -3361,6 +3542,11 @@
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Mainz",
+    "Mainz 05",
+    "1. FSV Mainz 05"
    ]
   },
   {
@@ -3501,6 +3687,11 @@
    "sources": [
     "https://www.fussballdaten.de/bundesliga/tore/",
     "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Gladbach",
+    "Borussia M'gladbach",
+    "Monchengladbach"
    ]
   },
   {
@@ -3577,6 +3768,10 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/stats/_/league/ger.1"
+   ],
+   "aliases": [
+    "Hoffenheim",
+    "TSG 1899 Hoffenheim"
    ]
   },
   {
@@ -3601,6 +3796,9 @@
    "sources": [
     "https://www.soccerpunter.com/team/away/28321/2708/Hamburger-SV-in-Germany-Bundesliga-2026-2027",
     "https://www.espn.co.uk/football/team/stats/_/id/127/scoring"
+   ],
+   "aliases": [
+    "Hamburg"
    ]
   },
   {
@@ -3662,6 +3860,16 @@
    ],
    "sources": [
     "https://www.gambling.com/betbuilderai/leagues/team/1-fc-koln"
+   ],
+   "aliases": [
+    "FC Koln",
+    "1. FC Koln",
+    "Koln",
+    "Cologne",
+    "FC Cologne",
+    "1. FC Köln",
+    "FC Köln",
+    "Köln"
    ]
   },
   {
@@ -3690,6 +3898,66 @@
    ],
    "sources": [
     "https://www.espn.com/soccer/team/stats/_/id/598"
+   ],
+   "aliases": [
+    "1. FC Union Berlin"
+   ]
+  },
+  {
+   "team": "Valencia CF",
+   "abbr": "VCF",
+   "comp": [
+    "La Liga"
+   ],
+   "aliases": [
+    "Valencia"
+   ],
+   "lastChecked": "2026-11-18",
+   "players": [
+    {
+     "id": "sadiq-vcf",
+     "name": "Umar Sadiq",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "club goal leader per LaLiga MD9 page; tally unverified"
+    },
+    {
+     "id": "duro-vcf",
+     "name": "Hugo Duro",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "squad striker; tally unverified"
+    }
+   ],
+   "sources": [
+    "https://www.laliga.com/en-GB/laliga-easports"
+   ]
+  },
+  {
+   "team": "Schalke 04",
+   "abbr": "SCH",
+   "comp": [
+    "Bundesliga"
+   ],
+   "aliases": [
+    "FC Schalke 04",
+    "Schalke"
+   ],
+   "lastChecked": "2026-11-18",
+   "players": [
+    {
+     "id": "karaman-sch",
+     "name": "Kenan Karaman",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "14 goals in the 2025-26 2. Bundesliga promotion season; 2026-27 tally unverified"
+    }
+   ],
+   "sources": [
+    "https://www.bundesliga.com/en/bundesliga"
    ]
   }
  ],
@@ -3711,7 +3979,6 @@
    "updated": "2026-11-18T05:13:19Z",
    "teams": 40,
    "teamsMissing": [
-    "Valencia CF",
     "Puebla",
     "Atletico de San Luis",
     "Atlante"
@@ -3723,9 +3990,7 @@
    "file": "scorers-seriea-bund.json",
    "updated": "2026-11-18T05:16:50Z",
    "teams": 37,
-   "teamsMissing": [
-    "Schalke 04"
-   ],
+   "teamsMissing": [],
    "notes": "WebFetch blocked by network policy; all figures come from web-search result snippets (DAZN/Sky/Virgilio ~9 Nov 2026 for Serie A; fussballdaten/Sportschau/DFB ~matchday 9-10 for Bundesliga). Sources often disagree by 1-2 goals. No injury reports checked; all status active/unverified."
   }
  ]

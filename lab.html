@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Safe Bets Lab — Sharp Line Alerts + Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f9;--card:#ffffff;--soft:#eef1f5;--line:#dfe4ea;--text:#0a0a0a;--mute:#4b5a6c;--dim:#7b8796;
+  --green:#058a55;--greenbg:#e3f6ed;--red:#d23347;--redbg:#fde8eb;--amber:#b86e00;--amberbg:#fff3df;--blue:#0a5fb8;--bluebg:#e3f1ff;--violet:#6d4bd8;--violetbg:#efeafe;
+  --accent:#4fa9f5;--shadow:0 1px 2px rgba(13,23,38,.06),0 4px 14px rgba(13,23,38,.05);
+}
+.dark{
+  --bg:#0b0f15;--card:#141a23;--soft:#1b2330;--line:#29323f;--text:#eef2f7;--mute:#a7b3c2;--dim:#768396;
+  --green:#2fe39a;--greenbg:rgba(47,227,154,.12);--red:#ff6b7a;--redbg:rgba(255,107,122,.12);--amber:#ffbf5c;--amberbg:rgba(255,191,92,.12);--blue:#6cb2ff;--bluebg:rgba(108,178,255,.12);--violet:#b49cff;--violetbg:rgba(180,156,255,.13);
+  --accent:#2fe39a;--shadow:none;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:16px}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(74px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+.mono{font-family:'JetBrains Mono',monospace}
+header{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 16px}
+.top{display:flex;align-items:center;justify-content:space-between;max-width:760px;margin:0 auto}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;letter-spacing:-.4px}
+.logo svg{width:28px;height:28px}
+.live{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--mute);font-weight:600;cursor:pointer;background:var(--card);border:1px solid var(--line);padding:6px 11px;border-radius:20px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite}
+.paused .dot{background:var(--dim);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px auto 0;max-width:760px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 10px;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:18px;font-weight:800}
+.stat span{font-size:11.5px;color:var(--mute);font-weight:600}
+.chips{display:flex;gap:7px;overflow-x:auto;padding:12px 16px 2px;scrollbar-width:none;max-width:760px;margin:0 auto}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:var(--card);border:1px solid var(--line);color:var(--mute);padding:8px 15px;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--text);border-color:var(--text);color:var(--bg)}
+main{padding:6px 16px 24px;max-width:760px;margin:0 auto}
+.view{display:none}.view.on{display:block}
+h2{font-size:13px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:18px 2px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+h2 a,h2 .lnk{color:var(--accent);cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px}
+h2 .plain{text-transform:none;letter-spacing:0;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.card.new{animation:flash 1.6s ease-out}
+@keyframes flash{0%{outline:3px solid var(--green)}100%{outline:3px solid transparent}}
+.card.closed{opacity:.55}
+.r{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:800;padding:5px 10px;border-radius:8px;white-space:nowrap}
+.t-elite{background:var(--greenbg);color:var(--green)}
+.t-strong{background:var(--bluebg);color:var(--blue)}
+.t-ok{background:var(--amberbg);color:var(--amber)}
+.t-weak{background:var(--soft);color:var(--dim)}
+.t-bad{background:var(--redbg);color:var(--red)}
+.t-vio{background:var(--violetbg);color:var(--violet)}
+.flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.flag{font-size:11.5px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:.3px}
+.when{font-size:13px;color:var(--dim);font-weight:600}
+.title{font-size:18px;font-weight:800;margin-top:12px;line-height:1.25}
+.sub{font-size:14px;color:var(--mute);margin-top:3px}
+.betbox{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--soft);border-radius:12px;padding:12px 14px;margin-top:12px}
+.lbl{font-size:12px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.betbox .bk{font-size:17px;font-weight:800;margin-top:2px}
+.betbox .odds{font-size:24px;font-weight:800;color:var(--green)}
+.betbox .stake{font-size:13.5px;color:var(--mute);margin-top:2px}
+.edgebig{text-align:right}
+.edgebig b{display:block;font-size:22px;font-weight:800;color:var(--green)}
+.edgebig span{font-size:12px;color:var(--mute);font-weight:700;text-transform:uppercase}
+.why{font-size:14.5px;color:var(--mute);line-height:1.5;margin-top:12px}
+.why b{color:var(--text)}
+.window{margin-top:12px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700}
+.track{flex:1;height:7px;background:var(--soft);border-radius:6px;overflow:hidden}
+.fill{height:100%;background:var(--green);border-radius:6px;transition:width 1s linear}
+.open-t{color:var(--green)}.closed-t{color:var(--red)}
+.empty{text-align:center;color:var(--mute);padding:40px 18px;font-size:15px;line-height:1.6;background:var(--card);border:1px dashed var(--line);border-radius:16px}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--dim);padding:10px 0 9px;font:600 11.5px Inter;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;position:relative}
+nav button svg{width:22px;height:22px}
+nav button.on{color:var(--accent)}
+.badge{position:absolute;top:5px;left:calc(50% + 6px);background:var(--red);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:800}
+.sheetbg{position:fixed;inset:0;background:rgba(5,10,18,.55);z-index:40;display:none}
+.sheetbg.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);border-radius:22px 22px 0 0;max-height:92vh;overflow-y:auto;transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);padding:10px 16px calc(24px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+.sheet.on{transform:none}
+.grab{width:44px;height:5px;border-radius:5px;background:var(--line);margin:0 auto 14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.kpi b{display:block;font-size:22px;font-weight:800}
+.kpi span{font-size:12.5px;color:var(--mute);font-weight:600}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cmpbox{background:var(--soft);border-radius:12px;padding:12px;text-align:center;border:2px solid transparent}
+.cmpbox.best{border-color:var(--green);background:var(--greenbg)}
+.cmpbox .o{font-size:24px;font-weight:800}
+.cmpbox small{display:block;color:var(--mute);font-size:13px;margin-top:3px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--mute);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.4px;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:10px 6px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+.ra{text-align:right}
+.pos{color:var(--green);font-weight:700}.neg{color:var(--dim)}.bad{color:var(--red);font-weight:700}
+.tier{font-size:10.5px;font-weight:800;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:middle}
+.tier-A{background:var(--amberbg);color:var(--amber)}.tier-X{background:var(--bluebg);color:var(--blue)}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--mute);margin-top:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:4px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:14px;font:700 16px Inter;width:100%;cursor:pointer;margin-top:12px}
+.dark .btn{color:#04150c}
+.btn.ghost{background:var(--card);color:var(--text);border:1px solid var(--line)}
+.btn.sm{padding:10px;font-size:14px;margin-top:0;width:auto}
+.btn:disabled{opacity:.6}
+.field{margin-bottom:18px}
+.field label{display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-bottom:8px}
+.field label span{color:var(--accent)}
+.field p{font-size:13px;color:var(--dim);margin-top:6px;line-height:1.45}
+input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+input[type=number],input[type=search],input[type=text]{background:var(--soft);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:11px 12px;font:600 16px Inter;width:100%}
+.inrow{display:flex;gap:8px;align-items:center}
+.inrow input{flex:1}
+.seg{display:flex;background:var(--soft);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;padding:9px 6px;border-radius:8px;font:700 14px Inter;color:var(--mute);cursor:pointer}
+.seg button.on{background:var(--card);color:var(--text);box-shadow:var(--shadow)}
+.seg.wrap{flex-wrap:wrap}.seg.wrap button{flex:1 1 30%}
+.booklist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.bt{display:flex;align-items:center;gap:8px;background:var(--soft);border:1.5px solid transparent;border-radius:10px;padding:9px 10px;font-size:13.5px;font-weight:600;cursor:pointer;min-width:0}
+.bt span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bt.on{border-color:var(--accent);background:var(--greenbg)}
+.ck{flex:none;width:18px;height:18px;border-radius:5px;border:2px solid var(--dim);display:grid;place-items:center;font-size:12px;font-weight:900;color:#fff}
+.bt.on .ck,.sw.on .ck{background:var(--accent);border-color:var(--accent)}
+.sw{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;cursor:pointer;padding:6px 0}
+.note{font-size:13px;color:var(--dim);line-height:1.55;margin-top:10px}
+.how{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.how .n{flex:none;width:28px;height:28px;border-radius:8px;background:var(--greenbg);color:var(--green);display:grid;place-items:center;font-weight:800}
+.how p{font-size:14.5px;line-height:1.5;color:var(--mute)}
+.how p b{color:var(--text)}
+.heat{height:8px;background:var(--soft);border-radius:5px;overflow:hidden;margin-top:6px}
+.heat div{height:100%;background:linear-gradient(90deg,var(--amber),var(--red))}
+.split{display:flex;height:22px;border-radius:7px;overflow:hidden;font-size:11.5px;font-weight:800;margin-top:6px}
+.split div{display:flex;align-items:center;padding:0 8px;white-space:nowrap}
+.progress{height:8px;background:var(--soft);border-radius:6px;overflow:hidden;margin-top:12px;display:none}
+.progress div{height:100%;width:0;background:var(--accent)}
+.toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-160%);background:var(--card);color:var(--text);border:2px solid var(--green);border-radius:14px;padding:11px 15px;font-size:14px;font-weight:600;z-index:50;transition:transform .3s;max-width:92vw;box-shadow:0 10px 30px rgba(0,0,0,.25);cursor:pointer}
+.toast.on{transform:translate(-50%,0)}
+.legs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.leg{background:var(--soft);border-radius:10px;padding:10px}
+.leg .lbl{font-size:11px}
+.leg b{display:block;font-size:15px;margin-top:2px}
+.leg .o{font-size:19px;font-weight:800;color:var(--green)}
+@media(min-width:620px){.kpis{grid-template-columns:repeat(4,1fr)}.booklist{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<header id="hdr">
+  <div class="top">
+    <div class="logo">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="var(--accent)"/><path d="M8 23V9h11" stroke="#fff" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16h8" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><circle cx="24" cy="20" r="3.2" fill="#fff"/></svg>
+      Safe Bets Lab
+    </div>
+    <div class="live" id="liveBtn"><span class="dot"></span><span id="liveTxt">Scanning 100 books</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b class="mono" id="stOpen">0</b><span>Open plays</span></div>
+    <div class="stat"><b class="mono" id="stEdge">—</b><span>Avg edge</span></div>
+    <div class="stat"><b class="mono" id="stArbs">0</b><span>Arbs live</span></div>
+    <div class="stat"><b class="mono" id="stClv">—</b><span>Avg CLV</span></div>
+  </div>
+</header>
+
+<div class="chips" id="sportChips"></div>
+
+<main>
+  <!-- PLAYS -->
+  <section class="view on" id="v-feed">
+    <h2><span id="feedTitle">Plays</span><a id="sortBtn">Sort: Newest</a></h2>
+    <div id="feed"></div>
+  </section>
+
+  <!-- SCANNER -->
+  <section class="view" id="v-scan">
+    <div class="seg" id="scanSeg" style="margin-top:12px"><button data-s="moves" class="on">Sharp moves</button><button data-s="arbs">Arbitrage</button><button data-s="mids">Middles</button></div>
+    <div id="scanHead"></div>
+    <div id="scanBody"></div>
+  </section>
+
+  <!-- SIM -->
+  <section class="view" id="v-sim">
+    <h2><span>Strategy simulator</span></h2>
+    <div class="panel">
+      <p class="why" style="margin-top:0">Runs your settings forward thousands of times to show the range of outcomes, from bad luck to good luck, before you risk money.</p>
+      <div class="field" style="margin-top:16px"><label>Bets per day <span id="lBpd">20</span></label><input type="range" id="sBpd" min="5" max="60" step="5" value="20"></div>
+      <div class="field"><label>Days <span id="lDays">30</span></label><input type="range" id="sDays" min="7" max="90" step="1" value="30"></div>
+      <div class="field"><label>Only plays scored <span id="lSimScore">75+</span></label><input type="range" id="sScore" min="0" max="90" step="5" value="75"></div>
+      <div class="field"><label>Number of simulations</label>
+        <div class="seg" id="sRuns"><button data-n="10000">10,000</button><button data-n="100000" class="on">100,000</button><button data-n="500000">500,000</button></div></div>
+      <button class="btn" id="runSim">Run 100,000 sims</button>
+      <div class="progress" id="simProg"><div></div></div>
+    </div>
+    <div id="simOut"></div>
+  </section>
+
+  <!-- MY BETS -->
+  <section class="view" id="v-bets">
+    <div class="seg" id="betSeg" style="margin-top:12px"><button data-b="mine" class="on">My bets</button><button data-b="model">Model track record</button></div>
+    <div id="betsMine">
+      <h2><span>My tracked bets</span><a id="clearBets">Clear</a></h2>
+      <div class="panel"><div class="kpis">
+        <div class="kpi"><b class="mono" id="mPL">$0</b><span>Profit / loss</span></div>
+        <div class="kpi"><b class="mono" id="mRoi">—</b><span>ROI</span></div>
+        <div class="kpi"><b class="mono" id="mClv">—</b><span>Avg CLV</span></div>
+        <div class="kpi"><b class="mono" id="mBeat">—</b><span>Beat the close</span></div></div>
+        <p class="note">Tap <b>I placed this bet</b> on any play to track it here. CLV (closing line value) compares your price to the fair price at game time. Beating the close consistently is the best sign your bets are good, even through losing streaks.</p></div>
+      <div id="myBetList"></div>
+      <div id="myBreak"></div>
+    </div>
+    <div id="betsModel" style="display:none">
+      <h2><span>Every play the app found</span><span class="plain" id="perfRange"></span></h2>
+      <div class="panel">
+        <div class="kpis">
+          <div class="kpi"><b class="mono" id="kUnits">+0u</b><span>Units up</span></div>
+          <div class="kpi"><b class="mono" id="kWin">—</b><span>Win rate</span></div>
+          <div class="kpi"><b class="mono" id="kRoi">—</b><span>ROI per bet</span></div>
+          <div class="kpi"><b class="mono" id="kClv">—</b><span>Avg CLV</span></div>
+        </div>
+        <svg id="perfChart" viewBox="0 0 600 230" style="width:100%;height:auto;margin-top:12px"></svg>
+        <div class="legend"><span><i style="background:var(--green)"></i>Elite 90+</span><span><i style="background:var(--blue)"></i>Strong 75+</span><span><i style="background:var(--dim)"></i>All plays</span></div>
+        <p class="note">1 unit per bet at the best price among your books, from the built-in market simulator.</p>
+      </div>
+      <h2><span>Recently settled</span></h2>
+      <div id="settled"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-set">
+    <h2><span>Display</span></h2>
+    <div class="panel"><div class="seg" id="themeSeg"><button data-t="light">Light</button><button data-t="dark">Dark</button></div></div>
+    <h2><span>Which plays to show</span></h2>
+    <div class="panel">
+      <div class="field"><label>Minimum score <span id="lScore">60</span></label><input type="range" id="fScore" min="0" max="95" step="5" value="60"><p>90+ Elite · 75+ Strong · 60+ OK. Higher = fewer but better plays.</p></div>
+      <div class="field"><label>Minimum edge <span id="lEdge">1.5%</span></label><input type="range" id="fEdge" min="0.5" max="8" step="0.5" value="1.5"></div>
+      <div class="sw" id="tSteam"><span class="ck"></span>Only steam moves (3+ sharp books)</div>
+      <div class="sw" id="tRlm"><span class="ck"></span>Only reverse line moves (RLM)</div>
+      <div class="field" style="margin:12px 0 0"><label>Bet types</label><div class="booklist" id="mktTypes"></div></div>
+    </div>
+    <h2><span>Fair price</span></h2>
+    <div class="panel">
+      <div class="field"><label>Remove the vig with</label>
+        <div class="seg wrap" id="devigSeg"><button data-d="mult">Multiplicative</button><button data-d="add">Additive</button><button data-d="power">Power</button><button data-d="shin">Shin</button><button data-d="worst">Worst case</button></div>
+        <p id="devigNote"></p></div>
+      <div class="field" style="margin-bottom:0"><label>Fair price comes from</label>
+        <div class="seg" id="srcSeg"><button data-f="all">All 18 sharp</button><button data-f="pin">Pinnacle</button><button data-f="exch">Exchanges</button></div>
+        <p>Blending all sharp books and exchanges filters out one-book fake moves. Pinnacle-only is the classic method.</p></div>
+    </div>
+    <h2><span>My sportsbooks</span><a id="booksAll">Select none</a></h2>
+    <div class="panel">
+      <input type="search" id="bookSearch" placeholder="Search 100 books…">
+      <p class="note" style="margin:8px 0 12px">Turn on the books you have accounts with. Plays and arbs only use these. Sharp books and exchanges always feed the fair price.</p>
+      <div id="bookGroups"></div>
+    </div>
+    <h2><span>Bet sizing</span></h2>
+    <div class="panel">
+      <div class="field"><label>Unit size ($)</label><input type="number" id="fUnit" value="50" min="1"></div>
+      <div class="field"><label>Bankroll ($)</label><input type="number" id="fBank" value="2500" min="1"></div>
+      <div class="field" style="margin-bottom:0"><label>Sizing <span id="lKelly">¼ Kelly</span></label><input type="range" id="fKelly" min="0" max="4" step="1" value="1"><p>Kelly bets more when the edge is bigger. ¼ Kelly is the usual safe choice.</p></div>
+    </div>
+    <h2><span>Alerts</span></h2>
+    <div class="panel">
+      <div class="sw" id="tToast"><span class="ck"></span>Pop-up alert for Strong & Elite plays</div>
+      <div class="sw" id="tArbA"><span class="ck"></span>Pop-up alert for new arbs</div>
+      <div class="sw" id="tSound"><span class="ck"></span>Sound alert</div>
+      <p class="note">Price alerts: open any play and tap <b>Alert me at a price</b>.</p>
+    </div>
+    <h2><span>Market simulator</span></h2>
+    <div class="panel">
+      <div class="field"><label>Speed <span id="lSpeed">1×</span></label><input type="range" id="fSpeed" min="1" max="5" step="1" value="2"></div>
+      <div class="cmp"><button class="btn ghost" id="bPause" style="margin:0">Pause</button><button class="btn ghost" id="bReset" style="margin:0">Reset</button></div>
+      <p class="note">Prices in this app are simulated. Hook it up to a live odds feed to use it for real bets.</p>
+    </div>
+    <h2><span>How it works</span></h2>
+    <div class="panel">
+      <div class="how"><div class="n">1</div><p><b>Watch the sharp books and exchanges.</b> Pinnacle, Circa, Betfair, BetCris and others take big bets from pros, so they move first when real news hits.</p></div>
+      <div class="how"><div class="n">2</div><p><b>Check that they agree.</b> One book moving alone is often noise. 3+ moving together is <b>steam</b>. A line moving against where most public bets are is <b>reverse line movement</b>.</p></div>
+      <div class="how"><div class="n">3</div><p><b>Work out the fair price.</b> Remove the bookmaker's cut and blend the sharp books. <b>Worst case</b> mode only shows bets that are +EV under every method.</p></div>
+      <div class="how"><div class="n">4</div><p><b>Find the slow books.</b> Any of the other 82 books still showing the old price is a bet with an edge. Edge = fair win chance × payout − 1.</p></div>
+      <div class="how" style="margin-bottom:0"><div class="n">5</div><p><b>Grade yourself on CLV.</b> If you keep getting better prices than the closing line, you're doing it right, even when a bet loses.</p></div>
+    </div>
+  </section>
+</main>
+
+<nav id="nav">
+  <button class="on" data-v="feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>Plays<span class="badge" id="navBadge" style="display:none">0</span></button>
+  <button data-v="scan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Scanner</button>
+  <button data-v="sim"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Simulate</button>
+  <button data-v="bets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>My Bets</button>
+  <button data-v="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</button>
+</nav>
+
+<div class="sheetbg" id="sheetbg"></div>
+<div class="sheet" id="sheet"><div class="grab"></div><div id="sheetBody"></div></div>
+
+<script>
+(()=>{
+// ================= odds math =================
+const am2dec=a=>a>0?1+a/100:1+100/(-a);
+const am2imp=a=>1/am2dec(a);
+const imp2am=(p,step)=>{p=Math.min(.97,Math.max(.03,p));let a=p>=.5?-100*p/(1-p):100*(1-p)/p;
+  a=step>1?Math.round(a/step)*step:Math.round(a);if(a>-100&&a<100)a=a<0?-100:100;return a;};
+const fmt=a=>(a>0?'+':'')+a;
+const pct=(x,d=1)=>(x*100).toFixed(d)+'%';
+const spct=(x,d=1)=>(x>=0?'+':'')+pct(x,d);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=x=>(x<0?'−$':'$')+Math.abs(Math.round(x)).toLocaleString();
+
+// ----- de-vig methods (two-way markets) -----
+function dvMult(a,b){return a/(a+b);}
+function dvAdd(a,b){return clamp(a-(a+b-1)/2,.005,.995);}
+function dvPower(a,b){let lo=1,hi=4;for(let i=0;i<40;i++){const k=(lo+hi)/2;(Math.pow(a,k)+Math.pow(b,k)>1)?lo=k:hi=k;}return Math.pow(a,(lo+hi)/2);}
+function dvShin(a,b){const S=a+b;const f=(z,q)=>(Math.sqrt(z*z+4*(1-z)*q*q/S)-z)/(2*(1-z));
+  let lo=0,hi=.4;for(let i=0;i<40;i++){const z=(lo+hi)/2;(f(z,a)+f(z,b)>1)?lo=z:hi=z;}const z=(lo+hi)/2;const pa=f(z,a),pb=f(z,b);return pa/(pa+pb);}
+const DV={mult:dvMult,add:dvAdd,power:dvPower,shin:dvShin};
+function fairSide(px,sideIx,method){
+  const a=am2imp(px[0]),b=am2imp(px[1]);
+  const one=k=>{const p0=DV[k](a,b),p1=DV[k](b,a);return sideIx===0?p0/(p0+p1):p1/(p0+p1);};
+  if(method==='worst')return Math.min(one('mult'),one('add'),one('power'),one('shin'));
+  return one(method);
+}
+const devig=px=>dvMult(am2imp(px[0]),am2imp(px[1]));
+
+// ================= 100 sportsbooks =================
+const RAW=[
+ ['Pinnacle','A',1.0],['Circa Sports','A',.9],['BetCris','A',.8],['Bookmaker.eu','A',.8],['BetOnline','A',.7],['LowVig.ag','A',.65],
+ ['SBOBET','A',.6],['Crown (Singbet)','A',.6],['Heritage Sports','A',.55],['Westgate SuperBook','A',.55],
+ ['Betfair Exchange','X',.85],['Sporttrade','X',.7],['Matchbook','X',.65],['Novig','X',.65],['Smarkets','X',.6],['ProphetX','X',.6],['Kalshi','X',.55],['Polymarket','X',.5],
+ ['DraftKings','US'],['FanDuel','US'],['BetMGM','US'],['Caesars','US'],['Fanatics','US'],['bet365','US'],['theScore Bet','US'],['BetRivers','US'],['Hard Rock Bet','US'],['Fliff','US'],
+ ['Bally Bet','US'],['Betly','US'],['Borgata','US'],['betPARX','US'],['Desert Diamond','US'],['Four Winds','US'],['Resorts World Bet','US'],['Golden Nugget','US'],['STN Sports','US'],['Mohegan Sun','US'],
+ ['Bovada','OFF'],['BetUS','OFF'],['MyBookie','OFF'],['BetAnything','OFF'],['Everygame','OFF'],['XBet','OFF'],['BetNow','OFF'],['SportsBetting.ag','OFF'],['Jazz Sports','OFF'],['YouWager','OFF'],['Bet105','OFF'],['BetPhoenix','OFF'],
+ ['William Hill','INTL'],['Paddy Power','INTL'],['Sky Bet','INTL'],['Ladbrokes','INTL'],['Coral','INTL'],['Betfred','INTL'],['Betway','INTL'],['Unibet','INTL'],['888sport','INTL'],['bwin','INTL'],
+ ['Betsson','INTL'],['Betfair Sportsbook','INTL'],['Marathonbet','INTL'],['1xBet','INTL'],['Betano','INTL'],['Sportsbet.io','INTL'],['Stake','INTL'],['Cloudbet','INTL'],['Tipico','INTL'],['Interwetten','INTL'],
+ ['bet-at-home','INTL'],['Betclic','INTL'],['Winamax','INTL'],['Sisal','INTL'],['Snai','INTL'],['Codere','INTL'],['Caliente','INTL'],['TAB NZ','INTL'],['Sportsbet AU','INTL'],['Ladbrokes AU','INTL'],
+ ['Neds','INTL'],['PlayUp','INTL'],['BetVictor','INTL'],['BoyleSports','INTL'],['Betsafe','INTL'],['LeoVegas','INTL'],['Coolbet','INTL'],['NordicBet','INTL'],['Mr Green','INTL'],['10bet','INTL'],
+ ['Dafabet','INTL'],['188BET','INTL'],['12BET','INTL'],['Fun88','INTL'],['M88','INTL'],['Betsul','INTL'],['Superbet','INTL'],['Fortuna','INTL'],['STS','INTL'],['Betcity','INTL'],
+];
+const TIERCFG={A:{vig:[.02,.035],step:1,lag:[0,4],noise:.004},X:{vig:[.01,.03],step:1,lag:[1,8],noise:.005},
+ US:{vig:[.045,.06],step:5,lag:[8,70],noise:.012},OFF:{vig:[.05,.07],step:5,lag:[15,90],noise:.015},INTL:{vig:[.04,.07],step:5,lag:[6,60],noise:.013}};
+const TIERNAME={A:'Sharp books',X:'Exchanges & prediction markets',US:'US regulated',OFF:'Offshore',INTL:'International'};
+const BOOKS=RAW.map(([name,tier,weight],i)=>{const c=TIERCFG[tier];
+  return {id:'b'+i,name,tier,weight:weight||0,signal:tier==='A'||tier==='X',vig:rnd(...c.vig),step:c.step,
+    lag:name==='Pinnacle'?[0,1]:c.lag,noise:c.noise,c:`hsl(${(i*137.5)%360} 65% 48%)`};});
+const B=Object.fromEntries(BOOKS.map(b=>[b.id,b]));
+const SIGNAL=BOOKS.filter(b=>b.signal),RETAIL=BOOKS.filter(b=>!b.signal);
+const PIN=BOOKS[0].id;
+const byName=n=>BOOKS.find(b=>b.name===n).id;
+
+// ================= markets =================
+const SPORTS={
+ NBA:{teams:['LAL','BOS','DEN','IND','DET','NYK','OKC','MIL','POR','PHX','GSW','MIA'],
+   players:['Jrue Holiday','Cade Cunningham','Jalen Brunson','Jamal Murray','Tyrese Haliburton','Jayson Tatum','Luka Dončić','Shai Gilgeous-Alexander','Anthony Edwards','Devin Booker','Stephen Curry','Bam Adebayo','Pascal Siakam','Jaylen Brown','Austin Reaves','Mikal Bridges'],
+   props:[['Points',[14.5,30.5],'n',.27],['Rebounds',[3.5,11.5],'p'],['Assists',[2.5,9.5],'p'],['Made Threes',[1.5,4.5],'p'],['Pts+Reb+Ast',[22.5,42.5],'n',.22]],sd:12,tot:226,totsd:17,sl:.03,tsl:.022},
+ NFL:{teams:['KC','BUF','PHI','DAL','SF','DET','BAL','NYG','WAS','GB','MIA','CIN'],
+   players:['Josh Allen','Jalen Hurts','Lamar Jackson','Saquon Barkley','CeeDee Lamb',"Ja'Marr Chase",'Amon-Ra St. Brown','Travis Kelce','Jahmyr Gibbs','Terry McLaurin','Malik Nabers','Derrick Henry'],
+   props:[['Pass Yds',[214.5,289.5],'n',.26],['Rush Yds',[44.5,94.5],'n',.42],['Rec Yds',[44.5,89.5],'n',.45],['Receptions',[3.5,7.5],'p'],['Rush+Rec Yds',[69.5,124.5],'n',.36]],sd:13.5,tot:44,totsd:13,sl:.035,tsl:.03},
+ NHL:{teams:['EDM','TOR','FLA','NYR','COL','DAL','VGK','SEA','BOS','CAR'],
+   players:['Connor McDavid','Auston Matthews','Nathan MacKinnon','Leon Draisaitl','Matthew Tkachuk','Artemi Panarin','Jared McCann','Mitch Marner','David Pastrňák','Jack Eichel'],
+   props:[['Shots on Goal',[2.5,4.5],'p'],['Points',[0.5,1.5],'p'],['Assists',[0.5,0.5],'p']],sd:2.3,tot:6,totsd:0,sl:0,tsl:0},
+ NCAAF:{teams:['MIA','ND','UGA','OSU','TEX','ORE','BAMA','LSU','PSU','MICH'],
+   players:['Carson Beck','Arch Manning','Jeremiah Smith','Dante Moore','Drew Allar','Garrett Nussmeier','Ryan Williams','CJ Carr'],
+   props:[['Pass Yds',[219.5,284.5],'n',.28],['Rush Yds',[39.5,84.5],'n',.45],['Rec Yds',[49.5,89.5],'n',.45],['Pass TDs',[1.5,2.5],'p']],sd:15,tot:52,totsd:15,sl:.028,tsl:.025},
+};
+const MKTTYPES=['Player Props','Spread','Total','Moneyline'];
+let markets=[],tick=0,opps=[],moves=[],settledList=[],seq=0,watches=[],seenArbs=new Set();const sched=[];
+const half=x=>Math.round(x*2)/2;
+function makeMarket(){
+  const sport=pick(Object.keys(SPORTS)),S=SPORTS[sport];
+  const t1=pick(S.teams);let t2=pick(S.teams);while(t2===t1)t2=pick(S.teams);
+  const r=Math.random();let m;
+  if(r<.7){const [pn,[lo,hi],kind,cv]=pick(S.props);const line=Math.floor(rnd(lo,hi))+.5;
+    m={type:'Player Props',who:pick(S.players),team:t1,opp:t2,label:pn,line,sides:['Over','Under'],dist:{kind,cv}};}
+  else if(r<.82){let ln=half(rnd(1,8.5))*(Math.random()<.5?1:-1);if(sport==='NHL')ln=ln>0?1.5:-1.5;
+    m={type:'Spread',who:`${t1} @ ${t2}`,t1,t2,label:'Spread',line:ln,dist:{kind:'margin',sd:S.sd,ln}};}
+  else if(r<.93){const ln=sport==='NHL'?pick([5.5,6.5]):Math.floor(rnd(S.tot-12,S.tot+12))+.5;
+    m={type:'Total',who:`${t1} @ ${t2}`,label:'Total',line:ln,sides:['Over','Under'],dist:sport==='NHL'?{kind:'p'}:{kind:'n',sd:S.totsd}};}
+  else m={type:'Moneyline',who:`${t1} @ ${t2}`,t1,t2,label:'Moneyline',line:null,sides:[t2,t1],dist:{kind:'margin',sd:S.sd,ln:0}};
+  m.id=++seq;m.sport=sport;m.p=rnd(.36,.64);m.end=tick+Math.floor(rnd(260,520));m.px={};m.hist={};m.off={};
+  // slope: how much win chance changes per point of line (for books hanging a different number)
+  m.slope=m.type==='Spread'?S.sl:m.type==='Total'?S.tsl:0;
+  m.sgn0=m.type==='Total'?-1:1; // side 0 (Over / underdog side) gets better or worse as the book's line rises
+  if(m.slope)for(const b of RETAIL)if(Math.random()<.22)m.off[b.id]=pick([-1,-.5,.5,1]);
+  // public betting: share of tickets and money on side 0
+  m.tix=rnd(.3,.7);m.cash=clamp(m.tix+rnd(-.12,.12),.1,.9);
+  for(const b of BOOKS){const px=price(b,bookP(m,b.id,m.p+(Math.random()-.5)*b.noise*2));m.px[b.id]=px;m.hist[b.id]=[[tick,px[0],px[1]]];}
+  return m;
+}
+function bookLine(m,id){return m.line==null?null:m.line+(m.off[id]||0);}
+function bookP(m,id,p){return clamp(p+m.sgn0*m.slope*(m.off[id]||0),.03,.97);}
+function fairAt(m,id,sideIx,fair0){const f=bookP(m,id,fair0);return sideIx===0?f:1-f;} // fair0 = fair for side 0 at main line
+function price(b,p){const v=b.vig/2;return [imp2am(p+v,b.step),imp2am(1-p+v,b.step)];}
+function sideName(m,sideIx,id){
+  const L=id?bookLine(m,id):m.line;
+  if(m.type==='Spread'){const l0=L;return sideIx===0?`${m.t2} ${l0>0?'+':''}${l0}`:`${m.t1} ${-l0>0?'+':''}${-l0}`;}
+  if(m.type==='Moneyline')return m.sides[sideIx];
+  return `${m.sides[sideIx]} ${L}`;
+}
+function steam(m){
+  const dir=Math.random()<.5?1:-1,size=rnd(.02,.065),old=m.p;
+  const fake=Math.random()<.2;
+  if(fake){const b=pick(SIGNAL.filter(x=>x.id!==PIN));sched.push({t:tick+1,mid:m.id,book:b.id,target:clamp(old+dir*size,.12,.88)});return;}
+  m.p=clamp(old+dir*size,.12,.88);
+  // public: often piles on the other side (that's what makes reverse line movement)
+  if(Math.random()<.4){const pub=dir>0?rnd(.22,.38):rnd(.62,.78);m.tix=pub;m.cash=clamp(pub+dir*rnd(.08,.2),.1,.9);}
+  else{m.tix=clamp(m.tix+dir*rnd(0,.1),.15,.85);m.cash=clamp(m.cash+dir*rnd(.05,.15),.1,.9);}
+  for(const b of SIGNAL){if(b.tier==='X'&&Math.random()<.25)continue;
+    sched.push({t:tick+Math.floor(rnd(b.lag[0],b.lag[1]+1)),mid:m.id,book:b.id,target:clamp(old+dir*size*rnd(.75,1.4),.12,.88)});}
+  for(const b of RETAIL){const slow=Math.random()<.12?3:1;
+    sched.push({t:tick+Math.floor(rnd(b.lag[0],b.lag[1])*slow),mid:m.id,book:b.id});}
+}
+function applyUpdate(u){
+  const m=markets.find(x=>x.id===u.mid);if(!m)return;
+  const b=B[u.book];const p=bookP(m,b.id,(u.target??m.p)+(Math.random()-.5)*b.noise*2);
+  const before=m.px[b.id],after=price(b,p);
+  if(before[0]===after[0]&&before[1]===after[1])return;
+  m.px[b.id]=after;m.hist[b.id].push([tick,after[0],after[1]]);
+  if(b.signal){
+    const d=devig(after)-devig(before);
+    if(Math.abs(d)>=.015){
+      const sideIx=d>0?0:1;
+      let mv=moves.find(x=>x.m===m&&x.sideIx===sideIx&&tick-x.tick<60);
+      if(!mv){mv={t:Date.now(),tick,m,sideIx,first:b.id,from:before[sideIx],to:after[sideIx],books:new Set()};moves.unshift(mv);if(moves.length>50)moves.length=50;}
+      mv.books.add(b.id);mv.to=m.px[mv.first][sideIx];
+      detect(m,mv);
+    }
+  } else for(const o of opps) if(o.m===m&&o.status==='open') refresh(o);
+}
+function consensus0(m){ // fair chance for side 0 at the main line
+  const src=st.fairSrc==='pin'?[B[PIN]]:st.fairSrc==='exch'?SIGNAL.filter(b=>b.tier==='X'):SIGNAL;
+  let w=0,s0=0,s1=0;
+  for(const b of src){const h=m.hist[b.id];const recent=h.length>1&&h[h.length-1][0]>tick-60;
+    const wt=(b.weight||.5)*(recent?1.5:1);s0+=fairSide(m.px[b.id],0,st.devig)*wt;s1+=fairSide(m.px[b.id],1,st.devig)*wt;w+=wt;}
+  return {f0:s0/w,f1:s1/w}; // with "worst case" these don't sum to 1 on purpose
+}
+function confirmations(m,sideIx){
+  let n=0;for(const b of SIGNAL){const h=m.hist[b.id];if(h.length<2)continue;const last=h[h.length-1];
+    if(last[0]<tick-60)continue;const prev=h[h.length-2];const d=devig([last[1],last[2]])-devig([prev[1],prev[2]]);
+    if((sideIx===0?d:-d)>.008)n++;}
+  return n;
+}
+function refresh(o){
+  const m=o.m,c=consensus0(m);o.fair=o.sideIx===0?c.f0:c.f1;o.fair0=c.f0;
+  // fair at each book's own line (some books hang a different number)
+  const base0=o.sideIx===0?c.f0:1-c.f1;
+  o.stale=[];for(const b of RETAIL){const pr=m.px[b.id][o.sideIx];const fp=fairAt(m,b.id,o.sideIx,base0);
+    const ev=fp*am2dec(pr)-1;if(ev>=.005)o.stale.push({id:b.id,price:pr,ev,fair:fp,line:bookLine(m,b.id)});}
+  o.stale.sort((a,c)=>c.ev-a.ev);
+  if(!o.stale.length&&o.status==='open'){o.status='closed';o.closedTick=tick;}
+}
+function isRLM(m,sideIx){const onOther=sideIx===0?1-m.tix:m.tix;return onOther>=.6;}
+function detect(m,mv){
+  const sideIx=mv.sideIx;
+  let o=opps.find(x=>x.m===m&&x.sideIx===sideIx&&x.status==='open');
+  if(!o)o={id:++seq,m,sideIx,created:tick,createdAt:Date.now(),status:'open',isNew:true,mv};
+  o.mv=mv;refresh(o);
+  if(!o.stale.length)return;
+  const conf=confirmations(m,sideIx),moveSize=Math.abs(devig([m.hist[mv.first][0][1],m.hist[mv.first][0][2]])-devig(m.px[mv.first]))*100;
+  o.conf=conf;o.rlm=isRLM(m,sideIx);o.steam=mv.books.size>=3;
+  o.score=Math.round(clamp(12+Math.min(38,o.stale[0].ev*100*6)+Math.min(18,moveSize*2)+Math.min(21,conf*3)+B[mv.first].weight*12+(o.rlm?5:0)-(mv.books.size===1?6:0),1,99));
+  if(!opps.includes(o)){
+    const mine=o.stale.find(s=>st.books[s.id]);if(mine)o.bet={...mine};
+    opps.unshift(o);
+    if(!warming&&passes(o))alertOpp(o);
+  }
+}
+function closeFairFor(m,id,sideIx){const c=consensus0(m);const base0=sideIx===0?c.f0:1-c.f1;return fairAt(m,id,sideIx,base0);}
+function settle(){
+  for(const m of markets) if(tick>=m.end){
+    const over=Math.random()<m.p; // side 0 result at main line
+    const won=(id,sideIx)=>{ // alt lines: re-draw relative to the book's line using the slope
+      if(!m.off[id])return over===(sideIx===0);
+      const p0=bookP(m,id,m.p);return (Math.random()<p0)===(sideIx===0);};
+    for(const o of opps) if(o.m===m&&!o.result&&o.bet){
+      const w=won(o.bet.id,o.sideIx);o.result=w?'W':'L';o.units=w?am2dec(o.bet.price)-1:-1;
+      o.clv=closeFairFor(m,o.bet.id,o.sideIx)*am2dec(o.bet.price)-1;
+      o.closePrice=m.px[o.bet.id][o.sideIx];settledList.push(o);}
+    for(const t of tracked) if(t.mid===m.id&&!t.result){
+      const w=won(t.book,t.sideIx);t.result=w?'W':'L';t.pl=w?t.stake*(am2dec(t.price)-1):-t.stake;
+      t.clv=closeFairFor(m,t.book,t.sideIx)*am2dec(t.price)-1;t.closePrice=m.px[t.book][t.sideIx];
+      if(!warming)toast(`${w?'✅ Won':'❌ Lost'}: ${esc(t.label)} · <b>${money(t.pl)}</b> · CLV ${spct(t.clv)}`);saveBets();}
+    watches=watches.filter(w=>w.mid!==m.id);
+    m.dead=true;
+  }
+  markets=markets.filter(m=>!m.dead);
+  opps=opps.filter(o=>!o.m.dead&&(o.status==='open'||tick-o.closedTick<80));
+  if(settledList.length>4000)settledList.splice(0,settledList.length-4000);
+}
+function checkWatches(){
+  for(const w of [...watches]){const m=markets.find(x=>x.id===w.mid);if(!m)continue;
+    let best=null;for(const b of RETAIL)if(st.books[b.id]&&bookLine(m,b.id)===w.line){const pr=m.px[b.id][w.sideIx];if(!best||am2dec(pr)>am2dec(best.pr))best={id:b.id,pr};}
+    if(best&&am2dec(best.pr)>=am2dec(w.target)){toast(`🔔 Price alert: ${esc(w.label)} is <b class="mono">${fmt(best.pr)}</b> at ${esc(B[best.id].name)}`);if(st.sound)beep();watches.splice(watches.indexOf(w),1);}}
+}
+// ----- arbitrage & middles -----
+function scanArbs(onlyMine){
+  const out=[];
+  for(const m of markets){
+    const groups={};
+    for(const b of BOOKS){if(onlyMine&&!b.signal&&!st.books[b.id])continue;if(onlyMine&&b.signal&&!st.books[b.id])continue;
+      const L=bookLine(m,b.id)??'ml';(groups[L]=groups[L]||[]).push(b);}
+    for(const L in groups){const g=groups[L];if(g.length<2)continue;
+      let b0=null,b1=null;for(const b of g){const p=m.px[b.id];if(!b0||am2dec(p[0])>am2dec(m.px[b0.id][0]))b0=b;if(!b1||am2dec(p[1])>am2dec(m.px[b1.id][1]))b1=b;}
+      if(b0===b1)continue;const d0=am2dec(m.px[b0.id][0]),d1=am2dec(m.px[b1.id][1]),inv=1/d0+1/d1;
+      if(inv<.997)out.push({key:`${m.id}|${L}|${b0.id}|${b1.id}`,m,b0:b0.id,b1:b1.id,p0:m.px[b0.id][0],p1:m.px[b1.id][1],profit:1/inv-1,s0:(1/d0)/inv,s1:(1/d1)/inv});}
+  }
+  return out.sort((a,b)=>b.profit-a.profit);
+}
+function scanMiddles(onlyMine){
+  const out=[];
+  for(const m of markets){if(!m.slope)continue;
+    const lowIx=m.type==='Total'?0:1,highIx=1-lowIx; // low side wins when result > line; high side wins when result < line
+    let lo=null,hi=null;
+    for(const b of BOOKS){if(onlyMine&&!st.books[b.id])continue;const L=bookLine(m,b.id);
+      const pl=m.px[b.id][lowIx],ph=m.px[b.id][highIx];
+      if(!lo||L<lo.L||(L===lo.L&&am2dec(pl)>am2dec(lo.p)))lo={id:b.id,L,p:pl};
+      if(!hi||L>hi.L||(L===hi.L&&am2dec(ph)>am2dec(hi.p)))hi={id:b.id,L,p:ph};}
+    if(!lo||!hi||hi.L-lo.L<1)continue;
+    const c=consensus0(m),f0=c.f0;
+    const pLow=fairAt(m,lo.id,lowIx,f0),pHigh=fairAt(m,hi.id,highIx,f0);
+    const pm=Math.max(0,pLow+pHigh-1),w1=am2dec(lo.p)-1,w2=am2dec(hi.p)-1;
+    const ev=(pm*(w1+w2)+(pLow-pm)*(w1-1)+(pHigh-pm)*(w2-1))/2; // per $1 on each side, as share of $2 risked
+    out.push({m,lo,hi,lowIx,highIx,gap:hi.L-lo.L,pm,ev,worst:Math.min(w1-1,w2-1)});}
+  return out.sort((a,b)=>b.ev-a.ev);
+}
+function step(){
+  tick++;while(markets.length<40)markets.push(makeMarket());
+  if(Math.random()<.09*speed)steam(pick(markets));
+  for(let i=sched.length-1;i>=0;i--)if(sched[i].t<=tick){const u=sched[i];sched.splice(i,1);applyUpdate(u);}
+  settle();checkWatches();
+  if(!warming&&st.arbAlert&&tick%3===0){const a=scanArbs(true);for(const x of a)if(!seenArbs.has(x.key)){seenArbs.add(x.key);
+    toast(`⚖️ Arb ${spct(x.profit)}: ${esc(x.m.who)} ${esc(x.m.label)} · ${esc(B[x.b0].name)} / ${esc(B[x.b1].name)}`);if(st.sound)beep();break;}}
+}
+
+// ================= settings & tracked bets =================
+const DEFAULT_MINE=['DraftKings','FanDuel','BetMGM','Caesars','Fanatics','bet365','theScore Bet','BetRivers','Hard Rock Bet','Fliff'];
+const st={score:60,edge:1.5,unit:50,bank:2500,kelly:1,sound:false,toast:true,arbAlert:false,sport:'All',sort:'new',theme:'light',
+  devig:'mult',fairSrc:'all',onlySteam:false,onlyRlm:false,
+  books:Object.fromEntries(RETAIL.map(b=>[b.id,DEFAULT_MINE.includes(b.name)])),types:Object.fromEntries(MKTTYPES.map(t=>[t,true]))};
+try{Object.assign(st,JSON.parse(localStorage.getItem('firstmove.st')||'{}'));}catch(e){}
+const save=()=>{try{localStorage.setItem('firstmove.st',JSON.stringify(st))}catch(e){}};
+let tracked=[];
+try{tracked=JSON.parse(localStorage.getItem('firstmove.bets')||'[]');tracked.forEach(t=>{if(!t.result)t.result='V';});}catch(e){}
+const saveBets=()=>{try{localStorage.setItem('firstmove.bets',JSON.stringify(tracked.slice(-500)))}catch(e){}};
+let speed=2,paused=false,warming=true;
+const KELLY=[0,.25,.5,.75,1],KL=['Flat (1 unit)','¼ Kelly','½ Kelly','¾ Kelly','Full Kelly'];
+const DEVIGNOTE={mult:'Splits the bookmaker\'s cut in proportion to each side. The standard method.',add:'Takes an equal share of the cut from each side. Gives favorites a bit more credit.',
+  power:'Puts more of the cut on the longshot side. Better for lopsided lines.',shin:'Models the bookmaker protecting itself from insiders. Accurate on favorites vs longshots.',
+  worst:'Runs all four methods and keeps the least favorable one. A bet only shows if it\'s +EV every way you measure it.'};
+function myBest(o){return o.stale?.find(s=>st.books[s.id]);}
+function passes(o){const mb=myBest(o);const ev=mb?mb.ev:(o.bet?.ev||0);
+  return (mb||o.bet)&&o.score>=st.score&&ev*100>=st.edge&&st.types[o.m.type]&&(st.sport==='All'||o.m.sport===st.sport)
+    &&(!st.onlySteam||o.steam)&&(!st.onlyRlm||o.rlm);}
+function stake(price,fair){
+  if(!st.kelly)return st.unit;const b=am2dec(price)-1,f=(b*fair-(1-fair))/b;
+  return Math.max(1,Math.round(st.bank*Math.max(0,f)*KELLY[st.kelly]));}
+const tierOf=s=>s>=90?['Elite','t-elite']:s>=75?['Strong','t-strong']:s>=60?['OK','t-ok']:['Weak','t-weak'];
+
+// ================= UI =================
+const $=id=>document.getElementById(id);
+const ago=t=>{const s=Math.max(0,Math.round((Date.now()-t)/1000));return s<60?s+'s ago':s<3600?Math.floor(s/60)+'m ago':Math.floor(s/3600)+'h ago';};
+function betLabel(o,id){const m=o.m||o;const s=sideName(m,o.sideIx,id);
+  if(m.type==='Player Props')return `${m.who} · ${s} ${m.label}`;
+  if(m.type==='Total')return `${m.who} · ${s}`;
+  if(m.type==='Moneyline')return `${s} to win`;return s;}
+function subLabel(m){return m.type==='Player Props'?`${m.sport} · ${m.team} vs ${m.opp}`:`${m.sport} · ${m.type} · ${m.who}`;}
+function applyTheme(){document.documentElement.classList.toggle('dark',st.theme==='dark');document.body.classList.toggle('dark',st.theme==='dark');}
+function flagsHTML(o,mb){
+  const f=[];
+  if(o.steam)f.push(`<span class="flag t-bad">🔥 STEAM · ${o.mv.books.size} books</span>`);
+  else if(o.mv.books.size===1&&(o.conf||0)<=1)f.push(`<span class="flag t-weak">1 book only · caution</span>`);
+  if(o.rlm)f.push(`<span class="flag t-vio">↩ RLM · public on other side</span>`);
+  if(mb&&mb.line!=null&&mb.line!==o.m.line)f.push(`<span class="flag t-ok">Alt line ${mb.line}</span>`);
+  if(tracked.some(t=>t.oid===o.id))f.push(`<span class="flag t-elite">✓ Placed</span>`);
+  return f.length?`<div class="flags">${f.join('')}</div>`:'';
+}
+
+function renderChips(){$('sportChips').innerHTML=['All',...Object.keys(SPORTS)].map(s=>`<div class="chip ${st.sport===s?'on':''}" data-s="${s}">${s==='All'?'All sports':s}</div>`).join('');}
+$('sportChips').onclick=e=>{const s=e.target.dataset.s;if(!s)return;st.sport=s;save();renderChips();renderAll();};
+
+function renderFeed(){
+  let list=opps.filter(passes);
+  if(st.sort==='score')list.sort((a,b)=>b.score-a.score);
+  else if(st.sort==='edge')list.sort((a,b)=>(myBest(b)?.ev||0)-(myBest(a)?.ev||0));
+  else list.sort((a,b)=>(a.status==='open'&&myBest(a)?0:1)-(b.status==='open'&&myBest(b)?0:1)||b.createdAt-a.createdAt);
+  const nOpen=list.filter(o=>o.status==='open'&&myBest(o)).length;
+  $('feedTitle').textContent=`${nOpen} open play${nOpen===1?'':'s'}`;
+  if(!list.length){$('feed').innerHTML=`<div class="empty"><b>Watching the sharp books…</b><br>A play shows up when a sharp book moves and one of <b>your</b> books still has the old price.<br><span style="color:var(--dim);font-size:13.5px">Fewer plays than you'd like? Lower the minimum score or add books in Settings.</span></div>`;return;}
+  $('feed').innerHTML=list.slice(0,40).map(o=>{
+    const live=myBest(o),mb=live||o.bet,open=o.status==='open'&&live,[tn,tc]=tierOf(o.score);
+    const stk=stake(mb.price,mb.fair||o.fair),win=Math.round(stk*(am2dec(mb.price)-1));
+    const nMine=o.stale.filter(s=>st.books[s.id]).length,w=open?Math.max(5,100-(tick-o.created)*1.2):0;
+    return `<div class="card ${open?'':'closed'} ${o.isNew?'new':''}" data-id="${o.id}">
+      <div class="r"><span class="tag ${tc}">${tn} · ${o.score}</span><span class="when">${ago(o.createdAt)}</span></div>
+      <div class="title">${esc(betLabel(o,mb.id))}</div>
+      <div class="sub">${esc(subLabel(o.m))}</div>
+      ${flagsHTML(o,mb)}
+      <div class="betbox"><div><div class="lbl">Bet at</div><div class="bk">${esc(B[mb.id].name)} <span class="odds mono">${fmt(mb.price)}</span></div>
+        <div class="stake">$${stk} to win $${win}</div></div>
+        <div class="edgebig"><b class="mono">+${pct(mb.ev)}</b><span>Edge</span></div></div>
+      <div class="why"><b>${esc(B[o.mv.first].name)}</b> moved first: ${fmt(o.mv.from)} → <b>${fmt(o.mv.to)}</b>. ${o.conf||1} sharp book${(o.conf||1)>1?'s':''} agree.${nMine>1?` ${nMine} of your books are still slow.`:''}</div>
+      <div class="window">${open?`<span class="open-t">Window open</span><div class="track"><div class="fill" style="width:${w}%"></div></div>`:`<span class="closed-t">Books caught up — window closed</span>`}</div>
+    </div>`;}).join('');
+  list.forEach(o=>o.isNew=false);
+}
+$('feed').onclick=e=>{const c=e.target.closest('.card');if(c)openSheet(+c.dataset.id);};
+$('sortBtn').onclick=()=>{st.sort={new:'score',score:'edge',edge:'new'}[st.sort];$('sortBtn').textContent='Sort: '+{new:'Newest',score:'Score',edge:'Edge'}[st.sort];save();renderFeed();};
+
+// ----- per-bet Monte Carlo -----
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function poisAbove(lam,line){let k=0,p=Math.exp(-lam),c=p;const t=Math.floor(line);while(k<t){k++;p*=lam/k;c+=p;}return 1-c;}
+function invNorm(p){const a=[-39.6968302866538,220.946098424521,-275.928510446969,138.357751867269,-30.6647980661472,2.50662827745924],
+  b=[-54.4760987982241,161.585836858041,-155.698979859887,66.8013118877197,-13.2806815528857],
+  c=[-.00778489400243029,-.322396458041136,-2.40075827716184,-2.54973253934373,4.37466414146497,2.93816398269878],d=[.00778469570904146,.32246712907004,2.445134137143,3.75440866190742];
+  const q=p<.02425?Math.sqrt(-2*Math.log(p)):p>1-.02425?Math.sqrt(-2*Math.log(1-p)):0;
+  if(p<.02425)return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  if(p>1-.02425)return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  const r=p-.5,s=r*r;return(((((a[0]*s+a[1])*s+a[2])*s+a[3])*s+a[4])*s+a[5])*r/(((((b[0]*s+b[1])*s+b[2])*s+b[3])*s+b[4])*s+1);}
+function simBet(o,mb,N=100000){
+  const m=o.m,d=m.dist,fs=mb.fair??o.fair,pOver=o.sideIx===0?fs:1-fs;let line=mb.line??m.line;
+  const draws=new Float32Array(N);let hits=0;
+  if(d.kind==='p'){let lo=.01,hi=60;for(let i=0;i<60;i++){const mid=(lo+hi)/2;poisAbove(mid,line)<pOver?lo=mid:hi=mid;}const L=Math.exp(-(lo+hi)/2);
+    for(let i=0;i<N;i++){let k=0,p=1;do{k++;p*=Math.random();}while(p>L);draws[i]=k-1;}}
+  else if(d.kind==='n'){const sd=d.sd||line*d.cv,mu=line+sd*invNorm(pOver);for(let i=0;i<N;i++)draws[i]=Math.max(0,mu+sd*randn());}
+  else{line=-(line??0);const sd=d.sd,mu=line+sd*invNorm(pOver);for(let i=0;i<N;i++)draws[i]=mu+sd*randn();} // side-0 team margin
+  for(let i=0;i<N;i++)if((draws[i]>line)===(o.sideIx===0))hits++;
+  const sorted=Float32Array.from(draws).sort();const lo=sorted[Math.floor(N*.005)],hi=sorted[Math.floor(N*.995)];
+  const nb=d.kind==='p'?Math.max(1,Math.min(30,hi-lo+1)):34,bw=d.kind==='p'?1:((hi-lo)/nb||1);
+  const bins=new Array(nb).fill(0);for(let i=0;i<N;i++){const j=Math.floor((draws[i]-lo)/bw);if(j>=0&&j<nb)bins[j]++;}
+  return {hits:hits/N,bins,lo,bw,line,median:sorted[N>>1],kind:d.kind,N};
+}
+function histSVG(r,o){
+  const W=600,H=170,pad=8,max=Math.max(...r.bins),bw=(W-2*pad)/r.bins.length;
+  let s=`<svg viewBox="0 0 ${W} ${H+24}" style="width:100%;height:auto">`;
+  r.bins.forEach((c,i)=>{const mid=r.lo+(i+.5)*r.bw;const win=(mid>r.line)===(o.sideIx===0);const h=c/max*(H-10);
+    s+=`<rect x="${pad+i*bw+1}" y="${H-h}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="${win?'var(--green)':'var(--line)'}"/>`;});
+  const lx=pad+(r.line-r.lo)/(r.bw*r.bins.length)*(W-2*pad);
+  if(lx>0&&lx<W)s+=`<line x1="${lx}" x2="${lx}" y1="0" y2="${H}" stroke="var(--red)" stroke-width="2.5" stroke-dasharray="5 4"/><text x="${Math.min(lx+6,W-90)}" y="14" fill="var(--red)" font-size="14" font-weight="700">Line ${r.kind==='margin'?fmt(-r.line):r.line}</text>`;
+  s+=`<text x="${pad}" y="${H+18}" fill="var(--dim)" font-size="13">${r.lo.toFixed(0)}</text><text x="${W-pad}" y="${H+18}" fill="var(--dim)" font-size="13" text-anchor="end">${(r.lo+r.bw*r.bins.length).toFixed(0)}</text>`;
+  return s+'</svg>';
+}
+function pathSVG(o,bookId){
+  const m=o.m,W=600,H=170,pad=40,ids=[...new Set([o.mv.first,PIN,byName('Circa Sports'),byName('Betfair Exchange'),bookId])];
+  const t0=Math.max(0,o.created-40);let lo=Infinity,hi=-Infinity;
+  const series=ids.map(id=>{const pts=m.hist[id].map(h=>[h[0],h[1+o.sideIx]]);pts.push([tick,m.px[id][o.sideIx]]);
+    pts.forEach(([,a])=>{const d=am2dec(a);lo=Math.min(lo,d);hi=Math.max(hi,d);});return {id,pts};});
+  if(hi-lo<.06){hi+=.03;lo-=.03;}
+  const X=t=>pad+(Math.max(t,t0)-t0)/Math.max(1,tick-t0)*(W-pad-10),Y=d=>H-14-(d-lo)/(hi-lo)*(H-26);
+  let s=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  for(let i=0;i<4;i++){const d=lo+(hi-lo)*i/3,y=Y(d);s+=`<line x1="${pad}" x2="${W-10}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="0" y="${y+4}" fill="var(--dim)" font-size="12" font-family="JetBrains Mono">${fmt(imp2am(1/d,1))}</text>`;}
+  series.forEach(({id,pts})=>{let d='';pts.forEach(([t,a],i)=>{const x=X(t),y=Y(am2dec(a));d+=i?`H${x.toFixed(1)}V${y.toFixed(1)}`:`M${x.toFixed(1)},${y.toFixed(1)}`;});
+    s+=`<path d="${d}" fill="none" stroke="${id===bookId?'var(--green)':B[id].c}" stroke-width="${id===bookId?3.5:2}"/>`;});
+  return {svg:s+'</svg>',ids};
+}
+let showAllBooks=false;
+function openSheet(id){
+  const o=opps.find(x=>x.id===id)||settledList.find(x=>x.id===id);if(!o)return;
+  const m=o.m,mb=myBest(o)||o.bet;const fair=mb.fair??o.fair;
+  const others=RETAIL.filter(b=>bookLine(m,b.id)===mb.line).map(b=>m.px[b.id][o.sideIx]).sort((a,c)=>am2dec(a)-am2dec(c));const mkt=others[others.length>>1]??mb.price;
+  const stk=stake(mb.price,fair),win=Math.round(stk*(am2dec(mb.price)-1)),mwin=Math.round(stk*(am2dec(mkt)-1));
+  const [tn,tc]=tierOf(o.score),path=pathSVG(o,mb.id);
+  const base0=o.sideIx===0?o.fair:1-o.fair;
+  const rows=BOOKS.map(b=>{const pr=m.px[b.id][o.sideIx];const fp=b.signal?fairSide(m.px[b.id],o.sideIx,'mult'):fairAt(m,b.id,o.sideIx,base0);
+      return {b,pr,line:bookLine(m,b.id),ev:fairAt(m,b.id,o.sideIx,base0)*am2dec(pr)-1,hold:am2imp(m.px[b.id][0])+am2imp(m.px[b.id][1])-1};})
+    .filter(x=>showAllBooks||x.b.signal||x.ev>=.005||st.books[x.b.id]).sort((a,c)=>(c.b.signal-a.b.signal)||(c.ev-a.ev));
+  const pubSide=o.sideIx===0?m.tix:1-m.tix,cashSide=o.sideIx===0?m.cash:1-m.cash;
+  const placed=tracked.find(t=>t.oid===o.id);
+  $('sheetBody').innerHTML=`
+    <div class="r"><span class="tag ${tc}">${tn} · ${o.score}</span><span class="when">${o.result?(o.result==='W'?'✅ Won':'❌ Lost'):o.status==='open'?'Window open':'Window closed'}</span></div>
+    <div class="title" style="font-size:20px">${esc(betLabel(o,mb.id))}</div><div class="sub">${esc(subLabel(m))}</div>
+    ${flagsHTML(o,mb)}
+    <div class="cmp" style="margin-top:14px">
+      <div class="cmpbox best"><small style="margin:0 0 4px;font-weight:700">BET HERE</small><div class="o mono" style="color:var(--green)">${fmt(mb.price)}</div><small>${esc(B[mb.id].name)}</small><small>$${stk} to win <b style="color:var(--text)">$${win}</b></small></div>
+      <div class="cmpbox"><small style="margin:0 0 4px;font-weight:700">MARKET NOW</small><div class="o mono">${fmt(mkt)}</div><small>Typical book</small><small>to win $${mwin} <span style="color:var(--red)">($${Math.max(0,win-mwin)} less)</span></small></div>
+    </div>
+    ${placed?`<div class="panel" style="margin-top:12px;border-color:var(--green)"><b>✓ You placed this:</b> ${money(placed.stake)} at ${fmt(placed.price)} (${esc(B[placed.book].name)})</div>`
+      :`<div class="panel" style="margin-top:12px"><div class="lbl" style="margin-bottom:8px">Track this bet</div><div class="inrow"><input type="number" id="placeAmt" value="${stk}" min="1"><button class="btn sm" id="placeBtn">I placed this bet</button></div></div>`}
+    <div class="panel"><div class="kpis">
+      <div class="kpi"><b class="mono" style="color:var(--green)">+${pct(mb.ev)}</b><span>Edge</span></div>
+      <div class="kpi"><b class="mono">${pct(fair)}</b><span>Fair win chance</span></div>
+      <div class="kpi"><b class="mono">${pct(am2imp(mb.price))}</b><span>Book thinks</span></div>
+      <div class="kpi"><b class="mono">${o.conf||1}/${SIGNAL.length}</b><span>Sharp books agree</span></div></div>
+      <p class="note">De-vig: <b>${{mult:'Multiplicative',add:'Additive',power:'Power',shin:'Shin',worst:'Worst case'}[st.devig]}</b> · Fair price from <b>${{all:'all sharp books',pin:'Pinnacle',exch:'exchanges'}[st.fairSrc]}</b></p></div>
+    <h2><span>Public betting</span>${o.rlm?'<span class="tag t-vio">Reverse line move</span>':''}</h2>
+    <div class="panel">
+      <div class="lbl">Tickets (number of bets)</div>
+      <div class="split"><div style="width:${pubSide*100}%;background:var(--greenbg);color:var(--green)">${pct(pubSide,0)} your side</div><div style="flex:1;background:var(--soft);color:var(--mute);justify-content:flex-end">${pct(1-pubSide,0)}</div></div>
+      <div class="lbl" style="margin-top:10px">Money (dollars bet)</div>
+      <div class="split"><div style="width:${cashSide*100}%;background:var(--greenbg);color:var(--green)">${pct(cashSide,0)} your side</div><div style="flex:1;background:var(--soft);color:var(--mute);justify-content:flex-end">${pct(1-cashSide,0)}</div></div>
+      <p class="note">${o.rlm?'Most bets are on the <b>other</b> side, yet the line moved toward yours. That usually means bigger, sharper money is on your side.':cashSide-pubSide>.1?'Money share is bigger than ticket share on your side: fewer, larger bets, often a sharp sign.':'No strong public-vs-sharp split on this one.'}</p></div>
+    <h2><span>🎲 Simulate this bet</span></h2>
+    <div class="panel" id="betSim"><p class="why" style="margin-top:0">Plays the game out 100,000 times using the fair price to see how often this bet cashes.</p><button class="btn" id="runBetSim">Run 100,000 sims</button></div>
+    <h2><span>🔔 Price alert</span></h2>
+    <div class="panel"><p class="why" style="margin:0 0 10px">Get a pop-up if any of your books offers this price or better.</p><div class="inrow"><input type="text" inputmode="numeric" id="watchAmt" value="${fmt(mb.price+(mb.price>0?15:10))}"><button class="btn sm" id="watchBtn">Alert me at a price</button></div></div>
+    <h2><span>How the price moved</span></h2>
+    <div class="panel">${path.svg}<div class="legend">${path.ids.map(i=>`<span><i style="background:${i===mb.id?'var(--green)':B[i].c}"></i>${esc(B[i].name)}</span>`).join('')}</div></div>
+    <h2><span>${showAllBooks?'All 100 books':'Key books'}</span><a id="toggleAll">${showAllBooks?'Show fewer':'Show all 100'}</a></h2>
+    <div class="panel" style="padding:4px 12px"><table><thead><tr><th>Book</th><th class="ra">Price</th><th class="ra">Hold</th><th class="ra">Edge</th></tr></thead><tbody>
+    ${rows.map(x=>`<tr><td>${esc(x.b.name)}${x.b.signal?`<span class="tier tier-${x.b.tier}">${x.b.tier==='A'?'SHARP':'EXCH'}</span>`:''}${st.books[x.b.id]?' <span class="tier" style="background:var(--greenbg);color:var(--green)">MINE</span>':''}${x.line!=null&&x.line!==m.line?` <span class="tier" style="background:var(--amberbg);color:var(--amber)">${x.line}</span>`:''}</td>
+      <td class="ra mono">${fmt(x.pr)}</td><td class="ra mono" style="color:var(--dim)">${pct(x.hold)}</td><td class="ra mono ${x.b.signal?'neg':x.ev>=.005?'pos':'neg'}">${x.b.signal?'—':(x.ev>0?'+':'')+pct(x.ev)}</td></tr>`).join('')}</tbody></table>
+    <p class="note" style="margin-bottom:8px">Hold = the bookmaker's built-in cut on this market. Lower hold = sharper, fairer book.</p></div>
+    <button class="btn" id="copyBtn">Copy bet slip</button><button class="btn ghost" id="closeBtn">Close</button>`;
+  $('sheet').classList.add('on');$('sheetbg').classList.add('on');
+  $('closeBtn').onclick=closeSheet;
+  $('toggleAll').onclick=()=>{showAllBooks=!showAllBooks;const y=$('sheet').scrollTop;openSheet(id);$('sheet').scrollTop=y;};
+  if($('placeBtn'))$('placeBtn').onclick=()=>{const amt=Math.max(1,+$('placeAmt').value||stk);
+    tracked.push({oid:o.id,mid:m.id,sideIx:o.sideIx,label:betLabel(o,mb.id),sub:subLabel(m),sport:m.sport,book:mb.id,price:mb.price,stake:amt,ev:mb.ev,fair,score:o.score,at:Date.now()});
+    saveBets();toast(`Tracking ${money(amt)} on ${esc(betLabel(o,mb.id))}`);const y=$('sheet').scrollTop;openSheet(id);$('sheet').scrollTop=y;};
+  $('watchBtn').onclick=()=>{const v=parseInt(String($('watchAmt').value).replace(/[^\d-]/g,''),10);
+    if(!v||(v>-100&&v<100)){toast('Enter American odds like +150 or -110');return;}
+    watches.push({mid:m.id,sideIx:o.sideIx,line:mb.line,target:v,label:betLabel(o,mb.id)});toast(`🔔 Alert set: ${esc(betLabel(o,mb.id))} at ${fmt(v)} or better`);};
+  $('runBetSim').onclick=()=>{$('runBetSim').textContent='Simulating…';$('runBetSim').disabled=true;
+    setTimeout(()=>{const r=simBet(o,mb);const evSim=r.hits*am2dec(mb.price)-1;
+      $('betSim').innerHTML=`<div class="kpis"><div class="kpi"><b class="mono" style="color:var(--green)">${pct(r.hits)}</b><span>Cashed in ${r.N.toLocaleString()} sims</span></div>
+        <div class="kpi"><b class="mono">${r.kind==='margin'?(r.median>0?'+':'')+r.median.toFixed(1):r.median.toFixed(r.kind==='p'?0:1)}</b><span>${r.kind==='margin'?'Median margin':'Median result'}</span></div>
+        <div class="kpi"><b class="mono" style="color:${evSim>0?'var(--green)':'var(--red)'}">${spct(evSim)}</b><span>Profit per $1 bet</span></div>
+        <div class="kpi"><b class="mono">${pct(1/am2dec(mb.price))}</b><span>Needed to break even</span></div></div>
+        <div style="margin-top:12px">${histSVG(r,o)}</div><div class="legend"><span><i style="background:var(--green)"></i>Bet wins</span><span><i style="background:var(--line)"></i>Bet loses</span></div>`;},30);};
+  $('copyBtn').onclick=()=>{const txt=`${betLabel(o,mb.id)} ${fmt(mb.price)} @ ${B[mb.id].name} — $${stk} (edge +${pct(mb.ev)}, score ${o.score})`;
+    navigator.clipboard.writeText(txt).then(()=>toast('Bet slip copied')).catch(()=>toast(esc(txt)));};
+}
+function closeSheet(){$('sheet').classList.remove('on');$('sheetbg').classList.remove('on');}
+$('sheetbg').onclick=closeSheet;
+
+// ----- scanner -----
+let scanTab='moves',arbMine=true;
+$('scanSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;scanTab=b.dataset.s;[...$('scanSeg').children].forEach(x=>x.classList.toggle('on',x===b));renderScan();};
+$('scanHead').onclick=e=>{if(e.target.id==='arbMineBtn'){arbMine=!arbMine;renderScan();}};
+function sportOk(m){return st.sport==='All'||m.sport===st.sport;}
+function renderScan(){
+  if(scanTab==='moves'){
+    $('scanHead').innerHTML=`<h2><span>Sharp moves</span><span class="plain">newest first</span></h2>`;
+    $('scanBody').innerHTML=moves.filter(mv=>sportOk(mv.m)).map(mv=>{const n=mv.books.size,o={m:mv.m,sideIx:mv.sideIx};
+      const caught=RETAIL.filter(b=>{const h=mv.m.hist[b.id];return h.length>1&&h[h.length-1][0]>=mv.tick;}).length;
+      const rl=isRLM(mv.m,mv.sideIx);
+      return `<div class="card" style="cursor:default"><div class="r"><span class="when">${ago(mv.t)}</span><span class="tag ${n>=3?'t-bad':n===2?'t-strong':'t-weak'}">${n>=3?'🔥 Steam · ':''}${n} sharp book${n>1?'s':''}</span></div>
+      <div class="title" style="font-size:16px">${esc(betLabel(o))}</div><div class="sub">${esc(subLabel(mv.m))}</div>
+      ${rl?`<div class="flags"><span class="flag t-vio">↩ RLM · ${pct(mv.sideIx===0?1-mv.m.tix:mv.m.tix,0)} of bets on the other side</span></div>`:''}
+      <div class="why"><b>${esc(B[mv.first].name)}</b> moved first: <span class="mono">${fmt(mv.from)} → <b>${fmt(mv.to)}</b></span></div>
+      <div class="why" style="margin-top:8px;font-size:13px">Other books caught up: ${caught}/${RETAIL.length}</div><div class="heat"><div style="width:${caught/RETAIL.length*100}%"></div></div></div>`;}).join('')||`<div class="empty">No sharp moves yet.</div>`;
+  } else if(scanTab==='arbs'){
+    const list=scanArbs(arbMine).filter(a=>sportOk(a.m));
+    $('scanHead').innerHTML=`<h2><span>${list.length} arb${list.length===1?'':'s'} live</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
+    $('scanBody').innerHTML=list.slice(0,30).map(a=>{const tot=st.unit*2,s0=Math.round(tot*a.s0),s1=tot-s0,ret=Math.round(tot*(1+a.profit));
+      return `<div class="card" style="cursor:default"><div class="r"><span class="tag t-elite">Guaranteed ${spct(a.profit,2)}</span><span class="when">${a.m.sport} · ${a.m.type}</span></div>
+      <div class="title" style="font-size:16px">${esc(a.m.type==='Player Props'?a.m.who+' · '+a.m.label:a.m.who)}</div>
+      <div class="legs"><div class="leg"><div class="lbl">Bet ${money(s0)}</div><b>${esc(sideName(a.m,0,a.b0))}</b><span class="o mono">${fmt(a.p0)}</span><div class="sub">${esc(B[a.b0].name)}</div></div>
+      <div class="leg"><div class="lbl">Bet ${money(s1)}</div><b>${esc(sideName(a.m,1,a.b1))}</b><span class="o mono">${fmt(a.p1)}</span><div class="sub">${esc(B[a.b1].name)}</div></div></div>
+      <div class="why">Risk ${money(tot)} total, get back about <b>${money(ret)}</b> whichever side wins.</div></div>`;}).join('')
+      ||`<div class="empty">No arbs right now.<br><span style="font-size:13.5px;color:var(--dim)">They pop up for a few seconds after big sharp moves.${arbMine?' Switch to all 100 books to see more.':''}</span></div>`;
+    $('scanBody').insertAdjacentHTML('beforeend',`<p class="note">Arbs are bets on both sides at different books so you profit either way. Books limit accounts that arb a lot, so use them sparingly. Exchange prices here don't include commission.</p>`);
+  } else {
+    const list=scanMiddles(arbMine).filter(x=>sportOk(x.m));
+    $('scanHead').innerHTML=`<h2><span>${list.length} middle${list.length===1?'':'s'}</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
+    $('scanBody').innerHTML=list.slice(0,30).map(x=>`<div class="card" style="cursor:default"><div class="r"><span class="tag ${x.ev>0?'t-elite':'t-strong'}">${x.gap}-pt window · ${pct(x.pm)} to hit both</span><span class="when">${x.m.sport} · ${x.m.type}</span></div>
+      <div class="title" style="font-size:16px">${esc(x.m.who)}</div>
+      <div class="legs"><div class="leg"><div class="lbl">Bet 1</div><b>${esc(sideName(x.m,x.lowIx,x.lo.id))}</b><span class="o mono">${fmt(x.lo.p)}</span><div class="sub">${esc(B[x.lo.id].name)}</div></div>
+      <div class="leg"><div class="lbl">Bet 2</div><b>${esc(sideName(x.m,x.highIx,x.hi.id))}</b><span class="o mono">${fmt(x.hi.p)}</span><div class="sub">${esc(B[x.hi.id].name)}</div></div></div>
+      <div class="why">If the result lands between <b>${x.lo.L}</b> and <b>${x.hi.L}</b>, both bets win. Otherwise one wins and one loses (small loss). Expected return: <b style="color:${x.ev>0?'var(--green)':'var(--red)'}">${spct(x.ev)}</b>.</div></div>`).join('')
+      ||`<div class="empty">No middles right now.<br><span style="font-size:13.5px;color:var(--dim)">They appear on spreads and totals when books hang different numbers.</span></div>`;
+  }
+}
+
+// ----- my bets / model -----
+let betTab='mine';
+$('betSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;betTab=b.dataset.b;[...$('betSeg').children].forEach(x=>x.classList.toggle('on',x===b));
+  $('betsMine').style.display=betTab==='mine'?'':'none';$('betsModel').style.display=betTab==='model'?'':'none';renderBets();};
+$('clearBets').onclick=()=>{if($('clearBets').dataset.c){tracked=[];saveBets();$('clearBets').dataset.c='';$('clearBets').textContent='Clear';renderBets();}
+  else{$('clearBets').dataset.c='1';$('clearBets').textContent='Tap again to clear all';setTimeout(()=>{$('clearBets').dataset.c='';$('clearBets').textContent='Clear';},3000);}};
+function renderBets(){if(betTab==='mine')renderMine();else renderModel();}
+function renderMine(){
+  const done=tracked.filter(t=>t.result==='W'||t.result==='L');const pl=done.reduce((a,t)=>a+t.pl,0),risk=done.reduce((a,t)=>a+t.stake,0);
+  const withClv=done.filter(t=>t.clv!=null);
+  $('mPL').textContent=money(pl);$('mPL').style.color=pl>=0?'var(--green)':'var(--red)';
+  $('mRoi').textContent=risk?spct(pl/risk):'—';
+  $('mClv').textContent=withClv.length?spct(withClv.reduce((a,t)=>a+t.clv,0)/withClv.length):'—';
+  $('mBeat').textContent=withClv.length?pct(withClv.filter(t=>t.clv>0).length/withClv.length,0):'—';
+  $('myBetList').innerHTML=[...tracked].reverse().slice(0,40).map(t=>{const st_=t.result==='W'?['WON','t-elite']:t.result==='L'?['LOST','t-bad']:t.result==='V'?['VOID','t-weak']:['PENDING','t-ok'];
+    return `<div class="card" style="cursor:default"><div class="r"><div style="min-width:0"><div style="font-weight:700;font-size:15px">${esc(t.label)}</div><div class="sub">${esc(B[t.book]?.name||'')} ${fmt(t.price)} · ${money(t.stake)} · edge +${pct(t.ev)}</div></div>
+      <div style="text-align:right;flex:none"><span class="tag ${st_[1]}">${st_[0]}</span>${t.pl!=null?`<div class="mono" style="font-weight:700;margin-top:4px;color:${t.pl>0?'var(--green)':'var(--red)'}">${money(t.pl)}</div>`:''}</div></div>
+      ${t.clv!=null?`<div class="why" style="margin-top:8px;font-size:13.5px">Closed at <b class="mono">${fmt(t.closePrice)}</b> · CLV <b style="color:${t.clv>0?'var(--green)':'var(--red)'}">${spct(t.clv)}</b> ${t.clv>0?'— you beat the close 👍':''}</div>`:''}</div>`;}).join('')
+    ||`<div class="empty">No tracked bets yet.<br><span style="font-size:13.5px;color:var(--dim)">Open a play and tap <b>I placed this bet</b>.</span></div>`;
+  const grp=(k)=>{const g={};done.forEach(t=>{const key=k(t);g[key]=g[key]||{n:0,pl:0,risk:0};g[key].n++;g[key].pl+=t.pl;g[key].risk+=t.stake;});return Object.entries(g).sort((a,b)=>b[1].pl-a[1].pl);};
+  const tbl=(title,rows)=>rows.length?`<h2><span>${title}</span></h2><div class="panel" style="padding:4px 12px"><table><thead><tr><th></th><th class="ra">Bets</th><th class="ra">P/L</th><th class="ra">ROI</th></tr></thead><tbody>${rows.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="ra mono">${v.n}</td><td class="ra mono ${v.pl>=0?'pos':'bad'}">${money(v.pl)}</td><td class="ra mono">${spct(v.pl/v.risk)}</td></tr>`).join('')}</tbody></table></div>`:'';
+  $('myBreak').innerHTML=tbl('By sportsbook',grp(t=>B[t.book]?.name||'?'))+tbl('By sport',grp(t=>t.sport));
+}
+function renderModel(){
+  const sel=settledList.filter(o=>o.score>=st.score);
+  const n=sel.length,u=sel.reduce((a,o)=>a+o.units,0),w=sel.filter(o=>o.result==='W').length;
+  $('kUnits').textContent=(u>=0?'+':'')+u.toFixed(1)+'u';$('kUnits').style.color=u>=0?'var(--green)':'var(--red)';
+  $('kWin').textContent=n?pct(w/n):'—';$('kRoi').textContent=n?spct(u/n):'—';
+  $('kClv').textContent=n?spct(sel.reduce((a,o)=>a+(o.clv||0),0)/n):'—';
+  $('perfRange').textContent=`Score ${st.score}+ · ${n} bets`;
+  const tiers=[[90,'var(--green)'],[75,'var(--blue)'],[0,'var(--dim)']].map(([min,c])=>{let s=0;const pts=[[0,0]];settledList.filter(o=>o.score>=min).forEach((o,i)=>{s+=o.units;pts.push([i+1,s]);});return {min,c,pts};});
+  const W=600,H=230,pad=44;let maxN=1,lo=0,hi=1;tiers.forEach(t=>{maxN=Math.max(maxN,t.pts.length-1);t.pts.forEach(([,y])=>{lo=Math.min(lo,y);hi=Math.max(hi,y);});});
+  const X=i=>pad+i/maxN*(W-pad-12),Y=y=>H-24-(y-lo)/(hi-lo||1)*(H-44);
+  let s='';for(let i=0;i<5;i++){const v=lo+(hi-lo)*i/4,y=Y(v);s+=`<line x1="${pad}" x2="${W-12}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="0" y="${y+4}" fill="var(--dim)" font-size="12" font-family="JetBrains Mono">${v>=0?'+':''}${v.toFixed(0)}u</text>`;}
+  [...tiers].reverse().forEach(t=>{if(t.pts.length<2)return;s+=`<path d="${t.pts.map(([x,y],i)=>(i?'L':'M')+X(x).toFixed(1)+','+Y(y).toFixed(1)).join('')}" fill="none" stroke="${t.c}" stroke-width="${t.min===90?3:2}"/>`;
+    const [lx,ly]=t.pts[t.pts.length-1];s+=`<text x="${Math.min(X(lx)+4,W-60)}" y="${Y(ly)-7}" fill="${t.c}" font-size="13" font-weight="800" font-family="JetBrains Mono">${ly>=0?'+':''}${ly.toFixed(1)}u</text>`;});
+  s+=`<text x="${W-12}" y="${H-4}" fill="var(--dim)" font-size="12" text-anchor="end">bets settled →</text>`;
+  $('perfChart').innerHTML=s;
+  $('settled').innerHTML=sel.slice(-12).reverse().map(o=>`<div class="card" data-sid="${o.id}"><div class="r"><div style="min-width:0"><div style="font-weight:700;font-size:15px">${esc(betLabel(o,o.bet.id))}</div><div class="sub">${esc(B[o.bet.id].name)} ${fmt(o.bet.price)} · score ${o.score} · CLV ${spct(o.clv||0)}</div></div>
+    <div style="text-align:right;flex:none"><span class="tag ${o.result==='W'?'t-elite':'t-bad'}">${o.result==='W'?'WIN':'LOSS'}</span><div class="mono" style="font-weight:700;margin-top:4px;color:${o.units>0?'var(--green)':'var(--red)'}">${o.units>0?'+':''}${o.units.toFixed(2)}u</div></div></div></div>`).join('')||'<div class="empty">No settled bets yet</div>';
+}
+$('settled').onclick=e=>{const c=e.target.closest('.card');if(c)openSheet(+c.dataset.sid);};
+
+// ----- strategy simulator (Web Worker) -----
+let simRuns=100000,worker=null;
+const workerSrc=`onmessage=e=>{const {pool,bpd,days,runs}=e.data;const P=pool.length;const pr=new Float64Array(P),pw=new Float64Array(P);
+ pool.forEach((x,i)=>{pr[i]=x[0];pw[i]=x[1];});
+ let s=(Date.now()^0x9e3779b9)>>>0;const R=()=>{s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296;};
+ const finals=new Float32Array(runs),dd=new Float32Array(runs);const keep=Math.min(runs,1500);const paths=new Float32Array(keep*(days+1));
+ const step=Math.max(1,Math.floor(runs/50));
+ for(let r=0;r<runs;r++){let u=0,peak=0,mdd=0;
+  for(let d=0;d<days;d++){for(let b=0;b<bpd;b++){const j=(R()*P)|0;u+=R()<pw[j]?pr[j]:-1;}
+   if(u>peak)peak=u;if(peak-u>mdd)mdd=peak-u;if(r<keep)paths[r*(days+1)+d+1]=u;}
+  finals[r]=u;dd[r]=mdd;if(r%step===0)postMessage({progress:r/runs});}
+ postMessage({done:true,finals,dd,paths,keep},[finals.buffer,dd.buffer,paths.buffer]);};`;
+$('sRuns').onclick=e=>{const b=e.target.closest('button');if(!b)return;simRuns=+b.dataset.n;
+  [...$('sRuns').children].forEach(x=>x.classList.toggle('on',x===b));$('runSim').textContent=`Run ${simRuns.toLocaleString()} sims`;};
+$('sBpd').oninput=e=>$('lBpd').textContent=e.target.value;
+$('sDays').oninput=e=>$('lDays').textContent=e.target.value;
+$('sScore').oninput=e=>$('lSimScore').textContent=e.target.value+'+';
+$('runSim').onclick=()=>{
+  const min=+$('sScore').value,bpd=+$('sBpd').value,days=+$('sDays').value;
+  let base=settledList.filter(o=>o.score>=min);if(base.length<30)base=settledList.slice();
+  if(base.length<10){$('simOut').innerHTML='<div class="empty">Not enough settled bets yet. Let the market run a little longer.</div>';return;}
+  const n=base.length,wins=base.filter(o=>o.result==='W').length,expW=base.reduce((a,o)=>a+(o.bet.fair||o.fair||.5),0);
+  const adj=clamp((wins-expW)/(n+150),-.04,.04);
+  const pool=base.map(o=>[am2dec(o.bet.price)-1,clamp((o.bet.fair||o.fair||.5)+adj,.02,.98)]);
+  const avgEv=pool.reduce((a,[p,w])=>a+(w*(p+1)-1),0)/pool.length;
+  if(worker)worker.terminate();
+  try{worker=new Worker(URL.createObjectURL(new Blob([workerSrc],{type:'text/javascript'})));}catch(err){$('simOut').innerHTML='<div class="empty">Your browser blocked the simulator.</div>';return;}
+  $('runSim').disabled=true;$('runSim').textContent='Simulating…';$('simProg').style.display='block';
+  worker.onmessage=e=>{const d=e.data;if(d.progress!=null){$('simProg').firstElementChild.style.width=(d.progress*100)+'%';return;}
+    $('runSim').disabled=false;$('runSim').textContent=`Run ${simRuns.toLocaleString()} sims`;$('simProg').style.display='none';
+    renderSimOut(d,{bpd,days,min,n,adj,avgEv});};
+  worker.postMessage({pool,bpd,days,runs:simRuns});
+};
+function q(arr,p){return arr[Math.min(arr.length-1,Math.floor(arr.length*p))];}
+function renderSimOut(d,c){
+  const f=Float32Array.from(d.finals).sort(),dd=Float32Array.from(d.dd).sort(),N=f.length,bets=c.bpd*c.days;
+  let prof=0,down20=0;for(let i=0;i<N;i++){if(f[i]>0)prof++;if(d.dd[i]>=20)down20++;}
+  const u=st.unit,K=d.keep,D=c.days;const bands=[];
+  for(let day=0;day<=D;day++){const col=new Float32Array(K);for(let r=0;r<K;r++)col[r]=d.paths[r*(D+1)+day];col.sort();bands.push([q(col,.05),q(col,.25),q(col,.5),q(col,.75),q(col,.95)]);}
+  let lo=0,hi=1;bands.forEach(b=>{lo=Math.min(lo,b[0]);hi=Math.max(hi,b[4]);});
+  const W=600,H=230,pad=48,X=i=>pad+i/D*(W-pad-12),Y=y=>H-24-(y-lo)/(hi-lo)*(H-44);
+  const area=(a,b)=>bands.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+','+Y(v[a]).toFixed(1)).join('')+[...bands].reverse().map((v,i)=>'L'+X(D-i).toFixed(1)+','+Y(v[b]).toFixed(1)).join('')+'Z';
+  let svg='';for(let i=0;i<5;i++){const v=lo+(hi-lo)*i/4,y=Y(v);svg+=`<line x1="${pad}" x2="${W-12}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="0" y="${y+4}" fill="var(--dim)" font-size="12" font-family="JetBrains Mono">${v>=0?'+':''}${v.toFixed(0)}u</text>`;}
+  svg+=`<path d="${area(0,4)}" fill="var(--green)" opacity=".12"/><path d="${area(1,3)}" fill="var(--green)" opacity=".22"/>`;
+  svg+=`<path d="${bands.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+','+Y(v[2]).toFixed(1)).join('')}" fill="none" stroke="var(--green)" stroke-width="3"/>`;
+  svg+=`<line x1="${pad}" x2="${W-12}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--dim)" stroke-dasharray="4 4"/><text x="${W-12}" y="${H-4}" fill="var(--dim)" font-size="12" text-anchor="end">day ${D} →</text>`;
+  const hb=30,hlo=f[Math.floor(N*.002)],hhi=f[Math.floor(N*.998)],hw=(hhi-hlo)/hb||1,bins=new Array(hb).fill(0);
+  for(let i=0;i<N;i++){const j=Math.floor((f[i]-hlo)/hw);if(j>=0&&j<hb)bins[j]++;}const mx=Math.max(...bins);
+  let hs=`<svg viewBox="0 0 600 150" style="width:100%;height:auto">`;bins.forEach((b,i)=>{const h=b/mx*120,x0=hlo+i*hw;hs+=`<rect x="${10+i*(580/hb)+1}" y="${130-h}" width="${580/hb-2}" height="${h}" rx="2" fill="${x0+hw/2>0?'var(--green)':'var(--red)'}" opacity=".85"/>`;});
+  hs+=`<text x="10" y="148" fill="var(--dim)" font-size="12">${hlo.toFixed(0)}u</text><text x="590" y="148" fill="var(--dim)" font-size="12" text-anchor="end">${hhi>=0?'+':''}${hhi.toFixed(0)}u</text></svg>`;
+  $('simOut').innerHTML=`
+   <div class="panel"><div class="kpis">
+    <div class="kpi"><b class="mono" style="color:var(--green)">${pct(prof/N,0)}</b><span>Chance you're up after ${c.days} days</span></div>
+    <div class="kpi"><b class="mono">${q(f,.5)>=0?'+':''}${q(f,.5).toFixed(1)}u</b><span>Typical result (≈${money(q(f,.5)*u)})</span></div>
+    <div class="kpi"><b class="mono" style="color:var(--red)">${q(f,.05).toFixed(1)}u</b><span>Bad luck (worst 5%)</span></div>
+    <div class="kpi"><b class="mono" style="color:var(--green)">${q(f,.95)>=0?'+':''}${q(f,.95).toFixed(1)}u</b><span>Good luck (best 5%)</span></div>
+    <div class="kpi"><b class="mono">${q(dd,.5).toFixed(1)}u</b><span>Typical worst drop</span></div>
+    <div class="kpi"><b class="mono">${pct(down20/N,0)}</b><span>Chance of a 20u+ drop</span></div>
+    <div class="kpi"><b class="mono">${bets.toLocaleString()}</b><span>Bets per run</span></div>
+    <div class="kpi"><b class="mono">${N.toLocaleString()}</b><span>Simulations</span></div></div></div>
+   <h2><span>Your bankroll over time</span></h2>
+   <div class="panel"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${svg}</svg>
+    <div class="legend"><span><i style="background:var(--green)"></i>Typical path</span><span><i style="background:var(--green);opacity:.4"></i>Middle 50%</span><span><i style="background:var(--green);opacity:.15"></i>90% of runs</span></div></div>
+   <h2><span>Where you could finish</span></h2>
+   <div class="panel">${hs}<p class="note">Built from ${c.n.toLocaleString()} settled bets scored ${c.min}+ (average edge ${pct(c.avgEv)}). Win chances were adjusted ${c.adj>=0?'up':'down'} ${pct(Math.abs(c.adj))} to match how those bets actually did, so the sim doesn't over-trust the model.</p></div>`;
+}
+
+function renderHeader(){
+  const open=opps.filter(o=>o.status==='open'&&passes(o)&&myBest(o));
+  $('stOpen').textContent=open.length;
+  $('stEdge').textContent=open.length?pct(open.reduce((a,o)=>a+myBest(o).ev,0)/open.length):'—';
+  $('stArbs').textContent=scanArbs(true).length;
+  const sel=settledList.filter(o=>o.score>=st.score);
+  $('stClv').textContent=sel.length?spct(sel.reduce((a,o)=>a+(o.clv||0),0)/sel.length):'—';
+  const nb=$('navBadge');if(view!=='feed'&&unseen>0){nb.style.display='';nb.textContent=unseen>99?'99+':unseen;}else nb.style.display='none';
+}
+
+// ----- alerts -----
+let actx=null,unseen=0,toastT,toastId=null;
+function beep(){try{if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;o.connect(g);g.connect(actx.destination);
+  g.gain.setValueAtTime(.0001,actx.currentTime);g.gain.exponentialRampToValueAtTime(.2,actx.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.25);o.start();o.stop(actx.currentTime+.3);}catch(e){}}
+function toast(msg,id){const t=$('toast');t.innerHTML=msg;toastId=id||null;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3800);}
+$('toast').onclick=()=>{$('toast').classList.remove('on');if(toastId)openSheet(toastId);};
+function alertOpp(o){
+  if(view!=='feed')unseen++;if(o.score<75)return;const mb=myBest(o);if(!mb)return;
+  if(st.toast)toast(`<b style="color:var(--green)">${tierOf(o.score)[0]} ${o.score}</b>${o.steam?' 🔥':''} · ${esc(betLabel(o,mb.id))} <b class="mono">${fmt(mb.price)}</b> at ${esc(B[mb.id].name)} · +${pct(mb.ev)}`,o.id);
+  if(st.sound)beep();
+}
+
+// ----- nav -----
+let view='feed';
+$('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;view=b.dataset.v;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+view));
+  $('sportChips').style.display=view==='feed'||view==='scan'?'':'none';
+  if(view==='feed')unseen=0;renderAll();window.scrollTo(0,0);};
+
+// ----- settings -----
+function renderBooks(){
+  const qy=($('bookSearch').value||'').toLowerCase();
+  $('bookGroups').innerHTML=['US','OFF','INTL','A','X'].map(t=>{
+    const list=BOOKS.filter(b=>b.tier===t&&b.name.toLowerCase().includes(qy));if(!list.length)return '';
+    return `<div style="font-weight:800;font-size:14px;margin:14px 0 8px">${TIERNAME[t]} <span style="color:var(--dim);font-weight:600">(${BOOKS.filter(b=>b.tier===t).length})</span>${t==='A'||t==='X'?'<span style="color:var(--dim);font-weight:600;font-size:12.5px"> — always feed the fair price</span>':''}</div>
+     <div class="booklist">${list.map(b=>`<div class="bt ${st.books[b.id]?'on':''}" data-b="${b.id}"><span class="ck">${st.books[b.id]?'✓':''}</span><span>${esc(b.name)}</span></div>`).join('')}</div>`;}).join('');
+  $('booksAll').textContent=RETAIL.some(b=>st.books[b.id])?'Select none':'Select all';
+}
+$('bookSearch').oninput=renderBooks;
+$('bookGroups').onclick=e=>{const t=e.target.closest('.bt[data-b]');if(!t)return;st.books[t.dataset.b]=!st.books[t.dataset.b];save();renderBooks();};
+$('booksAll').onclick=()=>{const any=RETAIL.some(b=>st.books[b.id]);RETAIL.forEach(b=>st.books[b.id]=!any);save();renderBooks();};
+const SWITCHES=[['tSound','sound'],['tToast','toast'],['tArbA','arbAlert'],['tSteam','onlySteam'],['tRlm','onlyRlm']];
+function renderSettings(){
+  $('fScore').value=st.score;$('lScore').textContent=st.score;$('fEdge').value=st.edge;$('lEdge').textContent=st.edge+'%';
+  $('fUnit').value=st.unit;$('fBank').value=st.bank;$('fKelly').value=st.kelly;$('lKelly').textContent=KL[st.kelly];
+  $('mktTypes').innerHTML=MKTTYPES.map(t=>`<div class="bt ${st.types[t]?'on':''}" data-t="${t}"><span class="ck">${st.types[t]?'✓':''}</span><span>${t}</span></div>`).join('');
+  for(const [id,k] of SWITCHES){$(id).classList.toggle('on',!!st[k]);$(id).querySelector('.ck').textContent=st[k]?'✓':'';}
+  [...$('themeSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.t===st.theme));
+  [...$('devigSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.d===st.devig));$('devigNote').textContent=DEVIGNOTE[st.devig];
+  [...$('srcSeg').children].forEach(b=>b.classList.toggle('on',b.dataset.f===st.fairSrc));
+  renderBooks();
+}
+function refreshAll(){opps.forEach(o=>{if(o.status==='open')refresh(o);});}
+$('themeSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;st.theme=b.dataset.t;save();applyTheme();renderSettings();};
+$('devigSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;st.devig=b.dataset.d;save();refreshAll();renderSettings();renderHeader();};
+$('srcSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;st.fairSrc=b.dataset.f;save();refreshAll();renderSettings();renderHeader();};
+$('fScore').oninput=e=>{st.score=+e.target.value;save();$('lScore').textContent=st.score;renderHeader();};
+$('fEdge').oninput=e=>{st.edge=+e.target.value;save();$('lEdge').textContent=st.edge+'%';};
+$('fUnit').onchange=e=>{st.unit=Math.max(1,+e.target.value||50);save();};
+$('fBank').onchange=e=>{st.bank=Math.max(1,+e.target.value||2500);save();};
+$('fKelly').oninput=e=>{st.kelly=+e.target.value;save();$('lKelly').textContent=KL[st.kelly];};
+$('fSpeed').oninput=e=>{speed=+e.target.value;$('lSpeed').textContent=['','0.5×','1×','2×','3×','5×'][speed];restartLoop();};
+$('mktTypes').onclick=e=>{const t=e.target.closest('.bt');if(!t)return;st.types[t.dataset.t]=!st.types[t.dataset.t];save();renderSettings();};
+for(const [id,k] of SWITCHES)$(id).onclick=()=>{st[k]=!st[k];
+  if(k==='sound'&&st.sound){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();beep();}catch(e){}}save();renderSettings();};
+function setPaused(v){paused=v;$('hdr').classList.toggle('paused',paused);$('liveTxt').textContent=paused?'Paused — tap to resume':'Scanning 100 books';$('bPause').textContent=paused?'Resume':'Pause';}
+$('bPause').onclick=()=>setPaused(!paused);$('liveBtn').onclick=()=>setPaused(!paused);
+$('bReset').onclick=()=>{markets=[];opps=[];moves=[];settledList=[];sched.length=0;watches=[];tick=0;warmup();renderAll();toast('Session reset');};
+
+function renderAll(){renderHeader();if(view==='feed')renderFeed();else if(view==='scan')renderScan();else if(view==='bets')renderBets();}
+function warmup(){warming=true;const sp=speed;speed=3;for(let i=0;i<4500;i++)step();speed=sp;
+  opps.forEach(o=>{o.createdAt=Date.now()-(tick-o.created)*1500;o.isNew=false;});moves.forEach(m=>{m.t=Date.now()-(tick-m.tick)*1500;});
+  scanArbs(true).forEach(a=>seenArbs.add(a.key));warming=false;}
+let loop;
+function restartLoop(){clearInterval(loop);const ms=[0,3000,1500,900,600,350][speed];loop=setInterval(()=>{if(paused)return;step();renderAll();},ms);}
+applyTheme();renderChips();renderSettings();warmup();renderAll();restartLoop();
+setInterval(()=>{if(!paused&&view==='feed')renderFeed();},1000);
+window.__fm={get opps(){return opps},get settled(){return settledList},get markets(){return markets},simBet,BOOKS,scanArbs,scanMiddles,fairSide,step,get tracked(){return tracked},st};
+})();
+</script>
+</body>
+</html>

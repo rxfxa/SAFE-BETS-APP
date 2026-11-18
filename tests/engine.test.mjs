@@ -338,9 +338,10 @@ try {
     const pf = await page.evaluate(() => { SB.setOddsFormat('prob'); SB.goTab('parlays'); const t = document.getElementById('main').textContent; SB.setOddsFormat('american'); return { orBetter: /or better/.test(t), lower: /or lower/.test(t) }; });
     check('% format: no ambiguous "or better", says "or lower"', !pf.orBetter && pf.lower, JSON.stringify(pf));
 
-    // ---- theme (ux-16)
-    const th = await page.evaluate(() => { document.getElementById('themeBtn').click(); const r = [getComputedStyle(document.documentElement).colorScheme, document.getElementById('themeBtn').getAttribute('aria-pressed')]; document.getElementById('themeBtn').click(); return r; });
-    check('dark theme sets color-scheme dark and aria-pressed', th[0] === 'dark' && th[1] === 'true', JSON.stringify(th));
+    // ---- theme (ux-16): one committed black theme, no toggle; the 'theme' event name stays subscribable for modules
+    const th = await page.evaluate(() => ({ cs: getComputedStyle(document.documentElement).colorScheme, bg: getComputedStyle(document.body).backgroundColor,
+      toggle: !!document.getElementById('themeBtn'), sub: typeof SB.on('theme', () => {}) }));
+    check('single black theme: color-scheme dark, black page, no theme toggle, theme event still subscribable', th.cs === 'dark' && th.bg === 'rgb(0, 0, 0)' && !th.toggle && th.sub === 'function', JSON.stringify(th));
 
     // ---- background refresh never steals focus from a field being typed in (ux-12)
     await page.evaluate(() => SB.goTab('odds'));
@@ -441,7 +442,7 @@ try {
     const b0 = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabs .tab')].map(b => b.dataset.t).join(','), main: document.getElementById('main').textContent }));
     await page.waitForFunction(() => SB.firstRender, null, { timeout: 30000 });
     const b1 = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabs .tab')].map(b => b.dataset.t).join(','), sw: document.documentElement.scrollWidth,
-      sizes: ['#themeBtn', '#oddsFmt', '.chip'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return Math.round(r.height); }) }));
+      sizes: ['.search', '#oddsFmt', '.chip'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return Math.round(r.height); }) }));
     check('boot: Soccer Parlays + Simulator tabs exist before the feed loads, with a loading message', /soccerparlays/.test(b0.tabs) && /sim/.test(b0.tabs) && /Loading/.test(b0.main) && b0.tabs === b1.tabs, JSON.stringify(b0));
     check('360px: no horizontal scroll, header controls and chips >= 40px', b1.sw <= 360 && b1.sizes.every(h => h >= 40), JSON.stringify(b1));
     await page.evaluate(() => { const g = SB.DATA.games.find(g => g.sport === 'soccer' && SB.priced(g)); SB.setSlip([{ gid: g.id, key: 'H' }, { gid: g.id, key: 'O1.5' }]); SB.openSlip(); });

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="sbe-chrome" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#a3aebb"/><stop offset=".48" stop-color="#f1f5fa"/><stop offset=".62" stop-color="#ffc58a"/><stop offset=".72" stop-color="#6c7888"/><stop offset="1" stop-color="#d9e0e8"/></linearGradient>
+<linearGradient id="sbe-ring" x1="20" y1="10" x2="44" y2="42" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#7d8998"/><stop offset=".7" stop-color="#e8edf3"/><stop offset="1" stop-color="#55606e"/></linearGradient>
+<radialGradient id="sbe-core" cx="32" cy="24" r="36" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0f3566"/><stop offset=".55" stop-color="#061227"/><stop offset="1" stop-color="#010409"/></radialGradient>
+<linearGradient id="sbe-bar" x1="0" y1="36" x2="0" y2="16" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0a6cff"/><stop offset="1" stop-color="#6efbfe"/></linearGradient>
+<linearGradient id="sbe-bolt" x1="52" y1="14" x2="22" y2="54" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#6efbfe"/><stop offset="1" stop-color="#1e8fff"/></linearGradient>
+</defs>
+<path d="M32 2.8 57.5 10.4V30.6C57.5 45.2 47 55.6 32 61.6 17 55.6 6.5 45.2 6.5 30.6V10.4Z" fill="url(#sbe-core)" stroke="url(#sbe-chrome)" stroke-width="3.2" stroke-linejoin="round"/>
+<path d="M32 8.2 52.4 14.3V30.6C52.4 42.1 44.3 50.6 32 55.9 19.7 50.6 11.6 42.1 11.6 30.6V14.3Z" fill="none" stroke="#1e8fff" stroke-opacity=".7" stroke-width="1.1" stroke-linejoin="round"/>
+<circle cx="32" cy="26" r="13.2" fill="#02070f" stroke="url(#sbe-ring)" stroke-width="2.6"/>
+<path d="M22.6 33.4A11 11 0 1 1 41.4 33.4" fill="none" stroke="#30dcf8" stroke-width="1.3" stroke-dasharray="1.1 2.4" stroke-opacity=".85"/>
+<g fill="url(#sbe-bar)"><rect x="23.4" y="30" width="3.4" height="5.4" rx=".5"/><rect x="28.3" y="27" width="3.4" height="8.4" rx=".5"/><rect x="33.2" y="24.2" width="3.4" height="11.2" rx=".5"/><rect x="38.1" y="21" width="3.4" height="14.4" rx=".5"/></g>
+<path d="M22.6 26.6 27.6 22.9 32.4 24.1 40 15.8" fill="none" stroke="#e8feff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="40" cy="15.8" r="1.7" fill="#ffffff"/>
+<path d="M55.5 9.5 32.6 32.6 39.5 33 19 48.5 53 32.5 45 31Z" fill="url(#sbe-bolt)" stroke="#010409" stroke-width=".8" stroke-linejoin="round"/>
+<path d="M26.2 47.6 30.4 51.6 38.4 43.6" fill="none" stroke="#6efbfe" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

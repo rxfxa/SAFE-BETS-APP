@@ -396,7 +396,8 @@ function parlayCardHTML(P) {
   const edgePx = SB.fmtPrice(1.05 / P.p);
   return `<div class="pc spcard" data-sp-card="${esc(P.id)}" data-sp-p="${P.p}" data-sp-legs="${esc(legsJson)}">
     <div class="pchead"><span class="pctitle">${esc(P.title)}${P.lottery ? ' <span class="badge b-est">LOTTERY-STYLE</span>' : ''}</span><span class="hit ${hitClass(P.p)}">${pct(P.p, P.p < .1 ? 1 : 0)} to hit</span></div>
-    <div style="margin-top:6px">${legs}</div>
+    <div class="gauge" style="--p:${Math.max(0, Math.min(1, +P.p || 0)).toFixed(3)}" aria-hidden="true"><i></i></div>
+    <div style="margin-top:4px">${legs}</div>
     <div class="pcfoot"><div class="odds mono">${esc(SB.fmtOdds(P.p))}<small>Fair odds · $10 pays ${money(10 / P.p)}${boost > 1.02 ? ` · same-game boost +${pct(boost - 1)}` : ''}</small></div></div>
     <div class="spbtns"><button class="btn" data-sp-build="${esc(P.id)}">Open in builder</button>${hasSim() ? `<button class="btn ghost" data-sp-sim="${esc(P.id)}">Simulate 100k</button>` : ''}</div>
     <div class="note">Bet only at <b class="mono">${esc(SB.fmtOdds(P.p))}</b> or better (${esc(edgePx)} = a 5% edge). ${P.lottery ? 'Correct scores miss far more often than they land; stake small.' : 'Hit chance is a model estimate, not a promise.'}</div></div>`;
@@ -404,7 +405,7 @@ function parlayCardHTML(P) {
 const emptyCard = (title, msg) => `<div class="pc sp-empty"><div class="pchead"><span class="pctitle">${esc(title)}</span></div><div class="why">${msg}</div></div>`;
 function cell(g, key, short, opts = {}) {
   const p = SB.p1(g, key), id = g.id + '|' + key, can = SB.priced(g) && p > 0, inS = SB.inSlip(g.id, key);
-  const st2 = opts.heat != null ? ` style="background:color-mix(in srgb,var(--accent2) ${Math.round(8 + 62 * opts.heat)}%,var(--card))"` : '';
+  const st2 = opts.heat != null ? ` style="background:color-mix(in srgb,var(--heat) ${Math.round(8 + 62 * opts.heat)}%,var(--card))"` : '';
   return `<button class="spc${opts.heat != null ? ' heat' : ''}${inS ? ' in' : ''}" data-leg="${esc(id)}" ${can ? '' : 'disabled'}${st2} title="${esc(SB.legLabel({ gid: g.id, key }) + ' · ' + pct(p, 1) + ' · fair ' + SB.fmtOdds(p))}" aria-label="${esc(SB.legLabel({ gid: g.id, key }) + ', ' + pct(p, 1) + ', fair price ' + SB.fmtOdds(p))}"><i>${esc(short)}</i><b>${pct(p, p < .1 ? 1 : 0)}</b><span>${esc(SB.fmtOdds(p))}</span></button>`;
 }
 // knockout / playoff fixtures where a level game goes to extra time or penalties. The feed's comp for this week's MLS Cup
@@ -542,22 +543,22 @@ SB.on('slip', () => { for (const b of document.querySelectorAll('#main .spc[data
 const css = `
 .spnav{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin:10px -16px 0;padding:2px 16px 4px}
 .spnav::-webkit-scrollbar{display:none}
-.spnav .chip .n{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;border-radius:9px;background:var(--soft);color:var(--mute);font-size:11.5px;font-weight:800;text-align:center;line-height:17px}
-.spnav .chip.on .n{background:rgba(0,0,0,.14);color:#000}
+.spnav .chip .n{display:inline-block;min-width:18px;margin-left:7px;padding:0 5px;border-radius:3px;background:var(--soft2);color:var(--mute);font-size:11.5px;font-weight:700;font-style:italic;text-align:center;line-height:17px;font-variant-numeric:tabular-nums}
+.spnav .chip.on .n{background:color-mix(in srgb,var(--bg) 28%,transparent);color:var(--on-blue)}
 .spnav .chip.zero{opacity:.6}
-.spnav .more{flex:none;align-self:center;font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;padding:0 0 0 6px}
+.spnav .more{flex:none;align-self:center;font-size:10.5px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.16em;padding:0 0 0 6px}
 .spsecs{margin-top:4px}
 @media(min-width:760px){.spnav{flex-wrap:wrap;overflow:visible;margin:10px 0 0;padding:2px 0 4px}}
 .spcard .hit{white-space:nowrap;flex:none}
 .spcard .badge,.spname .badge,.spname .warnflag{white-space:nowrap;display:inline-block}
-.spsecs .chip{padding:6px 12px;font-size:13px;border-radius:9px}
-.spcard .legtxt .spwhy{display:block;font-style:normal;font-size:12px;color:var(--mute);font-weight:500;margin-top:2px;line-height:1.35}
-.spcard .legp{text-align:right}.spcard .legp small{display:block;font-size:11.5px;color:var(--dim);font-weight:700}
-.spbtns{display:flex;gap:8px;margin-top:10px}.spbtns .btn{flex:1;padding:11px 10px;font-size:14.5px}
+.spsecs .chip{padding:6px 12px;font-size:13px;border-radius:5px}
+.spcard .legtxt .spwhy{display:block;font-style:normal;font-size:12px;color:var(--mute);font-weight:450;margin-top:2px;line-height:1.35}
+.spcard .legp{text-align:right}.spcard .legp small{display:block;font-size:11.5px;color:var(--dim);font-weight:600;font-style:normal}
+.spbtns{display:flex;gap:8px;margin-top:10px}.spbtns .btn{flex:1;padding:11px 8px;font-size:13px;letter-spacing:.02em}
 .spteams{display:grid;gap:6px;margin:10px 0 4px;cursor:pointer}
 .spteams>div{display:flex;align-items:center;gap:9px;min-width:0}
 .spteams .tn{font-size:15.5px;flex:1;min-width:0}
-.spteams small{font-size:12px;color:var(--dim);font-weight:700;flex:none}
+.spteams small{font-size:12px;color:var(--dim);font-weight:600;flex:none}
 .spcells{display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:6px;margin-top:8px}
 .spcells.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .spcells.c5{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -565,34 +566,34 @@ const css = `
 .spduo{display:grid;grid-template-columns:1fr;gap:0}
 .spduo .spcells{margin-top:6px}
 @media(min-width:520px){.spduo{grid-template-columns:1fr 1fr;gap:10px}}
-.spsub{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 0}
+.spsub{font-size:10.5px;font-weight:700;font-style:italic;color:var(--dim);text-transform:uppercase;letter-spacing:.14em;margin:12px 0 0}
 .sp2{grid-template-columns:minmax(0,1fr) auto auto}
-.sp2 .spname small{margin:0 0 1px;text-transform:uppercase;font-weight:800;letter-spacing:.3px}
+.sp2 .spname small{margin:0 0 1px;text-transform:uppercase;font-weight:700;letter-spacing:.1em}
 .sp2 .spname b{font-size:14.5px;display:block}
-.sppct{font-weight:800;font-size:14px}
+.sppct{font-weight:800;font-size:15px}
 .sp2 .yes{padding:8px 0}
 .spcells.c-wide{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
-.spc{border:1px solid var(--line);background:var(--soft);border-radius:9px;padding:6px 2px;text-align:center;cursor:pointer;color:var(--text);font-family:inherit;min-width:0}
-.spc i{display:block;font-style:normal;font-size:11px;font-weight:800;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
-.spc b{display:block;font-size:14px;font-weight:800}
-.spc span{display:block;font-size:11px;font-weight:700;color:var(--mute);font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.spc.heat i,.spc.heat span{color:var(--text)}
-.spc.in{outline:2.5px solid var(--text);outline-offset:-2px}
-.spc.in:not(.heat){background:var(--accent2);border-color:var(--accent2);color:#000}
-.spc.in:not(.heat) i,.spc.in:not(.heat) span{color:#000}
-.dark .spc.in:not(.heat){background:var(--accent)}
+.spc{border:1px solid var(--line);background:var(--soft);border-radius:5px;padding:6px 2px;text-align:center;cursor:pointer;color:var(--text);font-family:inherit;min-width:0;transition:border-color .15s,background .15s}
+.spc:hover:not(:disabled){border-color:var(--glow)}
+.spc i{display:block;font-style:normal;font-size:11px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.spc b{display:block;font-size:15px;font-weight:800;font-style:italic;font-stretch:108%;font-variant-numeric:tabular-nums}
+.spc span{display:block;font-size:11px;font-weight:600;font-style:italic;color:var(--mute);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spc.heat i,.spc.heat span{color:var(--heat-ink)}
+.spc.in{outline:2px solid var(--ice);outline-offset:-2px;box-shadow:0 0 12px color-mix(in srgb,var(--ice) 45%,transparent)}
+.spc.in:not(.heat){background:linear-gradient(180deg,var(--blue-top) 0,var(--blue-fill) 22%,var(--blue-deep));border-color:var(--ice);color:var(--on-blue)}
+.spc.in:not(.heat) i,.spc.in:not(.heat) span{color:var(--on-blue)}
 .spc:disabled{opacity:.5;cursor:default}
-.spteam{font-size:12.5px;font-weight:800;color:var(--mute);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 2px;display:flex;justify-content:space-between}
-.spteam small{font-weight:700;color:var(--dim);text-transform:none;letter-spacing:0;flex:none;margin-left:8px}
+.spteam{font-size:12.5px;font-weight:800;font-style:italic;font-stretch:110%;color:var(--chrome);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 2px;display:flex;justify-content:space-between}
+.spteam small{font-weight:600;font-style:normal;font-stretch:100%;color:var(--dim);text-transform:none;letter-spacing:0;flex:none;margin-left:8px}
 .spteam .badge{margin-left:4px}
 .mkhead .lg .badge{margin-left:4px}
 .sprow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
-.spname{min-width:0}.spname b{font-size:15px;margin-right:2px}
-.spname small{display:block;font-size:11.5px;color:var(--dim);font-weight:600;margin-top:1px}
+.spname{min-width:0}.spname b{font-size:15px;font-weight:650;margin-right:2px}
+.spname small{display:block;font-size:11.5px;color:var(--dim);font-weight:500;margin-top:1px}
 .sprow .yes{width:74px;padding:6px 0;font-size:13px;line-height:1.2}
-.sprow .yes small{display:block;font-size:10.5px;font-weight:700;opacity:.8}
-.splink{color:var(--accent2);font-weight:700;cursor:pointer}
-.dark .splink{color:var(--accent)}
+.sprow .yes small{display:block;font-size:10.5px;font-weight:600;font-style:normal;opacity:.85}
+.splink{color:var(--blue);font-weight:700;cursor:pointer}
+.splink:hover{color:var(--ice)}
 .spboard{min-width:0}
 `;
 const style = document.createElement('style'); style.id = 'soccer-css'; style.textContent = css; document.head.appendChild(style);

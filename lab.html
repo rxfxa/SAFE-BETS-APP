@@ -162,6 +162,14 @@ input:focus{outline:none;border-color:var(--glow);box-shadow:0 0 0 1px var(--glo
 .leg .o{font-size:20px;font-weight:900;font-style:italic;color:var(--green);font-variant-numeric:tabular-nums}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media(min-width:620px){.kpis{grid-template-columns:repeat(4,1fr)}.booklist{grid-template-columns:repeat(3,1fr)}}
+.bookbar{max-width:760px;margin:0 auto;padding:12px 16px 0}
+.bookhead{display:flex;align-items:center;gap:10px}
+.bookhead label{flex:none;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+#bookSel{flex:1;min-width:0;min-height:44px;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;font-size:15px;font-weight:600}
+#bookSel:focus-visible{outline:2px solid var(--glow);outline-offset:2px}
+.bookchips{padding:10px 0 2px;margin:0;max-width:none}
+.bookchips .chip{min-height:44px;display:inline-flex;align-items:center}
+.booknote{font-size:13px;color:var(--mute);margin-top:6px}.booknote:empty{display:none}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -181,6 +189,7 @@ input:focus{outline:none;border-color:var(--glow);box-shadow:0 0 0 1px var(--glo
 </header>
 
 <div class="chips" id="sportChips"></div>
+<section class="bookbar" id="bookBar" aria-label="Sportsbooks"><div class="bookhead"><label for="bookSel">Sportsbook</label><select id="bookSel"></select></div><div class="chips bookchips" id="bookChips" role="toolbar" aria-label="Popular sportsbooks"></div><div class="booknote" id="bookNote"></div></section>
 
 <main>
   <!-- PLAYS -->
@@ -364,6 +373,10 @@ const BOOKS=RAW.map(([name,tier,weight],i)=>{const c=TIERCFG[tier];
 const B=Object.fromEntries(BOOKS.map(b=>[b.id,b]));
 const SIGNAL=BOOKS.filter(b=>b.signal),RETAIL=BOOKS.filter(b=>!b.signal);
 const PIN=BOOKS[0].id;
+// Sportsbook picker: "All sportsbooks" uses My sportsbooks (settings); picking one book focuses every view on it
+const POPULAR=['DraftKings','FanDuel','BetMGM','Caesars','Fanatics','bet365','Hard Rock Bet','BetRivers','theScore Bet','Pinnacle'].map(n=>BOOKS.find(b=>b.name===n)).filter(Boolean);
+const focusId=()=>st.book&&st.book!=='all'&&B[st.book]?st.book:null;
+const mineBook=id=>{const f=focusId();return f?id===f:!!st.books[id];};
 const byName=n=>BOOKS.find(b=>b.name===n).id;
 
 // ================= markets =================
@@ -478,7 +491,7 @@ function detect(m,mv){
   o.conf=conf;o.rlm=isRLM(m,sideIx);o.steam=mv.books.size>=3;
   o.score=Math.round(clamp(12+Math.min(38,o.stale[0].ev*100*6)+Math.min(18,moveSize*2)+Math.min(21,conf*3)+B[mv.first].weight*12+(o.rlm?5:0)-(mv.books.size===1?6:0),1,99));
   if(!opps.includes(o)){
-    const mine=o.stale.find(s=>st.books[s.id]);if(mine)o.bet={...mine};
+    const mine=o.stale.find(s=>mineBook(s.id));if(mine)o.bet={...mine};
     opps.unshift(o);
     if(!warming&&passes(o))alertOpp(o);
   }
@@ -507,7 +520,7 @@ function settle(){
 }
 function checkWatches(){
   for(const w of [...watches]){const m=markets.find(x=>x.id===w.mid);if(!m)continue;
-    let best=null;for(const b of RETAIL)if(st.books[b.id]&&bookLine(m,b.id)===w.line){const pr=m.px[b.id][w.sideIx];if(!best||am2dec(pr)>am2dec(best.pr))best={id:b.id,pr};}
+    let best=null;for(const b of BOOKS)if(mineBook(b.id)&&bookLine(m,b.id)===w.line){const pr=m.px[b.id][w.sideIx];if(!best||am2dec(pr)>am2dec(best.pr))best={id:b.id,pr};}
     if(best&&am2dec(best.pr)>=am2dec(w.target)){toast(`🔔 Price alert: ${esc(w.label)} is <b class="mono">${fmt(best.pr)}</b> at ${esc(B[best.id].name)}`);if(st.sound)beep();watches.splice(watches.indexOf(w),1);}}
 }
 // ----- arbitrage & middles -----
@@ -515,9 +528,15 @@ function scanArbs(onlyMine){
   const out=[];
   for(const m of markets){
     const groups={};
-    for(const b of BOOKS){if(onlyMine&&!b.signal&&!st.books[b.id])continue;if(onlyMine&&b.signal&&!st.books[b.id])continue;
+    for(const b of BOOKS){if(onlyMine&&!st.books[b.id]&&b.id!==focusId())continue;
       const L=bookLine(m,b.id)??'ml';(groups[L]=groups[L]||[]).push(b);}
+    const F=focusId();
     for(const L in groups){const g=groups[L];if(g.length<2)continue;
+      if(F){const f=g.find(b=>b.id===F);if(!f)continue;
+        for(const side of [0,1]){let o=null;for(const b of g){if(b===f||(onlyMine&&!st.books[b.id]))continue;if(!o||am2dec(m.px[b.id][1-side])>am2dec(m.px[o.id][1-side]))o=b;}
+          if(!o)continue;const b0=side===0?f:o,b1=side===0?o:f,d0=am2dec(m.px[b0.id][0]),d1=am2dec(m.px[b1.id][1]),inv=1/d0+1/d1;
+          if(inv<.997)out.push({key:`${m.id}|${L}|${b0.id}|${b1.id}`,m,b0:b0.id,b1:b1.id,p0:m.px[b0.id][0],p1:m.px[b1.id][1],profit:1/inv-1,s0:(1/d0)/inv,s1:(1/d1)/inv});}
+        continue;}
       let b0=null,b1=null;for(const b of g){const p=m.px[b.id];if(!b0||am2dec(p[0])>am2dec(m.px[b0.id][0]))b0=b;if(!b1||am2dec(p[1])>am2dec(m.px[b1.id][1]))b1=b;}
       if(b0===b1)continue;const d0=am2dec(m.px[b0.id][0]),d1=am2dec(m.px[b1.id][1]),inv=1/d0+1/d1;
       if(inv<.997)out.push({key:`${m.id}|${L}|${b0.id}|${b1.id}`,m,b0:b0.id,b1:b1.id,p0:m.px[b0.id][0],p1:m.px[b1.id][1],profit:1/inv-1,s0:(1/d0)/inv,s1:(1/d1)/inv});}
@@ -528,11 +547,13 @@ function scanMiddles(onlyMine){
   const out=[];
   for(const m of markets){if(!m.slope)continue;
     const lowIx=m.type==='Total'?0:1,highIx=1-lowIx; // low side wins when result > line; high side wins when result < line
-    let lo=null,hi=null;
-    for(const b of BOOKS){if(onlyMine&&!st.books[b.id])continue;const L=bookLine(m,b.id);
+    let lo=null,hi=null;const F=focusId();
+    for(const b of BOOKS){if(onlyMine&&!st.books[b.id]&&b.id!==F)continue;const L=bookLine(m,b.id);
       const pl=m.px[b.id][lowIx],ph=m.px[b.id][highIx];
       if(!lo||L<lo.L||(L===lo.L&&am2dec(pl)>am2dec(lo.p)))lo={id:b.id,L,p:pl};
       if(!hi||L>hi.L||(L===hi.L&&am2dec(ph)>am2dec(hi.p)))hi={id:b.id,L,p:ph};}
+    if(F&&lo&&hi&&lo.id!==F&&hi.id!==F){const L=bookLine(m,F),gA=hi.L-L,gB=L-lo.L; // the picked book must hold one side
+      if(gA>=gB&&gA>=1)lo={id:F,L,p:m.px[F][lowIx]};else if(gB>=1)hi={id:F,L,p:m.px[F][highIx]};else continue;}
     if(!lo||!hi||hi.L-lo.L<1)continue;
     const c=consensus0(m),f0=c.f0;
     const pLow=fairAt(m,lo.id,lowIx,f0),pHigh=fairAt(m,hi.id,highIx,f0);
@@ -552,7 +573,7 @@ function step(){
 
 // ================= settings & tracked bets =================
 const DEFAULT_MINE=['DraftKings','FanDuel','BetMGM','Caesars','Fanatics','bet365','theScore Bet','BetRivers','Hard Rock Bet','Fliff'];
-const st={score:60,edge:1.5,unit:50,bank:2500,kelly:1,sound:false,toast:true,arbAlert:false,sport:'All',sort:'new',theme:'light',
+const st={score:60,edge:1.5,unit:50,bank:2500,kelly:1,sound:false,toast:true,arbAlert:false,sport:'All',book:'all',sort:'new',theme:'light',
   devig:'mult',fairSrc:'all',onlySteam:false,onlyRlm:false,
   books:Object.fromEntries(RETAIL.map(b=>[b.id,DEFAULT_MINE.includes(b.name)])),types:Object.fromEntries(MKTTYPES.map(t=>[t,true]))};
 try{Object.assign(st,JSON.parse(localStorage.getItem('firstmove.st')||'{}'));}catch(e){}
@@ -565,9 +586,9 @@ const KELLY=[0,.25,.5,.75,1],KL=['Flat (1 unit)','¼ Kelly','½ Kelly','¾ Kelly
 const DEVIGNOTE={mult:'Splits the bookmaker\'s cut in proportion to each side. The standard method.',add:'Takes an equal share of the cut from each side. Gives favorites a bit more credit.',
   power:'Puts more of the cut on the longshot side. Better for lopsided lines.',shin:'Models the bookmaker protecting itself from insiders. Accurate on favorites vs longshots.',
   worst:'Runs all four methods and keeps the least favorable one. A bet only shows if it\'s +EV every way you measure it.'};
-function myBest(o){return o.stale?.find(s=>st.books[s.id]);}
-function passes(o){const mb=myBest(o);const ev=mb?mb.ev:(o.bet?.ev||0);
-  return (mb||o.bet)&&o.score>=st.score&&ev*100>=st.edge&&st.types[o.m.type]&&(st.sport==='All'||o.m.sport===st.sport)
+function myBest(o){return o.stale?.find(s=>mineBook(s.id));}
+function passes(o){const mb=myBest(o),F=focusId(),bet=F&&o.bet&&o.bet.id!==F?null:o.bet;const ev=mb?mb.ev:(bet?.ev||0);
+  return (mb||bet)&&o.score>=st.score&&ev*100>=st.edge&&st.types[o.m.type]&&(st.sport==='All'||o.m.sport===st.sport)
     &&(!st.onlySteam||o.steam)&&(!st.onlyRlm||o.rlm);}
 function stake(price,fair){
   if(!st.kelly)return st.unit;const b=am2dec(price)-1,f=(b*fair-(1-fair))/b;
@@ -595,6 +616,18 @@ function flagsHTML(o,mb){
 
 function renderChips(){$('sportChips').innerHTML=['All',...Object.keys(SPORTS)].map(s=>`<div class="chip ${st.sport===s?'on':''}" data-s="${s}">${s==='All'?'All sports':s}</div>`).join('');}
 $('sportChips').onclick=e=>{const s=e.target.dataset.s;if(!s)return;st.sport=s;save();renderChips();renderAll();};
+function renderBookBar(){
+  const f=focusId()||'all';
+  $('bookSel').innerHTML='<option value="all">All sportsbooks</option>'+['US','A','X','OFF','INTL'].map(t=>`<optgroup label="${esc(TIERNAME[t])}">${BOOKS.filter(b=>b.tier===t).map(b=>`<option value="${b.id}">${esc(b.name)}${!b.signal&&st.books[b.id]?' ✓':''}</option>`).join('')}</optgroup>`).join('');
+  $('bookSel').value=f;
+  const chips=[{id:'all',name:'All'},...POPULAR];if(f!=='all'&&!POPULAR.some(b=>b.id===f))chips.splice(1,0,B[f]);
+  $('bookChips').innerHTML=chips.map(b=>`<button type="button" class="chip ${b.id===f?'on':''}" data-bk="${b.id}" aria-pressed="${b.id===f}">${esc(b.name)}</button>`).join('');
+  const nMine=RETAIL.filter(b=>st.books[b.id]).length;
+  $('bookNote').innerHTML=f==='all'?`Showing your ${nMine} book${nMine===1?'':'s'} (change them in Settings).`:`Showing <b>${esc(B[f].name)}</b> only${B[f].signal?' (a sharp book: it moves first, so stale prices are rare)':''}.`;
+  const on=$('bookChips').querySelector('.chip.on');if(on){const r=$('bookChips');const x=on.offsetLeft-r.offsetLeft;if(x<r.scrollLeft||x+on.offsetWidth>r.scrollLeft+r.clientWidth)r.scrollLeft=Math.max(0,x-16);}}
+function setBook(id){st.book=id==='all'||!B[id]?'all':id;save();renderBookBar();renderAll();}
+$('bookSel').onchange=e=>setBook(e.target.value);
+$('bookChips').onclick=e=>{const t=e.target.closest('[data-bk]');if(t)setBook(t.dataset.bk);};
 
 function renderFeed(){
   let list=opps.filter(passes);
@@ -603,11 +636,11 @@ function renderFeed(){
   else list.sort((a,b)=>(a.status==='open'&&myBest(a)?0:1)-(b.status==='open'&&myBest(b)?0:1)||b.createdAt-a.createdAt);
   const nOpen=list.filter(o=>o.status==='open'&&myBest(o)).length;
   $('feedTitle').textContent=`${nOpen} open play${nOpen===1?'':'s'}`;
-  if(!list.length){$('feed').innerHTML=`<div class="empty"><b>Watching the sharp books…</b><br>A play shows up when a sharp book moves and one of <b>your</b> books still has the old price.<br><span style="color:var(--dim);font-size:13.5px">Fewer plays than you'd like? Lower the minimum score or add books in Settings.</span></div>`;return;}
+  if(!list.length){$('feed').innerHTML=`<div class="empty"><b>Watching the sharp books…</b><br>A play shows up when a sharp book moves and ${focusId()?'<b>'+esc(B[focusId()].name)+'</b>':'one of <b>your</b> books'} still has the old price.<br><span style="color:var(--dim);font-size:13.5px">Fewer plays than you'd like? Lower the minimum score or add books in Settings.</span></div>`;return;}
   $('feed').innerHTML=list.slice(0,40).map(o=>{
     const live=myBest(o),mb=live||o.bet,open=o.status==='open'&&live,[tn,tc]=tierOf(o.score);
     const stk=stake(mb.price,mb.fair||o.fair),win=Math.round(stk*(am2dec(mb.price)-1));
-    const nMine=o.stale.filter(s=>st.books[s.id]).length,w=open?Math.max(5,100-(tick-o.created)*1.2):0;
+    const nMine=o.stale.filter(s=>mineBook(s.id)).length,w=open?Math.max(5,100-(tick-o.created)*1.2):0;
     return `<div class="card ${open?'':'closed'} ${o.isNew?'new':''}" data-id="${o.id}">
       <div class="r"><span class="tag ${tc}">${tn} · ${o.score}</span><span class="when">${ago(o.createdAt)}</span></div>
       <div class="title">${esc(betLabel(o,mb.id))}</div>
@@ -680,7 +713,7 @@ function openSheet(id){
   const base0=o.sideIx===0?o.fair:1-o.fair;
   const rows=BOOKS.map(b=>{const pr=m.px[b.id][o.sideIx];const fp=b.signal?fairSide(m.px[b.id],o.sideIx,'mult'):fairAt(m,b.id,o.sideIx,base0);
       return {b,pr,line:bookLine(m,b.id),ev:fairAt(m,b.id,o.sideIx,base0)*am2dec(pr)-1,hold:am2imp(m.px[b.id][0])+am2imp(m.px[b.id][1])-1};})
-    .filter(x=>showAllBooks||x.b.signal||x.ev>=.005||st.books[x.b.id]).sort((a,c)=>(c.b.signal-a.b.signal)||(c.ev-a.ev));
+    .filter(x=>showAllBooks||x.b.signal||x.ev>=.005||mineBook(x.b.id)).sort((a,c)=>(c.b.signal-a.b.signal)||(c.ev-a.ev));
   const pubSide=o.sideIx===0?m.tix:1-m.tix,cashSide=o.sideIx===0?m.cash:1-m.cash;
   const placed=tracked.find(t=>t.oid===o.id);
   $('sheetBody').innerHTML=`
@@ -714,7 +747,7 @@ function openSheet(id){
     <div class="panel">${path.svg}<div class="legend">${path.ids.map(i=>`<span><i style="background:${i===mb.id?'var(--green)':B[i].c}"></i>${esc(B[i].name)}</span>`).join('')}</div></div>
     <h2><span>${showAllBooks?'All 100 books':'Key books'}</span><a id="toggleAll">${showAllBooks?'Show fewer':'Show all 100'}</a></h2>
     <div class="panel" style="padding:4px 12px"><table><thead><tr><th>Book</th><th class="ra">Price</th><th class="ra">Hold</th><th class="ra">Edge</th></tr></thead><tbody>
-    ${rows.map(x=>`<tr><td>${esc(x.b.name)}${x.b.signal?`<span class="tier tier-${x.b.tier}">${x.b.tier==='A'?'SHARP':'EXCH'}</span>`:''}${st.books[x.b.id]?' <span class="tier" style="background:var(--greenbg);color:var(--green)">MINE</span>':''}${x.line!=null&&x.line!==m.line?` <span class="tier" style="background:var(--amberbg);color:var(--amber)">${x.line}</span>`:''}</td>
+    ${rows.map(x=>`<tr><td>${esc(x.b.name)}${x.b.signal?`<span class="tier tier-${x.b.tier}">${x.b.tier==='A'?'SHARP':'EXCH'}</span>`:''}${mineBook(x.b.id)?' <span class="tier" style="background:var(--greenbg);color:var(--green)">MINE</span>':''}${x.line!=null&&x.line!==m.line?` <span class="tier" style="background:var(--amberbg);color:var(--amber)">${x.line}</span>`:''}</td>
       <td class="ra mono">${fmt(x.pr)}</td><td class="ra mono" style="color:var(--dim)">${pct(x.hold)}</td><td class="ra mono ${x.b.signal?'neg':x.ev>=.005?'pos':'neg'}">${x.b.signal?'—':(x.ev>0?'+':'')+pct(x.ev)}</td></tr>`).join('')}</tbody></table>
     <p class="note" style="margin-bottom:8px">Hold = the bookmaker's built-in cut on this market. Lower hold = sharper, fairer book.</p></div>
     <button class="btn" id="copyBtn">Copy bet slip</button><button class="btn ghost" id="closeBtn">Close</button>`;
@@ -755,10 +788,10 @@ function renderScan(){
       <div class="title" style="font-size:16px">${esc(betLabel(o))}</div><div class="sub">${esc(subLabel(mv.m))}</div>
       ${rl?`<div class="flags"><span class="flag t-vio">↩ RLM · ${pct(mv.sideIx===0?1-mv.m.tix:mv.m.tix,0)} of bets on the other side</span></div>`:''}
       <div class="why"><b>${esc(B[mv.first].name)}</b> moved first: <span class="mono">${fmt(mv.from)} → <b>${fmt(mv.to)}</b></span></div>
-      <div class="why" style="margin-top:8px;font-size:13px">Other books caught up: ${caught}/${RETAIL.length}</div><div class="heat"><div style="width:${caught/RETAIL.length*100}%"></div></div></div>`;}).join('')||`<div class="empty">No sharp moves yet.</div>`;
+      <div class="why" style="margin-top:8px;font-size:13px">Other books caught up: ${caught}/${RETAIL.length}${focusId()&&focusId()!==mv.first?(()=>{const h=mv.m.hist[focusId()];const up=h&&h.length>1&&h[h.length-1][0]>=mv.tick;return ` · <b>${esc(B[focusId()].name)}</b>: ${up?'caught up':'<span style="color:var(--green)">still at the old price</span>'}`;})():''}</div><div class="heat"><div style="width:${caught/RETAIL.length*100}%"></div></div></div>`;}).join('')||`<div class="empty">No sharp moves yet.</div>`;
   } else if(scanTab==='arbs'){
     const list=scanArbs(arbMine).filter(a=>sportOk(a.m));
-    $('scanHead').innerHTML=`<h2><span>${list.length} arb${list.length===1?'':'s'} live</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
+    $('scanHead').innerHTML=`<h2><span>${list.length} arb${list.length===1?'':'s'} live${focusId()?' with '+esc(B[focusId()].name):''}</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
     $('scanBody').innerHTML=list.slice(0,30).map(a=>{const tot=st.unit*2,s0=Math.round(tot*a.s0),s1=tot-s0,ret=Math.round(tot*(1+a.profit));
       return `<div class="card" style="cursor:default"><div class="r"><span class="tag t-elite">Guaranteed ${spct(a.profit,2)}</span><span class="when">${a.m.sport} · ${a.m.type}</span></div>
       <div class="title" style="font-size:16px">${esc(a.m.type==='Player Props'?a.m.who+' · '+a.m.label:a.m.who)}</div>
@@ -769,7 +802,7 @@ function renderScan(){
     $('scanBody').insertAdjacentHTML('beforeend',`<p class="note">Arbs are bets on both sides at different books so you profit either way. Books limit accounts that arb a lot, so use them sparingly. Exchange prices here don't include commission.</p>`);
   } else {
     const list=scanMiddles(arbMine).filter(x=>sportOk(x.m));
-    $('scanHead').innerHTML=`<h2><span>${list.length} middle${list.length===1?'':'s'}</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
+    $('scanHead').innerHTML=`<h2><span>${list.length} middle${list.length===1?'':'s'}${focusId()?' with '+esc(B[focusId()].name):''}</span><a id="arbMineBtn">${arbMine?'Using my books':'Using all 100 books'}</a></h2>`;
     $('scanBody').innerHTML=list.slice(0,30).map(x=>`<div class="card" style="cursor:default"><div class="r"><span class="tag ${x.ev>0?'t-elite':'t-strong'}">${x.gap}-pt window · ${pct(x.pm)} to hit both</span><span class="when">${x.m.sport} · ${x.m.type}</span></div>
       <div class="title" style="font-size:16px">${esc(x.m.who)}</div>
       <div class="legs"><div class="leg"><div class="lbl">Bet 1</div><b>${esc(sideName(x.m,x.lowIx,x.lo.id))}</b><span class="o mono">${fmt(x.lo.p)}</span><div class="sub">${esc(B[x.lo.id].name)}</div></div>
@@ -793,7 +826,7 @@ function renderMine(){
   $('mRoi').textContent=risk?spct(pl/risk):'—';
   $('mClv').textContent=withClv.length?spct(withClv.reduce((a,t)=>a+t.clv,0)/withClv.length):'—';
   $('mBeat').textContent=withClv.length?pct(withClv.filter(t=>t.clv>0).length/withClv.length,0):'—';
-  $('myBetList').innerHTML=[...tracked].reverse().slice(0,40).map(t=>{const st_=t.result==='W'?['WON','t-elite']:t.result==='L'?['LOST','t-bad']:t.result==='V'?['VOID','t-weak']:['PENDING','t-ok'];
+  $('myBetList').innerHTML=[...tracked].filter(t=>!focusId()||t.book===focusId()).reverse().slice(0,40).map(t=>{const st_=t.result==='W'?['WON','t-elite']:t.result==='L'?['LOST','t-bad']:t.result==='V'?['VOID','t-weak']:['PENDING','t-ok'];
     return `<div class="card" style="cursor:default"><div class="r"><div style="min-width:0"><div style="font-weight:700;font-size:15px">${esc(t.label)}</div><div class="sub">${esc(B[t.book]?.name||'')} ${fmt(t.price)} · ${money(t.stake)} · edge +${pct(t.ev)}</div></div>
       <div style="text-align:right;flex:none"><span class="tag ${st_[1]}">${st_[0]}</span>${t.pl!=null?`<div class="mono" style="font-weight:700;margin-top:4px;color:${t.pl>0?'var(--green)':'var(--red)'}">${money(t.pl)}</div>`:''}</div></div>
       ${t.clv!=null?`<div class="why" style="margin-top:8px;font-size:13.5px">Closed at <b class="mono">${fmt(t.closePrice)}</b> · CLV <b style="color:${t.clv>0?'var(--green)':'var(--red)'}">${spct(t.clv)}</b> ${t.clv>0?'— you beat the close 👍':''}</div>`:''}</div>`;}).join('')
@@ -916,7 +949,7 @@ let view='feed';
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;view=b.dataset.v;
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+view));
-  $('sportChips').style.display=view==='feed'||view==='scan'?'':'none';
+  $('sportChips').style.display=view==='feed'||view==='scan'?'':'none';$('bookBar').style.display=view==='feed'||view==='scan'||view==='bets'?'':'none';
   if(view==='feed')unseen=0;renderAll();window.scrollTo(0,0);};
 
 // ----- settings -----
@@ -963,7 +996,9 @@ function warmup(){warming=true;const sp=speed;speed=3;for(let i=0;i<4500;i++)ste
   scanArbs(true).forEach(a=>seenArbs.add(a.key));warming=false;}
 let loop;
 function restartLoop(){clearInterval(loop);const ms=[0,3000,1500,900,600,350][speed];loop=setInterval(()=>{if(paused)return;step();renderAll();},ms);}
-applyTheme();renderChips();renderSettings();warmup();renderAll();restartLoop();
+applyTheme();renderChips();renderBookBar();renderSettings();warmup();renderAll();restartLoop();
+// test/debug hook (read-only views of the scanner state)
+window.__lab={get st(){return st},get warming(){return warming},get opps(){return opps},passes,myBest,scanArbs,scanMiddles,mineBook,focusId,BOOKS,RETAIL};
 setInterval(()=>{if(!paused&&view==='feed')renderFeed();},1000);
 window.__fm={get opps(){return opps},get settled(){return settledList},get markets(){return markets},simBet,BOOKS,scanArbs,scanMiddles,fairSide,step,get tracked(){return tracked},st};
 })();

@@ -40,7 +40,7 @@ function answer(url) {
   return { data: [], pagination: {} };
 }
 
-async function open({ addr = null } = {}) {
+async function open({ snapshot = null } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.clock.setFixedTime(new Date('2026-11-18T21:50:00Z'));
@@ -53,6 +53,14 @@ async function open({ addr = null } = {}) {
     return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(answer(url)) });
   });
   await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('plan')));
+  if (snapshot) await page.addInitScript(doc => {
+    // Claude's database, holding one saved sync (pm/positions) of one wallet
+    const db = {
+      collection() { const q = { orderBy() { return q; }, limit() { return q; }, onSnapshot(cb) { cb({ docs: [] }); }, doc() { return { set: async () => {} }; } }; return q; },
+      doc(p) { return { onSnapshot(cb) { cb({ exists: p === 'pm/positions', data: () => doc }); }, get: async () => ({ exists: false }), set: async () => {} }; },
+    };
+    window.claude = { use: async () => db };
+  }, snapshot);
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__plan && window.__polymarket && window.__polymarket.LOAD === 'done' && window.__lottos && window.__lottos.LOAD === 'done', null, { timeout: 30000 });
   await page.evaluate(() => SB.render()); await page.waitForTimeout(300);
@@ -101,6 +109,23 @@ try {
   check('online again: the wallet on file syncs by itself on load', /Synced/.test(await pmText(A.page)));
   // 7. Claude's last sync (database) still works when there is no live copy
   await A.page.evaluate(() => { localStorage.removeItem('fm2.plan.pmLive'); });
+  // 7b. Claude's saved sync is shown only for the wallet it belongs to
+  const SNAP_OTHER = { updated: '2026-11-18T20:00:00Z', wallet: '0xaaaa…aaaa', positions: [{ title: 'OTHER WALLET POS', outcome: 'Yes', slug: 'other', status: 'OPEN', avg: 0.5, now: 0.6, pnl: 1 }], combos: [] };
+  const SNAP_MINE = { updated: '2026-11-18T20:00:00Z', wallet: '0x983e…6748', positions: [{ title: 'MINE POS', outcome: 'Yes', slug: 'mine', status: 'OPEN', avg: 0.5, now: 0.6, pnl: 1 }], combos: [] };
+  NET.mode = 'fail';
+  const S1 = await open({ snapshot: SNAP_OTHER });
+  await S1.page.waitForTimeout(800);
+  check('a saved sync for another wallet is not shown when no wallet is connected', !/OTHER WALLET POS/.test(await pmText(S1.page)));
+  await S1.page.fill('#plPmAddr', WALLET); await S1.page.click('[data-pl-pmsave]');
+  await S1.page.waitForFunction(() => /Showing your last sync|Not synced yet/.test(document.querySelector('.pl-pm').textContent), null, { timeout: 30000 });
+  check('a saved sync for another wallet is not shown for the connected wallet either', !/OTHER WALLET POS/.test(await pmText(S1.page)));
+  await S1.ctx.close();
+  const S2 = await open({ snapshot: SNAP_MINE });
+  await S2.page.fill('#plPmAddr', WALLET); await S2.page.click('[data-pl-pmsave]');
+  await S2.page.waitForFunction(() => /Showing your last sync/.test(document.querySelector('.pl-pm').textContent), null, { timeout: 30000 });
+  check("the saved sync for the connected wallet is shown when the live sync is down", /MINE POS/.test(await pmText(S2.page)));
+  await S2.ctx.close();
+  NET.mode = 'ok';
   // 8. layout and console
   await A.page.setViewportSize({ width: 360, height: 740 }); await A.page.waitForTimeout(200);
   check('360px: no horizontal scroll', (await A.page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);

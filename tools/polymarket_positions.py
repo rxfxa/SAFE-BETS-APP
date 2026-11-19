@@ -21,8 +21,8 @@ def get(path, params, tries=3):
                 return json.loads(r.read().decode())
         except Exception as e:  # noqa: BLE001
             if i == tries - 1:
-                print('fetch failed', url, e, file=sys.stderr)
-                return {}
+                # never write a partial file: the app would show it as the whole account
+                raise SystemExit(f'fetch failed, nothing written: {url} ({e})')
             time.sleep(1.5 * (i + 1))
 
 

@@ -1389,6 +1389,7 @@ function openSlip(){
   const steps=[];for(let k=1;k<=order.length;k++)steps.push(parlayProb(order.slice(0,k).map(i=>slip[i])).p);
   const connected=slip.filter((L,i)=>i!==bi&&slip.some((M,j)=>j!==slip.indexOf(L)&&M.gid===L.gid)).length;
   const boost=pr.indep>0?pr.p/pr.indep:1;
+  const stakeV=stakeTxt===''?'10':stakeTxt;
   const tips=[];
   tips.push(baseP>=.75?['ok','✓',`<b>Anchor leg:</b> <span>${esc(legLabel(base))} (${pct(baseP)}). Strong start.</span>`]:baseP>=.62?['warn','!',`<b>Anchor leg is soft</b> <span>(${pct(baseP)}). Look for a leg you're more sure of, or go smaller.</span>`]:['bad','✗',`<b>No strong anchor leg.</b> <span>Your most likely leg is only ${pct(baseP)}. Bet a single or a 2-leg instead.</span>`]);
   tips.push(slip.length<=3?['ok','✓',`<b>${slip.length} legs.</b> <span>Small parlays hit far more often.</span>`]:slip.length===4?['warn','!',`<b>4 legs.</b> <span>Still OK, but each extra leg cuts your chances.</span>`]:['bad','✗',`<b>${slip.length} legs is a lot.</b> <span>This is how parlays lose by one leg. Trim the weakest.</span>`]);
@@ -1399,6 +1400,7 @@ function openSlip(){
   const weakest=order.slice(1).sort((a,b)=>legP[a]-legP[b])[0];
   openSheet(`<div class="r" style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:20px">Parlay builder</b><button class="btn ghost" id="clearSlip" style="padding:8px 12px;font-size:13.5px">Clear</button></div>
    <div class="panel" style="margin-top:12px"><div class="kpis"><div class="kpi"><b class="mono" style="color:var(--yes)">${pct(pr.p,1)}</b><span>Chance to hit</span></div><div class="kpi"><b class="mono">${pr.p>0?fmtOdds(pr.p):'—'}</b><span>Fair odds</span></div><div class="kpi"><b class="mono">${slip.length}</b><span>Legs</span></div></div>
+   <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)"><span>Stake on all ${slip.length} legs $</span><input type="number" id="stakeTop" class="stakein" min="0" step="1" inputmode="decimal" value="${esc(stakeV)}" style="max-width:96px" aria-label="Stake on the whole parlay, in dollars"></label><div id="payTop" class="mono" style="font-size:14px;line-height:1.5;text-align:right"></div></div>
    ${pr.p>0?`<div class="note">${minPriceLine(pr.p)} Model estimate, not a guarantee.</div>`:''}</div>
    <div class="sec">Legs <span style="text-transform:none;font-weight:600;letter-spacing:0">· ★ = your anchor leg (the one you're most sure of)</span></div>
    <div class="panel" style="padding:4px 14px">${order.map(i=>{const L=slip[i],g=gameById(L.gid),id=L.gid+'|'+L.key,isB=i===bi,conn=!isB&&L.gid===base.gid;
@@ -1410,7 +1412,7 @@ function openSlip(){
    <div class="sec">Check your sportsbook's price</div>
    <div class="panel"><div class="inrow"><input type="text" id="bookOdds" placeholder="Book price, e.g. ${esc(fmtPrice(3.5))}" aria-label="Your sportsbook's price for this parlay" value="${esc(bookPx)}" autocomplete="off" spellcheck="false"><button class="btn" id="chkBtn">Check</button></div>
     <div class="tgrid" style="margin-top:8px"><label class="fl"><span>Bankroll ($)</span><input type="number" id="bankroll" min="0" step="1" value="${bankroll}"></label><label class="fl"><span>Kelly fraction (0-1)</span><input type="number" id="kfrac" min="0" max="1" step="0.05" value="${kfrac}"></label></div>
-    <label class="fl" style="margin-top:8px"><span>Your stake ($) · saved with the parlay for profit / ROI in My Parlays</span><input type="number" id="stake" class="stakein" min="0" step="1" value="${esc(stakeTxt)}" placeholder="10"></label>
+    <label class="fl" style="margin-top:8px"><span>Your stake ($) · saved with the parlay for profit / ROI in My Parlays</span><input type="number" id="stake" class="stakein" min="0" step="1" value="${esc(stakeV)}" placeholder="10"></label>
     <div id="chkOut" class="why"></div><div class="kvs" id="minOut"></div></div>
    <div class="sec">Leg-by-leg book prices <span style="text-transform:none;font-weight:600;letter-spacing:0">· optional</span></div>
    <div class="panel"><div class="ts" style="margin:0 0 4px">Enter your book's price for each leg. Many books price a parlay by multiplying the legs; same-game legs that win together are worth less than that, legs that pull apart are worth more.</div>
@@ -1451,13 +1453,19 @@ function openSlip(){
       <div class="kv"><span>Fair if legs were unrelated</span><b>${pr.indep>0?fmtOdds(pr.indep):'—'}</b></div>
       <div class="kv ${e>0?'kpos':'kneg'}"><span>EV at the multiplied price</span><b>${signPct(e)}</b></div>
       <div class="why" style="margin-top:6px">${e>0?`Multiplying these legs pays <b>more</b> than our fair price${boost>1.01?' because they tend to win together':''}. Worth it only if your book really offers that combined price; many books reprice same-game parlays.`:`Multiplied, these legs pay <b>less</b> than our fair price${boost<.99?' (they pull against each other)':''}. No value at these leg prices.`}</div>`;};
-  $('bookOdds').oninput=e=>{bookPx=e.target.value;check();};
+  $('bookOdds').oninput=e=>{bookPx=e.target.value;check();updPay();};
   $('chkBtn').onclick=check;
   $('bankroll').oninput=e=>{bankroll=Math.max(0,+e.target.value||0);store.set('bankroll',bankroll);check();};
   $('kfrac').oninput=e=>{const v=+e.target.value;if(v>=0&&v<=1){kfrac=v;store.set('kellyFrac',kfrac);check();}};
   S.querySelectorAll('[data-lpx]').forEach(inp=>inp.oninput=()=>{legPx[inp.dataset.lpx]=inp.value;naive();});
-  check();naive();
-  if($('stake'))$('stake').oninput=e=>{stakeTxt=e.target.value;};
+  const updPay=()=>{const st=+$('stakeTop').value||0,el=$('payTop');if(!el)return;
+    if(!(p>0)){el.innerHTML='<span style="color:var(--mute)">These legs can\'t all win together, so there is no payout</span>';return;}
+    if(!(st>0)){el.innerHTML='<span style="color:var(--mute)">Enter a stake to see the payout</span>';return;}
+    const fair=st/p,dec=+S.dataset.dec||0;
+    el.innerHTML=`Pays <b style="color:var(--yes)">${money(fair)}</b> <span style="color:var(--mute)">(profit ${money(fair-st)}) at fair odds</span>${dec?`<br>Pays <b>${money(st*dec)}</b> at your book's price`:''}`;};
+  $('stakeTop').oninput=e=>{stakeTxt=e.target.value;if($('stake'))$('stake').value=stakeTxt;updPay();};
+  check();naive();updPay();
+  if($('stake'))$('stake').oninput=e=>{stakeTxt=e.target.value;if($('stakeTop'))$('stakeTop').value=stakeTxt;updPay();};
   // Save / Copy recompute from the live slip at click time: a data refresh may have dropped legs since the sheet was drawn
   $('saveP').onclick=()=>{const L=liveSlip();if(!L.length){toast('These legs are no longer available');return;}
     const P=parlayProb(L).p,dec=+S.dataset.dec||null,sk=+($('stake')&&$('stake').value)||+S.dataset.kelly||null;

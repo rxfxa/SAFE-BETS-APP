@@ -7,7 +7,8 @@ For every league below it reads GET https://gamma-api.polymarket.com/events?seri
 &end_date_max=<now+days>, merges each game's side events (player props, exact score, ...) into one game, and keeps:
   ml      moneyline: home / away (/ draw for soccer) prices
   spreads up to 8 lines (home-perspective line), totals up to 8 lines, by volume
-  props   player over/under lines with a live two-sided quote (NBA points/rebounds/assists/threes, NFL yards/receptions)
+  props   player over/under lines with a live two-sided quote (NBA: every line of points/rebounds/assists/threes;
+          NFL yards/receptions: top 40)
   tsf     NBA "team to score first"
 Each price is {b: best bid, a: best ask, m: mid} in dollars per $1 share (= implied probability).
 """
@@ -154,7 +155,8 @@ def main():
             continue
         g['spreads'] = sorted([s for s in g['spreads'] if live_quote(s['home']) or s['v'] > 0], key=lambda s: (-s['v'], abs((s['home']['m'] or .5) - .5)))[:8]
         g['totals'] = sorted([s for s in g['totals'] if live_quote(s['over']) or s['v'] > 0], key=lambda s: (-s['v'], abs((s['over']['m'] or .5) - .5)))[:8]
-        g['props'] = sorted(g['props'], key=lambda p: (-p['v'], p['over']['a'] - p['over']['b']))[:40]
+        # NBA: every live prop line (the Weekly Plan needs whole ladders, including the high lines whose No side is the safe leg)
+        g['props'] = sorted(g['props'], key=lambda p: (-p['v'], p['over']['a'] - p['over']['b']))[:(400 if g['sport'] == 'nba' else 40)]
         g['volume'], g['liquidity'] = round(g['volume']), round(g['liquidity'])
         keep.append(g)
     keep.sort(key=lambda g: g['start'])

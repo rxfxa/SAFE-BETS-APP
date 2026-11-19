@@ -199,7 +199,9 @@ SB.registerLegType('FB', {
 });
 function fbBoard() {
   const now = Date.now(), names = new Set(((FB && FB.picks) || []).map(norm));
-  const games = ((SB.DATA && SB.DATA.games) || []).filter(g => g.sport === 'nba' && SB.openG(g) && !(SB.isVoid && SB.isVoid(g)) && SB.startMs(g) - now <= 24 * 3600e3).sort((a, b) => SB.startMs(a) - SB.startMs(b));
+  // the picks are for one night: only games on the post's date (US Eastern) count
+  const etDate = g => new Date(SB.startMs(g) - 5 * 3600e3).toISOString().slice(0, 10);
+  const games = ((SB.DATA && SB.DATA.games) || []).filter(g => g.sport === 'nba' && SB.openG(g) && !(SB.isVoid && SB.isVoid(g)) && SB.startMs(g) - now <= 24 * 3600e3 && (!FB || !FB.date || etDate(g) === FB.date)).sort((a, b) => SB.startMs(a) - SB.startMs(b));
   const rows = [];
   for (const g of games) for (const side of ['away', 'home']) {
     const S = fbSide(g, side), named = S.m.players.filter(p => names.has(norm(p.name)));

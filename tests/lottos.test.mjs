@@ -154,7 +154,7 @@ try {
       cards: [...document.querySelectorAll('#main [data-lt-build^="fb"]')].length, rows: document.querySelectorAll('#main .lt-fbr').length }; });
   check('first basket: each game\'s first-basket chances add to 100%', !fb.games || fb.sumsOk, JSON.stringify(fb));
   check('first basket: named picks in tonight\'s games are priced or explained', !fb.games || (fb.rows === fb.priced && fb.named >= fb.priced));
-  if (fb.games && fb.cards) { await page.evaluate(() => SB.setSlip([])); await page.click('#main [data-lt-build^="fbp2_"]'); await page.waitForTimeout(200);
+  if (fb.games && fb.cards) { await page.evaluate(() => SB.setSlip([])); await page.click('#main [data-lt-build^="fb"]'); await page.waitForTimeout(200);
     const sl = await page.evaluate(() => SB.slip.map(l => ({ k: l.key, lab: l.label, p: SB.p1(SB.gameById(l.gid), l.key) })));
     check('first basket: double opens in the builder as FB legs with live chances', sl.length === 2 && sl.every(x => /^FB:/.test(x.k) && / first basket$/.test(x.lab) && x.p > 0.03 && x.p < 0.5), JSON.stringify(sl));
     await page.keyboard.press('Escape'); await page.evaluate(() => SB.setSlip([])); }

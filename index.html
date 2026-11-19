@@ -757,7 +757,7 @@ let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('sa
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};
 // Tabs sit in a fixed order so related ones stay together: find a bet → your bets → games by sport → tools.
 // Known keys (including module tabs: soccerparlays, odds, sim) always take their place here; other keys use registerTab's `after`.
-const TAB_ORDER=['trending','soccerparlays','lottos','polymarket','parlays','props','fantasy','mine','slipcheck','soccer','nba','nfl','nhl','ncaaf','injuries','odds','sim','lab'];
+const TAB_ORDER=['trending','soccerparlays','lottos','polymarket','plan','parlays','props','fantasy','mine','slipcheck','soccer','nba','nfl','nhl','ncaaf','injuries','odds','sim','lab'];
 const TABS=[['trending','🔥 Trending'],['parlays','🎯 Best Parlays'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['mine','⭐ My Parlays'],['soccer','⚽ Soccer Games'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['lab','⚡ Sharp Lab']];
 const CUSTOM={},tabParams={};
 function registerTab(t){
@@ -773,7 +773,7 @@ function registerTab(t){
 function goTab(key,params){tab=key;subf='All';store.set('tab',tab);tabParams[key]=params||{};if(sheetOpen())closeSheet(true);renderTabs();render();window.scrollTo(0,0);}
 function applyTheme(){document.documentElement.classList.add('dark');document.body.classList.add('dark');}
 $('q').oninput=e=>{q=e.target.value.toLowerCase().trim();render();};
-const TAB_GROUP={trending:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',parlays:'bets',props:'bets',fantasy:'bets',mine:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
+const TAB_GROUP={trending:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',plan:'bets',parlays:'bets',props:'bets',fantasy:'bets',mine:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
 const TAB_GROUPNAME={bets:'Find bets',mine:'Your bets',games:'Games',tools:'Tools'};
 const ICO_BALL='<circle cx="12" cy="12" r="8.5"/><path d="m12 8.3 3 2.2-1.1 3.6h-3.8L9 10.5z"/><path d="M12 8.3V3.6M15 10.5l4.4-1.3M13.9 14.1l2.6 3.8M10.1 14.1l-2.6 3.8M9 10.5 4.6 9.2"/>',
   ICO_HOOP='<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5v17M6.2 5.8c2.5 2.6 2.5 9.8 0 12.4M17.8 5.8c-2.5 2.6-2.5 9.8 0 12.4"/>';
@@ -791,6 +791,7 @@ const TAB_ICON={
   sim:'<rect x="4" y="4" width="16" height="16" rx="3.2"/><circle cx="8.7" cy="8.7" r="1.2" fill="currentColor"/><circle cx="15.3" cy="8.7" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="8.7" cy="15.3" r="1.2" fill="currentColor"/><circle cx="15.3" cy="15.3" r="1.2" fill="currentColor"/>',
   lab:'<path d="M9.5 3.5h5M10.5 3.5v5.4l-5.2 8.9c-.8 1.4.2 2.7 1.7 2.7h10c1.5 0 2.5-1.3 1.7-2.7l-5.2-8.9V3.5"/><path d="M7.7 14.5h8.6"/>',
   injuries:'<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M12 8v8M8 12h8"/>',
+  plan:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M12 14h2M16 14h.01M8 17.5h2"/>',
   polymarket:'<path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4z"/><path d="M9.5 16.5v-9h3.3a2.6 2.6 0 0 1 0 5.2H9.5"/>',
   slipcheck:'<path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13.2" r="3.4"/>',
   lottos:'<path d="M3.5 6h17v3.6a2.4 2.4 0 0 0 0 4.8V18h-17v-3.6a2.4 2.4 0 0 0 0-4.8z"/><path d="M14.5 6v2M14.5 11v2M14.5 16v2"/>'};
@@ -1564,7 +1565,7 @@ function calcOT(){
 }
 
 /* ================= window.SB — shared module API (version 2) =================
-   Contract between index.html and modules (soccer.js, sim.js, lottos.js, slipcheck.js, polymarket.js). index.html loads them with plain <script src> tags after
+   Contract between index.html and modules (soccer.js, sim.js, lottos.js, slipcheck.js, polymarket.js, plan.js). index.html loads them with plain <script src> tags after
    its main script; a missing module file must not break the app. The first render waits for DOMContentLoaded, so a
    module's top-level registerTab / registerLegType calls are in place before anything is drawn.
 
@@ -1706,6 +1707,7 @@ window.__fm2={get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIM
 <script src="lottos.js"></script>
 <script src="slipcheck.js"></script>
 <script src="polymarket.js"></script>
+<script src="plan.js"></script>
 </body>
 </html>
 

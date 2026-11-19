@@ -330,7 +330,8 @@ const ST = { win: store.get('plan.win', '24h'), budget: +store.get('plan.budget'
   legs: store.get('plan.legs', { safe: 9, coin: 12, lotto: 18 }), sport: store.get('plan.sport', 'all'), type: store.get('plan.type', 'mix'), lean: store.get('plan.lean', 'both'),
   excl: {}, sims: {}, built: null, week: null, builtKey: '', tickets: {} };
 let SLIPS = store.get('plan.slips', []); if (!Array.isArray(SLIPS)) SLIPS = [];
-let db = null, dbMode = 'local', dbSlips = null, pmDoc = null, pmAddr = store.get('plan.pmAddr', '');
+let db = null, dbMode = 'local', dbSlips = null, pmDoc = null, pmAddr = store.get('plan.pmAddr', ''), pmLive = null, pmBusy = false, pmErr = '';
+try { const c = store.get('plan.pmLive', null); if (c && c.addr === pmAddr) pmLive = c.doc; } catch (e) {}
 (async () => {
   try { if (window.claude && typeof window.claude.use === 'function') db = await window.claude.use('db'); } catch (e) { db = null; }
   if (!db) return;
@@ -349,10 +350,58 @@ async function updateSlip(id, patch) {
   if (db) { try { await db.collection('slips').doc(id).update(patch); } catch (e) { SB.toast('Couldn\'t save that grade'); } }
 }
 async function savePmAddr(addr) {
+  if (addr !== pmAddr) { pmLive = null; pmErr = ''; }
   pmAddr = addr; store.set('plan.pmAddr', addr);
+  setTimeout(syncPm, 0);
   if (db) { try { await db.doc('settings/polymarket').set({ address: addr, savedAt: Date.now() }); return 'db'; } catch (e) {} }
   return 'local';
 }
+
+// ---------------- live positions: read in this browser from Polymarket's public data API (no login, no key) ----------------
+const PM_DATA = 'https://data-api.polymarket.com/v2';
+const pmNum = x => (x == null || x === '' || !Number.isFinite(Number(x)) ? null : Math.round(Number(x) * 10000) / 10000);
+const pmSleep = ms => new Promise(r => setTimeout(r, ms));
+async function pmGet(path, params) {
+  for (let i = 0; ; i++) {
+    try { const r = await fetch(`${PM_DATA}/${path}?${new URLSearchParams(params)}`, { headers: { Accept: 'application/json' } });
+      if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+    catch (e) { if (i >= 2) throw e; await pmSleep(1500 * (i + 1)); }
+  }
+}
+async function pmWalk(path, params, cap) {
+  const out = []; let cur = null;
+  while (out.length < cap) {
+    const q = { ...params, limit: 100 }; if (cur) q.cursor = cur;
+    const d = (await pmGet(path, q)) || {}; out.push(...(d.data || []));
+    cur = (d.pagination || {}).next_cursor; if (!cur) break;
+  }
+  return out;
+}
+async function syncPm() {
+  const addr = pmAddr;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(addr || '') || pmBusy) return;
+  pmBusy = true; pmErr = '';
+  try {
+    const user = addr.toLowerCase(), seen = new Set(), positions = [];
+    for (const status of ['OPEN', 'REDEEMABLE', 'REDEEMABLE_LOST', 'CLOSED']) {
+      for (const p of await pmWalk('positions', { user, status }, 300)) {
+        const k = `${p.slug}|${p.outcome}`; if (seen.has(k)) continue; seen.add(k);  // a position can appear under more than one status
+        positions.push({ title: p.title, outcome: p.outcome, slug: p.slug, event: p.event_slug, end: p.end_date, status: p.status,
+          avg: pmNum(p.avg_price), now: pmNum(p.current_price), size: pmNum(p.total_size), cost: pmNum(p.total_cost_usdc), value: pmNum(p.current_value),
+          pnl: pmNum(p.total_pnl), first: p.first_entry_at, last: p.last_event_at });
+      }
+    }
+    const combos = (await pmWalk('positions/combos', { user }, 200)).slice(0, 100).map(c => ({ title: c.title, status: c.status, total_pnl: c.total_pnl,
+      legs: (c.legs || c.positions || []).slice(0, 30).map(l => ({ title: l.title, outcome: l.outcome, slug: l.slug, status: l.status, current_price: l.current_price })) }));
+    if (pmAddr !== addr) return;  // the wallet was changed while this ran
+    pmLive = { updated: new Date().toISOString(), positions: positions.slice(0, 400), combos };
+    store.set('plan.pmLive', { addr, doc: pmLive });
+  } catch (e) {
+    pmErr = 'Couldn\'t reach Polymarket from this page. Showing your last sync.';
+  } finally { pmBusy = false; SB.render(); }
+}
+setTimeout(() => { if (pmAddr) syncPm(); }, 1200);
+setInterval(() => { if (pmAddr && !pmBusy) syncPm(); }, 5 * 60e3);
 
 // ---------------- markup ----------------
 const splitOf = () => (SPLITS.find(s => s[0] === ST.split) || SPLITS[0])[2];
@@ -415,6 +464,7 @@ function weekSim() {
   return { tiers: tiers.map((T, j) => ({ ...T, wins: Array.from(wins[j], x => x / W) })), mean: sum / W, up: up / W, p5: q(0.05), p95: q(0.95), month: 4 * sum / W };
 }
 function reportBlock() {
+  const PMV = pmLive || pmDoc;
   const all = allSlips(), today = new Date(), mon = mondayOf(today);
   const line = list => ALL_TIERS.map(t => { const xs = list.filter(s => s.tier === t.id && (s.result === 'won' || s.result === 'lost')); if (!xs.length && !TIERS.includes(t)) return '';
     const w = xs.filter(s => s.result === 'won').length, pl = xs.reduce((a, s) => a + (s.result === 'won' ? s.stake * ((s.dec || 1) - 1) : -s.stake), 0);
@@ -422,8 +472,8 @@ function reportBlock() {
   const thisWeek = all.filter(s => s.week === mon), month = all.filter(s => s.date >= localDate(new Date(today.getFullYear(), today.getMonth(), 1)));
   const pending = thisWeek.filter(s => !s.result).length;
   let pmLine = '';
-  if (pmDoc && Array.isArray(pmDoc.positions)) { const [y, mo, dd] = mon.split('-').map(Number), since = new Date(y, mo - 1, dd).getTime() / 1000;
-    const wk = pmDoc.positions.filter(p => p.status !== 'OPEN' && p.last && p.last >= since);
+  if (PMV && Array.isArray(PMV.positions)) { const [y, mo, dd] = mon.split('-').map(Number), since = new Date(y, mo - 1, dd).getTime() / 1000;
+    const wk = PMV.positions.filter(p => p.status !== 'OPEN' && p.last && p.last >= since);
     const won = wk.filter(p => (p.pnl || 0) > 0).length, pl = wk.reduce((a, p) => a + (p.pnl || 0), 0);
     pmLine = `<div class="pl-rep"><b>POLYMARKET</b><span class="mono">${wk.length ? Math.round(won / wk.length * 100) + '% win rate' : '—'}</span><span>${won}/${wk.length} won</span><span class="mono ${pl >= 0 ? 'pl-pos' : 'pl-neg'}">${wk.length ? (pl >= 0 ? '+' : '') + money(pl) : ''}</span></div>`; }
   return `<h2>Week report <small>week of ${esc(fmtDay(mon))}</small></h2><div class="pc pl-report">${line(thisWeek)}${pmLine}
@@ -431,17 +481,18 @@ function reportBlock() {
     ${month.length ? `<div class="pl-sub">This month</div>${line(month)}` : ''}</div>`;
 }
 function pmBlock() {
+  const PMV = pmLive || pmDoc;
   const ok = /^0x[0-9a-fA-F]{40}$/.test(pmAddr || '');
   let h = `<h2>My Polymarket <small>positions and combos, tracked here</small></h2><div class="pc pl-pm">
-    <div class="why">Paste your Polymarket wallet address (on your Polymarket profile, starts with 0x). It's public on the blockchain, so no password or API key is needed. Claude reads your positions and combos, and they show up here and in the week report.</div>
+    <div class="why">Paste your Polymarket wallet address (on your Polymarket profile, starts with 0x). It's public on the blockchain, so no password or API key is needed. The app reads your positions and combos from Polymarket in your browser, refreshes them every 5 minutes, and shows them here and in the week report.</div>
     <div class="pl-row"><input id="plPmAddr" class="pl-addr" value="${esc(pmAddr || '')}" placeholder="0x… wallet address" aria-label="Polymarket wallet address" spellcheck="false" autocomplete="off"><button class="btn" data-pl-pmsave>Connect</button></div>
-    ${ok ? `<div class="note">Connected: ${esc(pmAddr.slice(0, 6))}…${esc(pmAddr.slice(-4))}. ${pmDoc ? `Last sync ${esc(new Date(pmDoc.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}.` : 'Waiting for the first sync: ask Claude to "sync my Polymarket".'}</div>` : ''}
+    ${ok ? `<div class="note">Connected: ${esc(pmAddr.slice(0, 6))}…${esc(pmAddr.slice(-4))}. ${pmBusy ? 'Syncing from Polymarket…' : PMV ? `Synced ${esc(new Date(PMV.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}.` : 'Not synced yet.'}${pmErr ? ` <b class="pl-amb">${esc(pmErr)}</b>` : ''}</div>` : ''}
     <div class="note">Or upload a screenshot of a Polymarket bet in 📸 Slip Check and it's tracked the same way.</div>`;
-  if (pmDoc && Array.isArray(pmDoc.positions)) {
-    const open = pmDoc.positions.filter(p => p.status === 'OPEN'), done = pmDoc.positions.filter(p => p.status !== 'OPEN').slice(0, 12);
+  if (PMV && Array.isArray(PMV.positions)) {
+    const open = PMV.positions.filter(p => p.status === 'OPEN'), done = PMV.positions.filter(p => p.status !== 'OPEN').slice(0, 12);
     const row = p => `<div class="pl-pmr"><span><b>${esc(p.title || '')}</b><small>${esc(p.outcome || '')} · bought at ${cents(p.avg)} · now ${cents(p.now)}</small></span><span class="mono ${(p.pnl || 0) >= 0 ? 'pl-pos' : 'pl-neg'}">${money(p.pnl || 0)}</span></div>`;
     h += `<div class="pl-sub">Open (${open.length})</div>${open.map(row).join('') || '<div class="note">No open positions.</div>'}`;
-    if ((pmDoc.combos || []).length) h += `<div class="pl-sub">Combos (${pmDoc.combos.length})</div>${pmDoc.combos.slice(0, 10).map(c => `<div class="pl-pmr"><span><b>${esc(c.title || 'Combo')}</b><small>${(c.legs || []).length} legs · ${esc(c.status || '')}</small></span><span class="mono">${c.total_pnl != null ? money(+c.total_pnl) : ''}</span></div>`).join('')}`;
+    if ((PMV.combos || []).length) h += `<div class="pl-sub">Combos (${PMV.combos.length})</div>${PMV.combos.slice(0, 10).map(c => `<div class="pl-pmr"><span><b>${esc(c.title || 'Combo')}</b><small>${(c.legs || []).length} legs · ${esc(c.status || '')}</small></span><span class="mono">${c.total_pnl != null ? money(+c.total_pnl) : ''}</span></div>`).join('')}`;
     h += `<div class="pl-sub">Settled</div>${done.map(row).join('') || '<div class="note">Nothing settled yet.</div>'}`;
   }
   return h + '</div>';
@@ -537,7 +588,7 @@ document.addEventListener('click', async e => {
       try { await navigator.clipboard.writeText(txt); SB.toast('Legs copied'); } catch (err) { SB.toast('Copy didn\'t work here: select the legs and copy them by hand'); } }
     return; }
   if (d.plPmsave != null) { const v = ((document.getElementById('plPmAddr') || {}).value || '').trim(); if (!/^0x[0-9a-fA-F]{40}$/.test(v)) { SB.toast('That isn\'t a wallet address: it starts with 0x and has 40 letters and numbers after it'); return; }
-    const where = await savePmAddr(v); SB.toast(where === 'db' ? 'Connected. Ask Claude to sync your Polymarket.' : 'Saved in this browser'); SB.render(); return; }
+    const where = await savePmAddr(v); SB.toast('Connected. Syncing your positions from Polymarket…'); SB.render(); return; }
   if (d.plWeek != null) { t.disabled = true; t.textContent = 'Running…'; setTimeout(() => { ST.week = weekSim(); SB.render(); }, 30); return; }
   if (d.plSim) {
     const S = ST.built && ST.built[d.plSim]; if (!S || !S.legs.length) return;

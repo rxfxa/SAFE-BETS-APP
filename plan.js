@@ -380,7 +380,9 @@ async function pmWalk(path, params, cap) {
   const out = [], seen = new Set(); let cur = null;
   while (out.length < cap) {
     const q = { ...params, limit: 100 }; if (cur) q.cursor = cur;
-    const d = (await pmGet(path, q)) || {}; out.push(...(d.data || []));
+    const d = (await pmGet(path, q)) || {};
+    if (d.data != null && !Array.isArray(d.data)) throw new Error('unexpected reply from Polymarket');  // a bad page must not end the list early
+    out.push(...(d.data || []));
     const next = (d.pagination || {}).next_cursor;
     if (!next || seen.has(next)) break;  // last page, or the API repeated a cursor
     seen.add(next); cur = next;
@@ -411,7 +413,9 @@ async function syncPm() {
     if (run === pmRun) pmErr = 'Couldn\'t reach Polymarket from this page. Showing your last sync.';
   } finally {
     if (run === pmRun) pmBusy = false;
+    const typed = document.getElementById('plPmAddr'), unsaved = typed && typed.value !== pmAddr ? typed.value : null;  // keep what is being typed
     SB.render();
+    const again = document.getElementById('plPmAddr'); if (again && unsaved != null) again.value = unsaved;
   }
 }
 setTimeout(() => { if (pmAddr) syncPm(); }, 1200);
@@ -686,5 +690,5 @@ document.head.appendChild(css);
 const TAB = { key: 'plan', label: '📅 Weekly Plan', after: 'polymarket', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="plan"]')) SB.registerTab(TAB); }, 0));
-window.__plan = { candidates, buildTarget, buildPayout, buildBig, simulate, pOver, roster, weekSim, TIERS, BIG, LEG_OPTIONS, legId, mktOf, get state() { return ST; }, get slips() { return allSlips(); }, get dbMode() { return dbMode; } };
+window.__plan = { candidates, buildTarget, buildPayout, buildBig, simulate, pOver, roster, weekSim, TIERS, BIG, LEG_OPTIONS, legId, mktOf, syncPm, get state() { return ST; }, get slips() { return allSlips(); }, get dbMode() { return dbMode; } };
 })();

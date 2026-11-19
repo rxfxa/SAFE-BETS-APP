@@ -126,6 +126,12 @@ try {
   check("the saved sync for the connected wallet is shown when the live sync is down", /MINE POS/.test(await pmText(S2.page)));
   await S2.ctx.close();
   NET.mode = 'ok';
+  // 7c. text typed in the wallet box but not saved survives a sync that finishes meanwhile
+  NET.mode = 'ok';
+  await A.page.fill('#plPmAddr', '0x2222222222222222222222222222222222222222');
+  await A.page.evaluate(() => window.__plan.syncPm());
+  await A.page.waitForTimeout(1500);
+  check('typed but unsaved wallet address survives a sync that finishes meanwhile', (await A.page.inputValue('#plPmAddr')) === '0x2222222222222222222222222222222222222222');
   // 8. layout and console
   await A.page.setViewportSize({ width: 360, height: 740 }); await A.page.waitForTimeout(200);
   check('360px: no horizontal scroll', (await A.page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);

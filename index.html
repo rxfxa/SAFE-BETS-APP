@@ -878,6 +878,12 @@ document.addEventListener('click',e=>{
     if(lg.closest('#sheet')&&had!==inSlip(gid,key))toast(`${had?'Removed':'Added'} ${esc(legLabel({gid,key}))} · ${slip.length} leg${slip.length===1?'':'s'}`);
     return;}
   const op=e.target.closest('[data-open]');if(op&&!e.target.closest('#sheet')){openGame(op.dataset.open);return;}
+  const sp=e.target.closest('[data-savep],[data-simp]');
+  if(sp){const id=sp.dataset.savep||sp.dataset.simp,T=autoCache[id];if(!T||!T.legs||!T.legs.length){toast('These legs have moved on. Refresh the tab and try again.');return;}
+    const legs=T.legs.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:(gameById(L.gid)||{}).sport}));
+    if(sp.dataset.savep){const ok=SB.saveParlay({legs,p:T.p,dec:p2dec(T.p),src:id});toast(ok?'Added to My Parlays':'Could not save these legs');}
+    else{const title=(sp.closest('.pc')&&sp.closest('.pc').querySelector('.pctitle')||{}).textContent||'Parlay';SB.goTab('sim',{legs,title:title.trim(),from:id,p:T.p});}
+    return;}
   const ap=e.target.closest('[data-addp]');if(ap){const P=autoCache[ap.dataset.addp];if(P){replaceSlip(P.legs.map(L=>({...L})),P.legs[0].gid+'|'+P.legs[0].key);openSlip();}return;}
 });
 
@@ -1054,12 +1060,13 @@ function renderMine(){
        const res=s.res&&s.res[L.gid];
        return `<div class="leg"><span class="legdot">${r===true?'✓':r===false?'✗':r==='void'?'–':'•'}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${g?esc(g.home.abbr+' vs '+g.away.abbr+(res?` · ${res.h}-${res.a}`:'')+' · '+(g.start?when(g):'')):'Game no longer listed'}${r==='void'?' · void':''}${man?' · graded by you':''}</span>
          ${need?`<div class="grade"><button type="button" data-grade="${i}|${j}|1">✓ hit</button><button type="button" data-grade="${i}|${j}|0">✗ missed</button></div>`:man?`<div class="grade"><button type="button" data-grade="${i}|${j}|x">Undo</button></div>`:''}</div></div>`;}).join('')}
-     <div class="pcfoot"><div class="odds mono">${pct(+s.p||0)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}${s.stake>0?' · $'+s.stake+' stake':''}</small></div><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
+     <div class="pcfoot"><div class="odds mono">${pct(+s.p||0)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}${s.stake>0?' · $'+s.stake+' stake':''}</small></div><button class="btn ghost" data-simmine="${i}">🎲 Simulate</button><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
   const roi=staked>0?pl/staked:null;
   const sum=saved.length?`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${w}/${n}</b><span>Won / settled</span></div><div class="kpi"><b class="mono" style="color:${pl>0?'var(--yes)':pl<0?'var(--no)':'var(--text)'}">${money?(pl<0?'−$':'$')+Math.abs(pl).toFixed(2):'—'}</b><span>Profit / loss${money?` on $${staked.toFixed(0)}`:''}</span></div><div class="kpi"><b class="mono">${roi==null?'—':signPct(roi)}</b><span>ROI</span></div></div>
      <div class="note">${n?`Model expected ${exp.toFixed(1)} wins from ${n} settled parlay${n>1?'s':''} (the hit chances when you saved them); you won ${w}.`:'Nothing settled yet.'} Profit counts parlays saved with a stake and your book's price.</div></div>`:'';
   $('main').innerHTML=updatedLine()+`<h2>My parlays <small>${saved.length} saved</small></h2>`+sum+(rows.length?`<div class="grid">${rows.join('')}</div>`:`<div class="empty">Save a parlay from the builder and it will grade itself here as games finish.</div>`);
   $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{saved.splice(+b.dataset.del,1);store.set('saved',saved);renderMine();});
+  $('main').querySelectorAll('[data-simmine]').forEach(b=>b.onclick=()=>{const s=saved[+b.dataset.simmine];if(s&&s.legs&&s.legs.length)SB.goTab('sim',{legs:s.legs,title:`${s.legs.length}-leg parlay`,from:'mine',p:s.p});});
   $('main').querySelectorAll('[data-grade]').forEach(b=>b.onclick=()=>{const [i,j,v]=b.dataset.grade.split('|'),L=saved[+i]&&saved[+i].legs[+j];if(!L)return;
     if(v==='x')delete L.manual;else L.manual=v==='1';store.set('saved',saved);renderMine();});
 }
@@ -1104,7 +1111,7 @@ function ticketCard(id,title,T,sub){
   return `<div class="pc"><div class="pchead"><span class="pctitle">${title}</span><span class="hit ${hc}">${T.p>=.01?pct(T.p):pct(T.p,1)} to hit</span></div>${gaugeHTML(T.p)}${sub?`<div class="why" style="margin-top:4px">${sub}</div>`:''}
    <div style="margin-top:6px">${T.legs.map(L=>{const g=gameById(L.gid);const pi=isP(L.key)?pLegInfo(L.key):null;
      return `<div class="leg"><span class="sp" title="${esc(SPORTNAME[g.sport]||g.sport)}">${sportIco(g.sport)}</span><div class="legtxt"><b>${esc(L.label)}${pi&&pi.pl.boost?'<span class="link">NEXT MAN UP</span>':''}</b><span>${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(L.p)}</span></div>`;}).join('')}</div>
-   <div class="pcfoot"><div class="odds mono">${fmtOdds(T.p)}<small>Fair odds · $10 pays ~$${pay.toLocaleString()}</small></div><button class="btn" data-addp="${id}">Open in builder</button></div><div class="note">${minPriceLine(T.p)}</div></div>`;
+   <div class="pcfoot"><div class="odds mono">${fmtOdds(T.p)}<small>Fair odds · $10 pays ~$${pay.toLocaleString()}</small></div><button class="btn" data-addp="${id}">Open in builder</button></div><div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-simp="${id}">🎲 Simulate</button></div><div class="note">${minPriceLine(T.p)}</div></div>`;
 }
 function lineupBanner(){const lu=DATA.lineups||{};const chk=lu.checked?new Date(lu.checked).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):null;
   return `<div class="lineup"><span>📋</span><div>${chk?`<b>Lineups checked ${esc(chk)}.</b> `:'<b>Built on normal / recent lineups.</b> '}Rechecked every morning around 6 AM and again right before each game. Players ruled out are removed, and teammates who pick up their minutes get a <b>Next man up</b> boost.</div></div>`;}
@@ -1647,6 +1654,7 @@ const SB={version:2,NSIM,
   $,esc,clamp,pct,when,abBox,toast,store,startMs,started,isFinal,priced,openG,gameById,
   get oddsFormat(){return oddsFmt},setOddsFormat,fmtOdds,fmtPrice,p2am,am2dec,p2dec,dec2p,dec2am,fmtAm,parseOdds,ev,kelly,noVig,
   fit,scoreMatrix,outcomes,simGame:sim,rng:mulberry32,hashStr,marketsFor,p1,probOf,parlayProb,legLabel,evalMarket,registerLegType,
+  get savedParlays(){return saved;},
   saveParlay(rec){if(!rec||!Array.isArray(rec.legs)||!rec.legs.length)return false;saved.push({...rec,at:rec.at||Date.now()});store.set('saved',saved);if(tab==='mine')render();return true;},
   get slip(){return slip},toggleLeg,inSlip,setSlip,replaceSlip,openSlip,renderSlipBar,openGame,isVoid,leagueT,
   registerTab,goTab,render,on,openSheet,closeSheet:()=>closeSheet()};

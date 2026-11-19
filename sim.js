@@ -1025,14 +1025,23 @@ function startParlay(){if(RUN.active)return;const legs=parLegs();if(!legs.length
     error(e){RUN.active=false;RUN.err='The parlay simulation failed: '+e;rerender();}});}
 function parBoxHTML(){const busy=RUN.active&&RUN.kind==='parlay';if(!busy)return '';
   return `<div class="sm-prog" role="progressbar" aria-label="Parlay simulation progress" aria-valuemin="0" aria-valuemax="${NSIM}" aria-valuenow="${RUN.done}"><div style="width:${(RUN.done/NSIM*100).toFixed(1)}%"></div></div><div class="sm-stat" aria-live="polite"><span>${esc(RUN.phase)}</span><span><b>${fmtN(RUN.done)}</b> / ${fmtN(NSIM)} · <b>${fmtN(RUN.rate)}</b>/s</span></div>`;}
+const sameLegs=(a,b)=>JSON.stringify((a||[]).map(l=>l.gid+'|'+l.key))===JSON.stringify((b||[]).map(l=>l.gid+'|'+l.key));
+/* My Parlays as tap-to-select chips: pick any saved parlay and simulate it here */
+function pickHTML(legs){const sv=SB.savedParlays||[];if(!sv.length)return '';
+  return `<div class="sm-sl" style="border:0;padding:0 0 8px"><label>My parlays · tap one to simulate it</label><div class="seg" role="group" aria-label="My parlays" style="flex-wrap:wrap">${sv.map((s,i)=>{const on=sameLegs(s.legs,legs);return `<button data-a="pload" data-i="${i}" class="${on?'on':''}" aria-pressed="${on}">${(s.legs||[]).length} legs · ${pc1(+s.p||0)}</button>`;}).join('')}</div></div>`;}
+/* add this parlay to My Parlays once it has been simulated (the saved hit chance is the simulated one) */
+function saveRowHTML(legs,sig){if(!legs.length)return '';const inMine=(SB.savedParlays||[]).some(s=>sameLegs(s.legs,legs)),R=PAR&&PAR.sig===sig?PAR:null;
+  return `<div class="sm-runrow" style="margin-top:6px"><button class="btn ghost" data-a="psave" ${inMine||!R?'disabled':''}>${inMine?'✓ In My Parlays':R?'＋ Add to My Parlays':'Run the simulation to add it'}</button></div>`;}
 function parlayHTML(){const legs=parLegs(),sig=JSON.stringify(legs.map(l=>l.gid+'|'+l.key)),busy=RUN.active&&RUN.kind==='parlay',R=PAR&&PAR.sig===sig?PAR:null;
   const fromParams=S.plegs&&S.plegs.length;
   let o=`<div class="panel"><div class="tt">Parlay simulator</div><div class="note" style="margin:2px 0 8px">Plays every game in the parlay 100,000 times. Each game is simulated once per run, so legs from the same game move together (a home win and over 2.5 often come together).</div>`;
-  if(fromParams)o+=`<div class="lineup">Simulating the parlay you opened here. <a data-a="useslip" style="color:var(--blue);cursor:pointer;font-weight:700">Use my slip instead</a></div>`;
+  o+=pickHTML(legs);
+  if(fromParams)o+=`<div class="lineup">Simulating ${S.ptitle?`<b>${esc(S.ptitle)}</b>`:'the parlay you opened here'}. <a data-a="useslip" style="color:var(--blue);cursor:pointer;font-weight:700">Use my slip instead</a></div>`;
   if(!legs.length)return o+`<div class="empty" style="margin-top:8px">Your slip is empty. Add legs from any game, or from the market table in the game simulator (tap +).<br><button class="btn" data-a="mode" data-m="game" style="margin-top:12px">Open the game simulator</button></div></div>`;
   o+=legs.map((l,j)=>{const {g,lab,p}=legInfo(l);const pr=R&&R.per[j]; // R.sig === this slip, so R.per follows the same leg order
     return `<div class="sm-pl"><div class="t"><b>${esc(lab)}</b><span>${g?esc(gameLine(g))+' · '+esc(g.comp):''}${pr&&pr.how==='cond'?'<span class="sm-flag">engine conditional</span>':pr&&pr.how==='engine'?'<span class="sm-flag">engine chance</span>':''}</span></div><div class="p">${pr&&pr.sim!=null?pc1(pr.sim):pc1(p)}<small>${pr&&pr.sim!=null?'engine '+pc1(p):'engine'}</small></div></div>`;}).join('');
   o+=`<div class="sm-runrow" style="margin-top:10px"><button class="btn" data-a="prun" ${RUN.active?'disabled':''}>▶ Simulate parlay · 100,000×</button><button class="btn ghost" data-a="cancel" ${busy?'':'hidden'}>Cancel</button></div><div id="smParBox">${parBoxHTML()}</div>`;
+  o+=saveRowHTML(legs,sig);
   if(RUN.err&&RUN.kind==='parlay'&&!busy)o+=`<div class="note" style="color:var(--no)">${esc(RUN.err)}</div>`;
   if(R){const v=parAgree(R),e=v.e;
     o+=`<div class="sm-kpis" style="margin-top:12px"><div><b>${pcS(R.hit)}</b><span>sim hit rate ±${(e*100).toFixed(e<.0005?2:1)}</span></div><div><b>${pcS(R.eng)}</b><span>engine (parlayProb)</span></div><div><b>${v.rel==null?'—':(v.rel>=0?'+':'−')+Math.round(Math.abs(v.rel)*100)+'%'}</b><span>sim vs engine</span></div></div>
@@ -1094,7 +1103,7 @@ function saveUI(){store.set('sim.mode',S.mode);if(S.gid)store.set('sim.gid',S.gi
 function render(main,params){
   if(params!==lastParams){lastParams=params;const p=params||{};
     if(p.gid&&SB.gameById(p.gid)){if(p.gid!==S.gid){S.wi={};}S.gid=p.gid;if(!p.legs&&!p.mode)S.mode='game';}
-    if(Array.isArray(p.legs)&&p.legs.length){S.plegs=p.legs;S.mode='parlay';}
+    if(Array.isArray(p.legs)&&p.legs.length){S.plegs=p.legs;S.ptitle=p.title||null;S.mode='parlay';}
     if(p.mode&&MODES.some(m=>m[0]===p.mode))S.mode=p.mode;saveUI();}
   if(!MODES.some(m=>m[0]===S.mode))S.mode='game';
   injectCSS();
@@ -1128,7 +1137,9 @@ function wire(root){if(!root)return;
       case 'wspeed':W.speed=+b.dataset.s||1;paintWatch();if(W.playing)watchLoop();break;
       case 'wskip':if(!W.ev)break;W.pos=W.ev.steps.length-1;W.playing=false;stopTimer();paintWatch();break;
       case 'prun':startParlay();break;
-      case 'useslip':S.plegs=null;rerender();break;
+      case 'useslip':S.plegs=null;S.ptitle=null;rerender();break;
+      case 'pload':{const s=(SB.savedParlays||[])[+b.dataset.i];if(s&&s.legs&&s.legs.length){S.plegs=s.legs.map(l=>({gid:l.gid,key:l.key,label:l.label,sport:l.sport}));S.ptitle=`${s.legs.length}-leg saved parlay`;S.mode='parlay';saveUI();rerender();}break;}
+      case 'psave':{const legs=parLegs(),sig=JSON.stringify(legs.map(l=>l.gid+'|'+l.key)),R=PAR&&PAR.sig===sig?PAR:null;if(!legs.length||!R)break;SB.saveParlay({legs:legs.map(x=>({...x})),p:R.hit,src:'simulator'});SB.toast('Added to My Parlays');rerender();break;}
       case 'bsrc':S.bank.src=b.dataset.s;rerender();break;
       case 'brun':startBank();break;}});
   root.addEventListener('input',e=>{const t=e.target;

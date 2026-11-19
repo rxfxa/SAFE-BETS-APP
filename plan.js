@@ -1,8 +1,9 @@
 /* plan.js — "📅 Weekly Plan": a $20/week ($80/month) plan of Polymarket slips across every sport, built to hit-rate targets,
    with decision buttons, a 500,000-run simulator, slip tracking, the end-of-week report and the user's Polymarket account.
 
-   TIERS (whole-slip hit rate): SAFE 60-89% · COIN FLIP 45-55% · LOTTO 1-40%, plus three big slips: 15 legs ~50%,
-   21 legs ~20%, 24 legs ~2-5%. A slip's payout is about 1 / its hit rate, so these targets set the pay.
+   TIERS (whole-slip hit rate): SAFE 60-89% · COIN FLIP 45-55% · LOTTO 1-40%. BIG SLIPS (payout at Polymarket prices):
+   15+ legs paying ×10+, 21+ legs ×50+, 24+ legs ×100+; each tries its base leg count and up to 9 more (in 3s) and keeps
+   the one that reaches the payout with the best simulated chance to hit, favouring legs the model rates above the price.
    LEGS (Polymarket only):
      player props  NBA points / rebounds / assists, both sides (Yes = over, No = under), from polymarket.json
      game lines    moneyline, spread and total for NBA, NFL, NHL, college football and soccer (polymarket.js rows,
@@ -34,10 +35,12 @@ const TIERS = [
   { id: 'coin', name: 'COIN FLIP', range: [0.45, 0.55], target: 0.50, legs: 12, blurb: 'Hits about half the time, pays about ×2.' },
   { id: 'lotto', name: 'LOTTO', range: [0.01, 0.40], target: 0.12, legs: 18, blurb: 'Hits 1-40% of the time, pays ×3 to ×100. Most of these lose.' },
 ];
+// big slips are built to a payout: at least ×10 / ×50 / ×100 at Polymarket prices; legs may grow in 3s (up to +9) when
+// that reaches the payout with a better chance to hit
 const BIG = [
-  { id: 'b15', name: '15 LEGS · 50%', range: [0.45, 0.55], target: 0.50, legs: 15, blurb: 'Fifteen legs built to land about half the time.' },
-  { id: 'b21', name: '21 LEGS · 20%', range: [0.16, 0.25], target: 0.20, legs: 21, blurb: 'Twenty-one legs at about one in five.' },
-  { id: 'b24', name: '24 LEGS · 2-5%', range: [0.02, 0.05], target: 0.035, legs: 24, blurb: 'The moonshot: about 1 in 30.' },
+  { id: 'b15', name: 'PAYS 10×+', minPay: 10, legs: 15, blurb: '15 or more legs that pay at least ×10.' },
+  { id: 'b21', name: 'PAYS 50×+', minPay: 50, legs: 21, blurb: '21 or more legs that pay at least ×50.' },
+  { id: 'b24', name: 'PAYS 100×+', minPay: 100, legs: 24, blurb: '24 or more legs that pay at least ×100.' },
 ];
 const ALL_TIERS = TIERS.concat(BIG);
 const SPLITS = [['balanced', 'Balanced 50/30/20', [0.5, 0.3, 0.2]], ['safer', 'Safer 70/20/10', [0.7, 0.2, 0.1]], ['bolder', 'Bolder 34/33/33', [0.34, 0.33, 0.33]]];
@@ -222,6 +225,57 @@ function buildBest(C, t, N, ex, seed) {
   return S;
 }
 
+// payout-targeted builder: product of buy prices ≤ 1/minPay, then trade legs for the highest chance to hit that keeps the pay
+function buildPayout(C, tier, N, exclude) {
+  const M = tier.minPay, L = Math.log(M), qa = Math.pow(1 / M, 1 / N);
+  const pool = C.filter(c => !(exclude && exclude.has(legId(c))) && c.ask >= 0.2 && c.ps >= 0.25);
+  const byG = new Map(); for (const c of pool) { if (!byG.has(c.pg.slug)) byG.set(c.pg.slug, []); byG.get(c.pg.slug).push(c); }
+  const score = c => Math.abs(Math.log(c.ask / qa)) - 0.8 * Math.log(c.ps / c.ask); // near the target price, value first
+  const by = (a, b) => score(a) - score(b), packs = [];
+  for (const [slug, cs] of byG) {
+    const props = cs.filter(c => c.kind === 'prop').sort(by), lines = cs.filter(c => c.kind === 'line').sort(by);
+    const H = props.find(c => c.side === 'home'), A = props.find(c => c.side === 'away'); let legs = [];
+    if (H && A) { legs = [H, A]; const third = cs.slice().sort(by).find(c => c !== H && c !== A && mktOf(c) !== mktOf(H) && mktOf(c) !== mktOf(A)); if (third) legs.push(third); }
+    else { const used = new Set(); for (const c of lines) { if (used.has(mktOf(c))) continue; used.add(mktOf(c)); legs.push(c); if (legs.length === 3) break; } if (legs.length < 2) continue; }
+    packs.push({ slug, legs, fit: legs.reduce((s, c) => s + score(c), 0) / legs.length });
+  }
+  packs.sort((a, b) => a.fit - b.fit);
+  const use = []; let rem = N;
+  for (const pk of packs) { if (rem <= 0) break; let k = Math.min(pk.legs.length, rem); if (k < 2) break; if (rem - k === 1) { if (k === 3) k = 2; else continue; } use.push({ pk, k }); rem -= k; }
+  if (rem === 1) { const u = use.find(x => x.k === 3); if (u) { u.k = 2; rem = 2; for (const pk of packs) { if (use.some(x => x.pk === pk)) continue; use.push({ pk, k: 2 }); rem = 0; break; } } }
+  const legs = use.flatMap(x => x.pk.legs.slice(0, x.k));
+  const lpay = () => -legs.reduce((s, c) => s + Math.log(c.ask), 0), lp = () => legs.reduce((s, c) => s + Math.log(c.ps), 0);
+  const okSwap = (old, nw) => {
+    if (legs.includes(nw) || nw.pg.slug !== old.pg.slug) return false;
+    const same = legs.filter(c => c !== old && c.pg.slug === nw.pg.slug);
+    if (same.some(c => mktOf(c) === mktOf(nw))) return false;
+    const props = same.filter(c => c.kind === 'prop').concat(nw.kind === 'prop' ? [nw] : []);
+    return !(props.length && new Set(props.map(c => c.side)).size < 2);
+  };
+  for (let it = 0; it < 6 * N && legs.length; it++) {
+    const cur = lpay(), short = cur < L; let best = null;
+    for (const old of legs) for (const nw of byG.get(old.pg.slug) || []) {
+      if (!okSwap(old, nw)) continue;
+      const dPay = Math.log(old.ask) - Math.log(nw.ask), dP = Math.log(nw.ps) - Math.log(old.ps);
+      if (short) { if (dPay <= 1e-9) continue; const r = dP / dPay; if (!best || r > best.r) best = { old, nw, r }; } // cheapest pay gain
+      else { if (cur + dPay < L || dP <= 1e-9) continue; if (!best || dP > best.r) best = { old, nw, r: dP }; } // more chance, pay kept
+    }
+    if (!best) break;
+    legs[legs.indexOf(best.old)] = best.nw;
+  }
+  return { legs, short: Math.max(0, N - legs.length), games: new Set(legs.map(c => c.pg.slug)).size, est: Math.exp(lp()), pay: Math.exp(lpay()), payOk: lpay() >= L - 1e-9 };
+}
+function buildBig(C, t, exclude, seed) {
+  let best = null;
+  for (let N = t.legs; N <= t.legs + 9; N += 3) {
+    const S = buildPayout(C, t, N, exclude); if (S.legs.length !== N) continue;
+    S.quick = simulate(S.legs, QUICK, seed + N).hit; S.target = N;
+    const better = !best || (S.payOk && !best.payOk) || (S.payOk === best.payOk && (S.payOk ? S.quick > best.quick : S.pay > best.pay));
+    if (better) best = S;
+  }
+  return best || { legs: [], short: t.legs, games: 0, est: 0, pay: 0, payOk: false, quick: 0, target: t.legs };
+}
+
 // ---------------- joint simulation ----------------
 function cdfOf(O) { const c = new Float64Array(O.n); let s = 0; for (let i = 0; i < O.n; i++) { s += O.p[i]; c[i] = s; } return c; }
 function prepGames(legs) {
@@ -313,12 +367,12 @@ function legRow(c, i, missRate, tierId) {
 }
 function slipCard(t, S, stake) {
   if (!S || !S.legs.length) return `<div class="pc pl-card" data-tier="${t.id}"><div class="pchead"><span class="pctitle">${esc(t.name)}</span></div><div class="why">Not enough Polymarket legs for this slip with these filters. Try "All sports", "Next 3 days" or "Props + lines".</div></div>`;
-  const nums = slipNumbers(S.legs), sim = ST.sims[t.id], p = sim ? sim.hit : S.quick, inR = p >= t.range[0] && p <= t.range[1];
+  const nums = slipNumbers(S.legs), sim = ST.sims[t.id], p = sim ? sim.hit : S.quick, isPay = !!t.minPay, inR = isPay ? (nums.dec || 0) >= t.minPay - 1e-9 : p >= t.range[0] && p <= t.range[1];
   const byGame = []; for (const c of S.legs) { let g = byGame.find(x => x.slug === c.pg.slug); if (!g) byGame.push(g = { slug: c.pg.slug, c, legs: [] }); g.legs.push(c); }
   let n = 0;
-  return `<div class="pc pl-card" data-tier="${t.id}"><div class="pchead"><span class="pctitle">${esc(t.name)}${TIERS.includes(t) ? ` · ${S.legs.length} legs` : ''}${S.short ? ` <span class="badge b-est">${S.short} SHORT</span>` : ''}</span><span class="hit ${p >= 0.55 ? 'h-hi' : p >= 0.3 ? 'h-mid' : 'h-lo'}">${pctS(p)} to hit</span></div>
+  return `<div class="pc pl-card" data-tier="${t.id}"><div class="pchead"><span class="pctitle">${esc(t.name)} · ${S.legs.length} legs${S.short ? ` <span class="badge b-est">${S.short} SHORT</span>` : ''}</span><span class="hit ${p >= 0.55 ? 'h-hi' : p >= 0.3 ? 'h-mid' : 'h-lo'}">${pctS(p)} to hit</span></div>
     <div class="gauge" style="--p:${Math.max(0, Math.min(1, p)).toFixed(3)}" aria-hidden="true"><i></i></div>
-    <div class="why" style="margin-top:6px">${esc(t.blurb)} Target ${Math.round(t.range[0] * 100)}-${Math.round(t.range[1] * 100)}%: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'on target' : 'closest we can get right now'}</b>.${!inR && p < t.range[0] ? ` Each of ${S.legs.length} legs would need about ${pctS(S.need, 0)}, and Polymarket has ${S.strong} legs that strong for these filters.` : ''}</div>
+    ${isPay ? `<div class="why" style="margin-top:6px">${esc(t.blurb)} Pays <b class="mono">×${(nums.dec || 0).toFixed(1)}</b> at Polymarket prices: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'payout target met' : 'closest we can get right now'}</b>${S.legs.length > t.legs ? ` (${S.legs.length - t.legs} legs added for a better chance to hit)` : ''}. To break even at that payout it needs to hit ${pctS(1 / Math.max(1, nums.dec || 1), 1)} of the time; the market's prices say ${pctS(nums.pm, 1)}, our model says ${pctS(p, 1)}.</div>` : `<div class="why" style="margin-top:6px">${esc(t.blurb)} Target ${Math.round(t.range[0] * 100)}-${Math.round(t.range[1] * 100)}%: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'on target' : 'closest we can get right now'}</b>.${!inR && p < t.range[0] ? ` Each of ${S.legs.length} legs would need about ${pctS(S.need, 0)}, and Polymarket has ${S.strong} legs that strong for these filters.` : ''}</div>`}
     <div class="kpis pl-k">${[[pctS(p), sim ? '500k sims' : 'quick estimate'], [pctS(nums.pm), 'market says'], [nums.dec ? '×' + nums.dec.toFixed(2) : '—', 'pays at Polymarket prices'], [money(stake), 'stake'], [nums.dec ? money(stake * nums.dec) : '—', 'returns if it hits']].map(([v, l]) => `<div class="kpi"><b class="mono">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
     <div class="pl-dec">${[['🔁 New mix', 'reroll'], ['↺ Start over', 'reset'], ['📋 Copy legs', 'copy']].map(([l, a]) => `<button class="pl-chipbtn" data-pl-act="${a}|${t.id}">${l}</button>`).join('')}</div>
     ${byGame.map(G => `<div class="pl-game"><div class="mkhead"><span class="lg">${esc(G.c.pg.comp)} · ${esc(G.c.G.away.abbr)} @ ${esc(G.c.G.home.abbr)} · ${G.legs.length} legs</span><span>${esc(new Date(G.c.pg.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></div>
@@ -391,14 +445,14 @@ function render(main) {
   const winH = ST.win === '3d' ? 72 : 30, { games, C, missing } = candidates({ winH, sport: ST.sport, type: ST.type, lean: ST.lean }), st = stakes();
   const built = {}, taken = new Set();
   for (const t of TIERS) { const N = ST.legs[t.id] || t.legs; const ex = new Set([...taken, ...(ST.excl[t.id] || [])]); const S = buildBest(C, t, N, ex, 0x1234 + N); S.target = N; S.legs.forEach(c => taken.add(legId(c))); built[t.id] = S; }
-  for (const t of BIG) { const S = buildBest(C, t, t.legs, new Set(ST.excl[t.id] || []), 0x4321 + t.legs); S.target = t.legs; built[t.id] = S; }
+  for (const t of BIG) built[t.id] = buildBig(C, t, new Set(ST.excl[t.id] || []), 0x4321);
   const key = JSON.stringify(Object.values(built).map(S => S.legs.map(legId)));
   if (ST.builtKey !== key) { const old = ST.built || {}; for (const id of Object.keys(ST.sims)) { if (!old[id] || JSON.stringify(old[id].legs.map(legId)) !== JSON.stringify((built[id] || { legs: [] }).legs.map(legId))) delete ST.sims[id]; } ST.week = null; }
   ST.builtKey = key; ST.built = built;
   const PM = window.__polymarket && window.__polymarket.PM;
   const chip = (attr, k, l, on) => `<button class="chip ${on ? 'on' : ''}" data-${attr}="${k}" aria-pressed="${on}">${esc(l)}</button>`;
   let h = `<h2>Weekly Plan <small>$${ST.budget}/week · $${ST.budget * 4}/month · Polymarket, every sport</small></h2>
-    <div class="note pl-lead">Three slips a day built to hit-rate targets (SAFE 60-89%, COIN FLIP 45-55%, LOTTO 1-40%), plus 15-, 21- and 24-leg slips. Every leg is a Polymarket market: player props priced by a game-script model (injuries, matchup, blowouts), and game lines priced by the app's own engine.</div>
+    <div class="note pl-lead">Three slips a day built to hit-rate targets (SAFE 60-89%, COIN FLIP 45-55%, LOTTO 1-40%), plus big slips that pay ×10, ×50 and ×100 or more. Every leg is a Polymarket market: player props priced by a game-script model (injuries, matchup, blowouts), and game lines priced by the app's own engine.</div>
     <div class="pc pl-set">
       <div class="pl-row"><label for="plBudget">Weekly budget</label><span class="pl-money">$<input id="plBudget" type="number" min="3" step="1" inputmode="decimal" value="${ST.budget}"></span><span class="note">= $${(ST.budget * 4).toFixed(0)} a month</span></div>
       <div class="spnav">${SPLITS.map(s => chip('pl-split', s[0], s[1], ST.split === s[0])).join('')}</div>
@@ -415,7 +469,7 @@ function render(main) {
     const bySport = {}; for (const G of games) bySport[G.pg.sport] = (bySport[G.pg.sport] || 0) + 1;
     h += `<div class="note">${games.length} games (${Object.entries(bySport).map(([k, v]) => `${v} ${({ nba: 'NBA', nfl: 'NFL', nhl: 'NHL', ncaaf: 'college FB', soccer: 'soccer' })[k] || k}`).join(', ')}) · ${C.length} Polymarket legs priced${missing ? ` · ${missing} prop lines skipped (player not in our data)` : ''} · snapshot ${esc(new Date(PM.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}. Prices move: check each one before you buy.</div>`;
     h += `<div class="grid pl-grid">${TIERS.map((t, i) => slipCard(t, built[t.id], st[i])).join('')}</div>`;
-    h += `<h2>Big slips <small>15 legs ~50% · 21 legs ~20% · 24 legs ~2-5%</small></h2><div class="grid pl-grid">${BIG.map(t => slipCard(t, built[t.id], 1)).join('')}</div>`;
+    h += `<h2>Big slips <small>pays ×10+ · ×50+ · ×100+ at Polymarket prices</small></h2><div class="grid pl-grid">${BIG.map(t => slipCard(t, built[t.id], 1)).join('')}</div>`;
     const W = ST.week;
     h += `<h2>Week simulator <small>7 days of SAFE, COIN FLIP and LOTTO · 500,000 weeks</small></h2><div class="pc">
       <div class="pl-btns"><button class="btn" data-pl-week>Run 500,000 weeks</button></div>
@@ -534,5 +588,5 @@ document.head.appendChild(css);
 const TAB = { key: 'plan', label: '📅 Weekly Plan', after: 'polymarket', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="plan"]')) SB.registerTab(TAB); }, 0));
-window.__plan = { candidates, buildTarget, simulate, pOver, roster, weekSim, TIERS, BIG, LEG_OPTIONS, legId, mktOf, get state() { return ST; }, get slips() { return allSlips(); }, get dbMode() { return dbMode; } };
+window.__plan = { candidates, buildTarget, buildPayout, buildBig, simulate, pOver, roster, weekSim, TIERS, BIG, LEG_OPTIONS, legId, mktOf, get state() { return ST; }, get slips() { return allSlips(); }, get dbMode() { return dbMode; } };
 })();

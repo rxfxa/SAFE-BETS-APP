@@ -58,7 +58,11 @@ try {
   for (const r of R) check(`${r.k}: ${r.want} legs, divisible by 3, 2-3 per game, a player from each team, one per market`, r.n === r.want && r.div3 && r.perGame && r.bothTeams && r.oneMkt, JSON.stringify(r));
   const hits = Object.fromEntries(R.map(r => [r.k, r.quick]));
   check('SAFE lands in 60-89%', hits.safe >= 0.6 && hits.safe <= 0.89, String(hits.safe));
-  check('LOTTO lands in 1-40%; 21 legs near 20%; 24 legs in 2-5%', hits.lotto >= 0.01 && hits.lotto <= 0.4 && hits.b21 >= 0.15 && hits.b21 <= 0.26 && hits.b24 >= 0.015 && hits.b24 <= 0.06, JSON.stringify(hits));
+  check('LOTTO lands in 1-40%', hits.lotto >= 0.01 && hits.lotto <= 0.4, String(hits.lotto));
+  const pays = await page.evaluate(() => window.__plan.BIG.map(t => { const S = window.__plan.state.built[t.id], px = S.legs.reduce((s, c) => s * c.ask, 1);
+    return { id: t.id, base: t.legs, n: S.legs.length, pay: 1 / px, min: t.minPay, ok: S.payOk, p: S.quick }; }));
+  check('big slips pay ×10+ / ×50+ / ×100+ at Polymarket prices, with at least 15 / 21 / 24 legs in steps of 3', pays.every(x => x.pay >= x.min - 1e-6 && x.ok && x.n >= x.base && x.n <= x.base + 9 && x.n % 3 === 0), JSON.stringify(pays.map(x => ({ ...x, pay: +x.pay.toFixed(1), p: +x.p.toFixed(4) }))));
+  check('bigger payout, smaller chance: ×10 > ×50 > ×100 hit chances', pays[0].p > pays[1].p && pays[1].p > pays[2].p);
   check('tiers rise in risk: SAFE > COIN FLIP > LOTTO', hits.safe > hits.coin && hits.coin > hits.lotto, JSON.stringify(hits));
   const off = await page.evaluate(() => [...document.querySelectorAll('.pl-card')].filter(c => /closest we can get/.test(c.textContent)).map(c => /legs would need about \d+%/.test(c.textContent)));
   check('off-target slips explain why (legs needed vs legs available)', off.every(Boolean), JSON.stringify(off));

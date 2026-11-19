@@ -63,6 +63,14 @@ try {
       (await page.textContent('#payTop')).includes(fair25) && (await page.inputValue('#stake')) === '25', `${await page.textContent('#payTop')} (want ${fair25})`);
     const profit = `$${(25 / p - 25).toFixed(2)}`;
     check('profit is shown next to the payout', (await page.textContent('#payTop')).includes(`(profit ${profit})`));
+    // any amount: cents, and large amounts, move the payout straight away
+    for (const amt of ['7.5', '7.25', '1250', '0.5']) {
+      await page.fill('#stakeTop', amt);
+      const want = `$${(Number(amt) / p).toFixed(2)}`;
+      check(`any amount: $${amt} pays ${want} at fair odds`, (await page.textContent('#payTop')).includes(want), await page.textContent('#payTop'));
+    }
+    check('stake boxes accept cents on a phone keypad (step 0.01)', (await page.getAttribute('#stakeTop', 'step')) === '0.01' && (await page.getAttribute('#stake', 'step')) === '0.01');
+    await page.fill('#stakeTop', '25');
     await page.fill('#bookOdds', '+200');
     await page.waitForTimeout(100);
     check("a book price adds the payout at that price ($25 at +200 = $75.00)", (await page.textContent('#payTop')).includes('$75.00'), await page.textContent('#payTop'));

@@ -124,7 +124,7 @@ function candidates(opts) {
       if (r.p != null && Math.abs(r.p - q.m) > MAX_GAP) continue;
       const p = r.p != null ? r.p : q.m, mo = r.p == null || !r.key;
       C.push({ kind: 'line', G, pg, g, mkt: r.type, label: r.label, key: r.key, mo, side: /^SC:(ml|sp):H/.test(r.key || '') ? 'home' : /^SC:(ml|sp):A/.test(r.key || '') ? 'away' : null,
-        p, mid: q.m, ask: q.a, bid: q.b, ps: mo ? q.m : Math.min(p, q.m + 0.04), tags: lineTags(r, G, mo) });
+        p, mid: q.m, ask: q.a, bid: q.b, ps: mo ? q.m : Math.min(p, q.m + 0.04), tags: lineTags(r, G, mo), pmId: q.id ?? null, pmO: q.o ?? null });
       G.n++;
     }
     // NBA player props
@@ -142,7 +142,7 @@ function candidates(opts) {
           if (lean === 'under' && s.over) continue; if (lean === 'over' && !s.over) continue;
           if (s.mid == null || !liveQ(s.bid, s.ask) || Math.abs(s.p - s.mid) > MAX_GAP) continue;
           const team = side === 'home' ? G.home : G.away, opp = side === 'home' ? G.away : G.home;
-          C.push({ kind: 'prop', G, pg, g, pr, side, team, opp, pl, stat: pr.stat, line: pr.line, over: s.over, p: s.p, mid: s.mid, ask: s.ask, bid: s.bid, ps: Math.min(s.p, s.mid + 0.04),
+          C.push({ kind: 'prop', G, pg, g, pr, side, team, opp, pl, stat: pr.stat, line: pr.line, over: s.over, p: s.p, mid: s.mid, ask: s.ask, bid: s.bid, ps: Math.min(s.p, s.mid + 0.04), pmId: q.id ?? null, pmO: q.id == null ? null : s.over ? 0 : 1,
             mean, sdBase, sign, label: `${pl.name} ${s.over ? 'over' : 'under'} ${pr.line} ${st.n}`, tags: tagsFor(pl, s.over, env, side, LT, mean, pr.line) });
           G.n++;
         }
@@ -328,7 +328,7 @@ async function simulateChunked(legs, S, onProgress) {
 // ---------------- state + storage ----------------
 const ST = { win: store.get('plan.win', '24h'), budget: +store.get('plan.budget', 20) || 20, split: store.get('plan.split', 'balanced'),
   legs: store.get('plan.legs', { safe: 9, coin: 12, lotto: 18 }), sport: store.get('plan.sport', 'all'), type: store.get('plan.type', 'mix'), lean: store.get('plan.lean', 'both'),
-  excl: {}, sims: {}, built: null, week: null, builtKey: '' };
+  excl: {}, sims: {}, built: null, week: null, builtKey: '', tickets: {} };
 let SLIPS = store.get('plan.slips', []); if (!Array.isArray(SLIPS)) SLIPS = [];
 let db = null, dbMode = 'local', dbSlips = null, pmDoc = null, pmAddr = store.get('plan.pmAddr', '');
 (async () => {
@@ -358,6 +358,20 @@ async function savePmAddr(addr) {
 const splitOf = () => (SPLITS.find(s => s[0] === ST.split) || SPLITS[0])[2];
 const stakes = () => { const sp = splitOf(); return TIERS.map((t, i) => Math.round(ST.budget * sp[i] / 7 * 100) / 100); };
 const stakeOf = id => { const i = TIERS.findIndex(t => t.id === id); return i >= 0 ? stakes()[i] : 1; };
+// ---------------- bet-script ticket ----------------
+// A short code the user's own computer reads (tools/place_slip.py): which Polymarket outcome each leg buys (Gamma market id +
+// outcome index) and the price the app saw. The script looks every market up again, checks the live price and asks before it
+// bets. No keys or account details are in it.
+function ticketOf(t, S) {
+  const nums = slipNumbers(S.legs), sim = ST.sims[t.id];
+  return { v: 1, t: t.id, n: t.name, d: new Date().toISOString().slice(0, 16) + 'Z', s: stakeOf(t.id), x: nums.dec ? Math.round(nums.dec * 100) / 100 : null,
+    m: Math.round(nums.pm * 10000) / 10000, p: Math.round((sim ? sim.hit : S.quick) * 10000) / 10000, L: S.legs.map(c => [c.pmId, c.pmO, Math.round(c.ask * 1000)]) };
+}
+function encTicket(obj) {
+  const b = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  return 'SBT1.' + b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+const ticketReady = S => S.legs.every(c => Number.isInteger(c.pmId) && (c.pmO === 0 || c.pmO === 1));
 function slipNumbers(legs) { const pm = legs.reduce((s, c) => s * c.mid, 1), px = legs.reduce((s, c) => s * c.ask, 1); return { pm, dec: px > 0 ? 1 / px : null }; }
 function legRow(c, i, missRate, tierId) {
   const where = c.kind === 'prop' ? `${esc(c.team.abbr)} vs ${esc(c.opp.abbr)} · Polymarket ${c.over ? 'Yes' : 'No'} at ${cents(c.ask)}` : `${esc(c.mkt)} · Polymarket at ${cents(c.ask)}`;
@@ -374,7 +388,8 @@ function slipCard(t, S, stake) {
     <div class="gauge" style="--p:${Math.max(0, Math.min(1, p)).toFixed(3)}" aria-hidden="true"><i></i></div>
     ${isPay ? `<div class="why" style="margin-top:6px">${esc(t.blurb)} Pays <b class="mono">×${(nums.dec || 0).toFixed(1)}</b> at Polymarket prices: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'payout target met' : 'closest we can get right now'}</b>${S.legs.length > t.legs ? ` (${S.legs.length - t.legs} legs added for a better chance to hit)` : ''}. To break even at that payout it needs to hit ${pctS(1 / Math.max(1, nums.dec || 1), 1)} of the time; the market's prices say ${pctS(nums.pm, 1)}, our model says ${pctS(p, 1)}.</div>` : `<div class="why" style="margin-top:6px">${esc(t.blurb)} Target ${Math.round(t.range[0] * 100)}-${Math.round(t.range[1] * 100)}%: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'on target' : 'closest we can get right now'}</b>.${!inR && p < t.range[0] ? ` Each of ${S.legs.length} legs would need about ${pctS(S.need, 0)}, and Polymarket has ${S.strong} legs that strong for these filters.` : ''}</div>`}
     <div class="kpis pl-k">${[[pctS(p), sim ? '500k sims' : 'quick estimate'], [pctS(nums.pm), 'market says'], [nums.dec ? '×' + nums.dec.toFixed(2) : '—', 'pays at Polymarket prices'], [money(stake), 'stake'], [nums.dec ? money(stake * nums.dec) : '—', 'returns if it hits']].map(([v, l]) => `<div class="kpi"><b class="mono">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
-    <div class="pl-dec">${[['🔁 New mix', 'reroll'], ['↺ Start over', 'reset'], ['📋 Copy legs', 'copy']].map(([l, a]) => `<button class="pl-chipbtn" data-pl-act="${a}|${t.id}">${l}</button>`).join('')}</div>
+    <div class="pl-dec">${[['🔁 New mix', 'reroll'], ['↺ Start over', 'reset'], ['📋 Copy legs', 'copy'], ['🖥 Send to my bet script', 'ticket']].map(([l, a]) => `<button class="pl-chipbtn" data-pl-act="${a}|${t.id}">${l}</button>`).join('')}</div>
+    ${ST.tickets[t.id] && ST.tickets[t.id].key === S.legs.map(legId).join(',') ? `<div class="pl-ticket"><div class="note"><b>Copied.</b> On your computer run <code>python3 place_slip.py</code>: it reads this code from your clipboard, checks every leg's live price and asks before it bets. If the copy didn't work, select the code below and copy it.</div><textarea readonly rows="2" aria-label="Bet script code" spellcheck="false">${esc(ST.tickets[t.id].code)}</textarea></div>` : ''}
     ${byGame.map(G => `<div class="pl-game"><div class="mkhead"><span class="lg">${esc(G.c.pg.comp)} · ${esc(G.c.G.away.abbr)} @ ${esc(G.c.G.home.abbr)} · ${G.legs.length} legs</span><span>${esc(new Date(G.c.pg.start).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}</span></div>
       ${G.c.pg.sport === 'nba' && G.c.G.env.T ? `<div class="pl-env">Total ${G.c.G.env.T.toFixed(1)} · ${G.c.G.env.mu >= 0 ? esc(G.c.G.home.abbr) + ' by ' + G.c.G.env.mu.toFixed(1) : esc(G.c.G.away.abbr) + ' by ' + (-G.c.G.env.mu).toFixed(1)} · blowout chance ${pctS(G.c.G.env.pBlow, 0)}</div>` : ''}
       ${G.legs.map(c => legRow(c, n++, sim ? sim.miss[S.legs.indexOf(c)] : null, t.id)).join('')}</div>`).join('')}
@@ -431,6 +446,16 @@ function pmBlock() {
   }
   return h + '</div>';
 }
+function scriptBlock() {
+  return `<h2>Bet from your computer <small>your key stays on your computer</small></h2><div class="pc pl-script">
+    <div class="why">Tap <b>🖥 Send to my bet script</b> on any slip, then run <code>python3 place_slip.py</code> on your computer. It looks up every leg on Polymarket again, shows the live price next to the app's, and places the whole slip as one Polymarket combo only after you type <b>yes</b>. Your key never comes to this app or to Claude.</div>
+    <details><summary>Set it up once (about 5 minutes)</summary><ol class="pl-steps">
+      <li>Install Python 3.10 or newer, then run <code>pip install polymarket-client==0.20.0</code>.</li>
+      <li>Get <code>place_slip.py</code>: it's in your Safe Bets repo under <code>tools/</code>, or ask Claude to send it.</li>
+      <li>Run <code>python3 place_slip.py --setup</code>. It asks for your Polymarket wallet address and key in the terminal, hidden as you type. New Polymarket accounts (Deposit Wallet) get a trading-only key that can bet but can't withdraw, and your main key isn't saved.</li>
+      <li>Each time: tap 🖥 on a slip, run <code>python3 place_slip.py</code>, check the legs, type <b>yes</b>.</li></ol>
+      <div class="note">Try <code>python3 place_slip.py --check</code> first: it checks the slip with no key and places nothing. The script never bets more than your cap (set during setup, $25 unless you change it), won't buy a leg whose price jumped, and stops if Polymarket doesn't allow betting where you are.</div></details></div>`;
+}
 function trackedList() {
   const all = allSlips().slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 21);
   if (!all.length) return '<div class="pc"><div class="why">No tracked slips yet. Tap "✅ I placed it" on a slip after you place it.</div></div>';
@@ -477,7 +502,7 @@ function render(main) {
         ${W.tiers.map(T => `<div class="pl-rep"><b>${T.t.name}</b><span>${pctS(T.p)} a day</span><span>most likely ${T.wins.indexOf(Math.max(...T.wins))}/7 won</span><span class="mono">×${T.dec.toFixed(2)}</span></div>`).join('')}
         <div class="note">Uses today's slips as a typical day and Polymarket's prices for the payout.</div>` : '<div class="why">Plays a full week (7 SAFE, 7 COIN FLIP, 7 LOTTO slips at your stakes) 500,000 times.</div>'}</div>`;
   }
-  h += reportBlock() + pmBlock();
+  h += reportBlock() + pmBlock() + scriptBlock();
   h += `<h2>Tracked slips <small>grade them, or let Claude grade them Sunday night</small></h2>` + trackedList();
   h += `<div class="note pl-foot">Place a slip as a Polymarket combo or buy the legs one by one. Live sportsbook odds aren't in the app yet, so every leg is compared with Polymarket's price and our model. Hit chances are model estimates, never guarantees. Bet only what you can lose. 21+.</div>`;
   main.innerHTML = h;
@@ -503,6 +528,11 @@ document.addEventListener('click', async e => {
   if (d.plAct) { const [a, tier] = d.plAct.split('|'), S = ST.built && ST.built[tier];
     if (a === 'reroll' && S) { ST.excl[tier] = (ST.excl[tier] || []).concat(S.legs.map(legId)); SB.render(); }
     else if (a === 'reset') { ST.excl[tier] = []; SB.render(); }
+    else if (a === 'ticket' && S && S.legs.length) {
+      if (!ticketReady(S)) { SB.toast('Some legs are from an older price snapshot. Refresh the app and try again.'); return; }
+      const code = encTicket(ticketOf(ALL_TIERS.find(x => x.id === tier) || TIERS[0], S)); ST.tickets[tier] = { key: S.legs.map(legId).join(','), code };
+      let ok = false; try { await navigator.clipboard.writeText(code); ok = true; } catch (err) { ok = false; }
+      SB.toast(ok ? 'Copied for your bet script: run python3 place_slip.py' : 'Select the code under the slip and copy it'); SB.render(); }
     else if (a === 'copy' && S) { const txt = S.legs.map((c, i) => `${i + 1}. ${c.label} (${c.pg.away.name} @ ${c.pg.home.name}) at ${cents(c.ask)}`).join('\n');
       try { await navigator.clipboard.writeText(txt); SB.toast('Legs copied'); } catch (err) { SB.toast('Copy didn\'t work here: select the legs and copy them by hand'); } }
     return; }
@@ -553,6 +583,9 @@ css.textContent = `
 .pl-dec{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px}
 .pl-chipbtn{min-height:40px;padding:6px 12px;border-radius:6px;border:1px solid var(--edge);background:var(--card-hi);color:var(--text);font:600 13px var(--f);cursor:pointer}
 .pl-chipbtn:hover{border-color:var(--glow)}
+.pl-ticket{margin:8px 0 2px;display:grid;gap:6px}.pl-ticket textarea{width:100%;box-sizing:border-box;background:var(--soft);color:var(--text);border:1px solid var(--edge);border-radius:6px;padding:8px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;resize:vertical;word-break:break-all}
+.pl-script code,.pl-ticket code{font:12.5px ui-monospace,Menlo,Consolas,monospace;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--ice)}
+.pl-script details{margin-top:8px}.pl-script summary{cursor:pointer;font-weight:700;min-height:32px;display:flex;align-items:center}.pl-steps{margin:6px 0 6px 18px;padding:0;display:grid;gap:6px;font-size:14px;line-height:1.45}
 .pl-game{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
 .pl-env{font-size:12.5px;color:var(--dim);margin:2px 0 4px}
 .pl-leg{align-items:flex-start}

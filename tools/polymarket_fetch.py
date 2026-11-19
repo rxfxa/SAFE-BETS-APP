@@ -10,7 +10,8 @@ For every league below it reads GET https://gamma-api.polymarket.com/events?seri
   props   player over/under lines with a live two-sided quote (NBA: every line of points/rebounds/assists/threes;
           NFL yards/receptions: top 40)
   tsf     NBA "team to score first"
-Each price is {b: best bid, a: best ask, m: mid} in dollars per $1 share (= implied probability).
+Each price is {b: best bid, a: best ask, m: mid, id: Gamma market id, o: outcome index} in dollars per $1 share (= implied
+probability); id + o identify the exact outcome to buy.
 """
 import json, sys, time, re, urllib.request, urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -58,7 +59,8 @@ def jl(x):
 
 
 def quote(m, idx):
-    """Price of outcome idx (0 = first outcome) as {b, a, m}."""
+    """Price of outcome idx (0 = first outcome) as {b, a, m, id, o}: id is the Gamma market id and o the outcome index, so a
+    leg can be placed later (tools/place_slip.py looks the market up by id and buys outcome o)."""
     prices = [num(p) for p in jl(m.get('outcomePrices'))]
     mid = prices[idx] if idx < len(prices) else None
     b, a = num(m.get('bestBid')), num(m.get('bestAsk'))
@@ -66,7 +68,8 @@ def quote(m, idx):
         b, a = (None if a is None else round(1 - a, 4)), (None if b is None else round(1 - b, 4))
     if mid is None and b is not None and a is not None:
         mid = (a + b) / 2
-    return {'b': b, 'a': a, 'm': None if mid is None else round(mid, 4)}
+    mid_ = int(m['id']) if str(m.get('id') or '').isdigit() else None
+    return {'b': b, 'a': a, 'm': None if mid is None else round(mid, 4), 'id': mid_, 'o': idx}
 
 
 def live_quote(q):

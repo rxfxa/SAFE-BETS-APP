@@ -21,15 +21,20 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}/index.html`;
 const FX = fs.readFileSync(path.join(ROOT, 'tests/fixtures/pm-2026-11-18.json'), 'utf8');
 const DATA = fs.readFileSync(path.join(ROOT, 'tests/fixtures/data-2026-11-18.json'), 'utf8');
+// the fixture predates market ids on quotes; this copy gives every quote a synthetic Gamma id + outcome index, as polymarket_fetch.py now does
+const FXID = (() => { const d = JSON.parse(FX); let n = 9000000; const two = (a, b) => { const id = n++; if (a) Object.assign(a, { id, o: 0 }); if (b) Object.assign(b, { id, o: 1 }); };
+  for (const g of d.games) { if (g.ml.draw) { for (const k of ['home', 'away', 'draw']) if (g.ml[k]) Object.assign(g.ml[k], { id: n++, o: 0 }); } else two(g.ml.away, g.ml.home);
+    for (const x of g.spreads || []) two(x.home, x.away); for (const x of g.totals || []) two(x.over, x.under); for (const x of g.props || []) two(x.over, x.under); }
+  return JSON.stringify(d); })();
 let fails = 0;
 const check = (name, ok, info = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${info ? ' :: ' + info : ''}`); if (!ok) fails++; };
 const browser = await chromium.launch();
-async function openPage({ fixture = true, w = 390, h = 844 } = {}) {
+async function openPage({ fixture = true, w = 390, h = 844, ids = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h } }); const page = await ctx.newPage(); const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.clock.setFixedTime(new Date('2026-11-18T21:50:00Z'));
   await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA }));
-  await page.route('**/polymarket.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: fixture ? FX : JSON.stringify({ updated: '2026-11-18T21:00:00Z', games: [] }) }));
+  await page.route('**/polymarket.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: fixture ? (ids ? FXID : FX) : JSON.stringify({ updated: '2026-11-18T21:00:00Z', games: [] }) }));
   await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('plan')));
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__plan && window.__polymarket && window.__polymarket.LOAD === 'done' && window.__lottos && window.__lottos.LOAD === 'done', null, { timeout: 30000 });
@@ -108,6 +113,10 @@ try {
   await page.click(`[data-pl-leg="${coin.id}|0|0"]`); await page.waitForTimeout(150);
   const rep = await page.evaluate(() => [...document.querySelectorAll('.pl-report .pl-rep')].slice(0, 3).map(r => r.textContent.replace(/\s+/g, ' ').trim()));
   check('report: "SAFE 100% win rate 1/1 won", "COIN FLIP 0% win rate 0/1 won"', /SAFE\s*100% win rate\s*1\/1 won/.test(rep[0]) && /COIN FLIP\s*0% win rate\s*0\/1 won/.test(rep[1]), JSON.stringify(rep));
+  // bet script: legs from a snapshot without market ids can't be sent
+  await page.click('[data-pl-act="ticket|safe"]'); await page.waitForTimeout(150);
+  check('bet script: old snapshot without market ids is refused (no code shown)', !(await page.$('.pl-ticket')));
+  check('bet script: setup card explains the script, the --check run and the cap', await page.evaluate(() => { const t = (document.querySelector('.pl-script') || {}).textContent || ''; return /place_slip\.py --setup/.test(t) && /--check/.test(t) && /can't withdraw/.test(t) && /\$25/.test(t); }));
   // Polymarket connection
   await page.fill('#plPmAddr', 'not-an-address'); await page.click('[data-pl-pmsave]'); await page.waitForTimeout(150);
   check('connect: rejects something that isn\'t a wallet address', !(await page.evaluate(() => localStorage.getItem('fm2.plan.pmAddr'))));
@@ -119,6 +128,23 @@ try {
   check('360px: no horizontal scroll', (await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0);
   check('no console errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await ctx.close();
+  { // bet script code from a snapshot with market ids
+    const B = await openPage({ ids: true });
+    await B.page.click('[data-pl-act="ticket|safe"]'); await B.page.waitForSelector('.pl-card[data-tier="safe"] .pl-ticket textarea');
+    const code = await B.page.$eval('.pl-card[data-tier="safe"] .pl-ticket textarea', x => x.value);
+    const T = JSON.parse(Buffer.from(code.slice(5), 'base64url').toString('utf8'));
+    const want = await B.page.evaluate(() => { const P = window.__plan, S = P.state.built.safe; return { legs: S.legs.map(c => [c.pmId, c.pmO, Math.round(c.ask * 1000), c.kind === 'prop' ? c.over : null]), n: S.legs.length }; });
+    check('bet script: code is one line, starts SBT1., no keys or account data', /^SBT1\.[A-Za-z0-9_-]+$/.test(code) && code.length < 1200 && !/0x[0-9a-f]{40}/i.test(JSON.stringify(T)), `${code.length} chars`);
+    check('bet script: every leg carries its market id, side and the app\'s price', T.v === 1 && T.t === 'safe' && T.L.length === want.n && T.L.every((L, i) => L[0] === want.legs[i][0] && L[1] === want.legs[i][1] && L[2] === want.legs[i][2]) && T.s > 0 && T.x > 1, JSON.stringify(T).slice(0, 200));
+    check('bet script: a prop under buys the No side (outcome 1), an over buys Yes (0)', want.legs.filter(l => l[3] != null).every(l => l[1] === (l[3] ? 0 : 1)));
+    await B.page.click('[data-pl-act="ticket|b24"]'); await B.page.waitForSelector('.pl-card[data-tier="b24"] .pl-ticket textarea');
+    const big = await B.page.$eval('.pl-card[data-tier="b24"] .pl-ticket textarea', x => x.value);
+    check('bet script: a 24+ leg code still fits on one terminal line (under 1,024 characters)', big.length < 1024, `${big.length} chars`);
+    await B.page.click('[data-pl-act="reroll|safe"]'); await B.page.waitForTimeout(200);
+    check('bet script: a new mix hides the old code', !(await B.page.$('.pl-card[data-tier="safe"] .pl-ticket')));
+    check('bet script page: no console errors', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
+    await B.ctx.close();
+  }
   const e = await openPage({ fixture: false });
   check('no Polymarket legs: honest message; budget, report and Polymarket card still there', await e.page.evaluate(() => /No Polymarket legs/.test(document.querySelector('#main').textContent) && !!document.getElementById('plBudget') && !!document.querySelector('.pl-report') && !!document.querySelector('.pl-pm')));
   await e.ctx.close();

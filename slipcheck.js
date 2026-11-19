@@ -43,6 +43,8 @@ const rerender = () => { if (activeTab() === 'slipcheck') SB.render(); };
 function bookDec(s) { // odds exactly as printed on the slip -> decimal price, or null
   s = str(s, 24); if (!s) return null;
   if (/^(evens?|ev|even money)$/i.test(s)) return 2;
+  const ct = /^(\d+(?:\.\d+)?)\s*¢$/.exec(s); if (ct) { const x = parseFloat(ct[1]); return x > 0 && x < 100 ? 100 / x : null; } // Polymarket share price in cents
+  if (/^0?\.\d+$/.test(s)) { const x = parseFloat(s); return x > 0 && x < 1 ? 1 / x : null; } // share price as a fraction of $1
   const fmt = /^[+−-]\s*\d/.test(s) ? 'american' : /\d\s*\/\s*\d/.test(s) ? 'fractional' : (/^\d+[.,]\d+$/.test(s) && parseFloat(s.replace(',', '.')) < 30) ? 'decimal' : 'american';
   try { const d = SB.parseOdds(s.replace('−', '-'), fmt); return d && d > 1 ? d : null; } catch (e) { return null; }
 }
@@ -305,6 +307,7 @@ Reply with ONLY one JSON object:
 {"book": string|null, "betType": "parlay"|"single"|"sgp"|"teaser"|"other", "stake": number|null, "totalOdds": string|null (exactly as printed, e.g. "+650" or "7.50"), "payout": number|null (total return or to-win as printed),
  "legs": [{"sport": "nba"|"nfl"|"ncaaf"|"nhl"|"soccer"|"mlb"|"mma"|"other", "event": "Away Team @ Home Team or Team A vs Team B as printed", "market": "moneyline"|"spread"|"total"|"player_points"|"player_rebounds"|"player_assists"|"player_other"|"btts"|"correct_score"|"double_chance"|"draw"|"other", "selection": "the pick as printed", "team": string|null, "player": string|null, "side": "over"|"under"|null, "line": number|null, "odds": string|null (as printed), "confidence": number between 0 and 1}],
  "notes": "anything unclear, or empty"}
+It may be a Polymarket screenshot (one position, a combo/parlay, or the portfolio list). Then book = "Polymarket", every market (or combo leg) is a leg, selection = the outcome bought (Yes / No / a team), odds = the average price exactly as shown in cents (for example "63¢"), stake = the cost, payout = the "to win" or shares value if shown. A player market like "LeBron James: Points O/U 24.5" bought Yes is market player_points, side over, line 24.5; bought No is side under.
 If the image is not a bet slip, reply {"error": "not a bet slip"}.`;
 const ERR = { not_granted: 'The AI reader wasn\'t allowed, so enter the legs by hand below.', sampling_disabled: 'AI reading isn\'t available on this account. Enter the legs by hand.',
   images_unavailable: 'AI image reading isn\'t available here. Enter the legs by hand.', rate_limited: 'Too many AI requests right now. Try again in a minute, or enter the legs by hand.',
@@ -435,7 +438,7 @@ function results() {
 }
 function render(main) {
   const head = `<h2>Slip Check <small>bring a bet from any app</small></h2>
-    <div class="note sc-lead">Upload a screenshot of a bet slip from DraftKings, FanDuel, bet365, PrizePicks or any other app. The Safe Bets model compares the prices, grades every leg, gives you a straight verdict, and tracks the bet here with the rest of yours.</div>`;
+    <div class="note sc-lead">Upload a screenshot of a bet slip from Polymarket, DraftKings, FanDuel, bet365, PrizePicks or any other app. The Safe Bets model compares the prices, grades every leg, gives you a straight verdict, and tracks the bet here with the rest of yours.</div>`;
   main.innerHTML = head + uploadPanel() + editor() + results();
 }
 

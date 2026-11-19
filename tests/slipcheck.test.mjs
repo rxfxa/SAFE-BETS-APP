@@ -25,9 +25,12 @@ const check = (name, ok, info = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 // ---------- a canned reading built from the live board ----------
-const DATA = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+// a fixed slate: the feed of 2026-11-18 with the page clock pinned to that afternoon
+const NOW = Date.parse('2026-11-18T21:50:00Z');
+const DATA_TXT = fs.readFileSync(path.join(ROOT, 'tests/fixtures/data-2026-11-18.json'), 'utf8');
+const DATA = JSON.parse(DATA_TXT);
 const PROPS = JSON.parse(fs.readFileSync(path.join(ROOT, 'props.json'), 'utf8'));
-const soon = g => g.status === 'scheduled' && g.prob && Date.parse(g.start) > Date.now() + 3600e3;
+const soon = g => g.status === 'scheduled' && g.prob && Date.parse(g.start) > NOW + 3600e3;
 const nba = DATA.games.filter(g => g.sport === 'nba' && soon(g)).sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
 const soc = DATA.games.find(g => g.sport === 'soccer' && soon(g) && g.prob.draw != null);
 const pl = PROPS.players.find(p => p.stat === 'pts' && p.status === 'active' && nba.some(g => g.id === p.gid) && !nba.slice(0, 2).some(g => g.id === p.gid))
@@ -52,6 +55,8 @@ async function openPage({ stub = null, w = 390, h = 844 } = {}) {
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  await page.clock.setFixedTime(new Date(NOW));
+  await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA_TXT }));
   await page.addInitScript(([stub]) => {
     localStorage.setItem('fm2.tab', JSON.stringify('slipcheck'));
     if (!stub) return;

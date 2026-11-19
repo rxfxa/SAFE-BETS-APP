@@ -208,7 +208,7 @@ function simNBA(P,R,rec,ev){
   function poss(team,clk){const lead=team?a-h:h-a;const e=(team?eA:eH)*(1-C.REV*clamp(lead,-C.CAP,C.CAP)/C.CAP),k=e/C.BASE,u=R();
     const pts=u<C.P3*k?3:u<(C.P3+C.P2)*k?2:u<(C.P3+C.P2+C.P1)*k?1:0;
     if(team)a+=pts;else h+=pts;
-    if(ev){ev.steps.push({c:clk,h,a});if(pts)ev.log.push({i,c:clk,k:'pts',team,pts,h,a});}i++;}
+    if(ev){ev.steps.push({c:clk,h,a});if(pts)ev.log.push({i,c:clk,k:'pts',team,pts,h,a,who:ev.pick?ev.pick(team):null});}i++;}
   const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
   for(let qn=0;qn<4;qn++){const nq=Math.floor(pace/4)+(qn<pace%4?1:0),tot=2*nq;
     for(let j=0;j<tot;j++){poss(off,ev?'Q'+(qn+1)+' '+fmt(720*(1-(j+1)/tot)):'');off^=1;}
@@ -241,7 +241,7 @@ function simFB(P,R,rec,ev){
     else if(u<pTD+pFG+C.SAF){kind='saf';score(team^1,2);}
     else if(u<pTD+pFG+C.SAF+C.DTD){kind='dtd';score(team^1,7);}
     else kind=R()<.62?'punt':R()<.75?'to':'downs';
-    if(ev){ev.steps.push({c:clk,h,a});ev.log.push({i,c:clk,k:'drive',kind,team,h,a});}i++;
+    if(ev){ev.steps.push({c:clk,h,a});ev.log.push({i,c:clk,k:'drive',kind,team,h,a,who:ev.pick&&/^td/.test(kind)&&kind!=='dtd'?ev.pick(team):null});}i++;
     return kind;}
   const qclk=(half,idx,nd)=>{const f=(idx+1)/nd,q=half*2+(f<=.5?1:2),s=Math.round(900*(1-(f<=.5?f*2:(f-.5)*2)));return 'Q'+q+' '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
   for(let half=0;half<2;half++){const nd=nDrives();let team=half?rcv^1:rcv;
@@ -391,7 +391,7 @@ const BASE=(()=>{const m=new Map(),K='sb.simBase.'+MODELV;let t=null;
   return m;})();
 let PAR=null,BANK=null;   // last parlay / bankroll results
 const DBG={maxGap:0,clicksDuringRun:0,runs:0,worker:null,local:0};
-window.__sim={CORE,S,RUN,CACHE,BASE,DBG,get PAR(){return PAR},get BANK(){return BANK},get W(){return W},parAgree:R=>parAgree(R),liveCalc:(g,b,L)=>liveCalc(g,b,L),tsig:g=>tsig(g)};
+window.__sim={CORE,S,RUN,CACHE,BASE,DBG,scorerPools,pickWho,likelyScorers,get PAR(){return PAR},get BANK(){return BANK},get W(){return W},parAgree:R=>parAgree(R),liveCalc:(g,b,L)=>liveCalc(g,b,L),tsig:g=>tsig(g)};
 
 /* ---------- engine bridge ---------- */
 function gamesList(){return (SB.DATA.games||[]).filter(g=>SB.priced(g)&&SB.fit(g)).sort((a,b)=>SB.startMs(a)-SB.startMs(b));}
@@ -891,12 +891,46 @@ function ensureBase(g,view,cb){const k=tsig(g);let b=BASE.get(k);if(b)return b;
   runner.start({cmd:'calib',spec:specFor(g,{})},{done(r){RUN.active=false;BASE.set(k,r.base);if(cb)cb();else rerender();},
     error(m){RUN.active=false;W.loading=false;SB.toast('Could not calibrate this game: '+esc(m));rerender();}});
   return null;}
+/* ---------- who scores (watch view, play-by-play, and the most-likely list) ----------
+   NBA: scorers weighted by the lottos model's expected points (season averages, boosted when a teammate is out).
+   NFL: touchdown scorers weighted by season rushing + receiving TDs (firsttd model), players ruled out left out.
+   NHL: no player scoring data in the app yet, so the log and the list show teams only. */
+const NFL_DRIVES=11.4;  // average drives per NFL team (the mean of the drive-count table in the NFL simulator: 10·.2 + 11·.35 + 12·.3 + 13·.15)
+function scorerPools(g){
+  const T=[g.home,g.away];
+  if(g.sport==='nba'&&window.__lottos&&__lottos.teamModel)
+    return T.map(t=>{try{return (__lottos.teamModel(t.abbr).players||[]).filter(p=>!(p.w>0)&&p.mean>0).map(p=>({name:p.name,wt:p.mean,mean:p.mean}));}catch(e){return [];}});
+  if(g.sport==='nfl'&&window.__firsttd&&__firsttd.FT){const FT=__firsttd.FT,st=FT.status||{};
+    return T.map(t=>{const tm=FT.teams&&FT.teams[t.abbr];if(!tm)return [];
+      return (tm.players||[]).filter(p=>(p.rush||0)+(p.rec||0)>0&&(st[`${t.abbr}|${p.name}`]||{}).status!=='out').map(p=>({name:p.name,wt:(p.rush||0)+(p.rec||0)}));});}
+  return null;
+}
+function pickWho(pool){if(!pool||!pool.length)return null;const tot=pool.reduce((s,p)=>s+p.wt,0);let r=Math.random()*tot;for(const p of pool){r-=p.wt;if(r<=0)return p.name;}return pool[pool.length-1].name;}
+function phi(z){const t=1/(1+.3275911*Math.abs(z)/Math.SQRT2),y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-z*z/2);return z>=0?(1+y)/2:(1-y)/2;}
+/* NBA: each player's points ~ normal(expected share of his team's points, spread grows with the mean); the chance he has the most
+   points on his team is found by 6,000 simulated draws. Other sports: a touchdown is Poisson with ~0.1 TD per expected point. */
+function likelyScorers(g,P){
+  const pools=scorerPools(g);if(!pools||!P||!(P.g>0))return null;
+  const nba=g.sport==='nba',k=nba?1:NFL_DRIVES;  // NFL P.g is points per drive: scale by the average drive count
+  const E=[P.g*Math.exp(P.x)*k,P.g*Math.exp(-P.x)*k],out=[];
+  pools.forEach((pool,t)=>{if(!pool.length)return;const tot=pool.reduce((s,p)=>s+p.wt,0);
+    if(nba){const mu=pool.map(p=>p.wt/tot*E[t]),sd=mu.map(m=>2.2*Math.sqrt(Math.max(m,1))+1),top=new Array(pool.length).fill(0),N=6000;
+      const gauss=()=>Math.sqrt(-2*Math.log(Math.random()||1e-12))*Math.cos(2*Math.PI*Math.random());
+      for(let k=0;k<N;k++){let best=-Infinity,bi=0;for(let i=0;i<pool.length;i++){const v=mu[i]+sd[i]*gauss();if(v>best){best=v;bi=i;}}top[bi]++;}
+      pool.forEach((p,i)=>out.push({name:p.name,team:t,mu:mu[i],p20:1-phi((19.5-mu[i])/sd[i]),pTop:top[i]/N}));}
+    else pool.forEach(p=>{const lam=0.1*E[t]*p.wt/tot;out.push({name:p.name,team:t,lam,pAny:1-Math.exp(-lam)});});});
+  return {nba,rows:out.sort((a,b)=>nba?b.pTop-a.pTop:b.pAny-a.pAny)};
+}
+function likeHTML(g){if(g.sport==='nhl')return '<div class="note">No NHL player scoring data yet, so goals are logged by team only.</div>';
+  const L=W.likely;if(!L||W.gid!==g.id||!L.rows.length)return '';
+  return `<details class="sm-likely" open style="margin:10px 0"><summary>${L.nba?'Most likely to score the most points':'Most likely to score a touchdown'} <small>season stats × this game’s expected score</small></summary><div class="in">${L.rows.slice(0,8).map(r=>`<div class="sm-row"><div class="l"><b>${esc(r.name)} <span style="display:inline;color:var(--dim)">${esc(r.team?g.away.abbr:g.home.abbr)}</span></b><span>${L.nba?`≈${r.mu.toFixed(1)} pts · 20+ pts ${pcS(r.p20)}`:`≈${r.lam.toFixed(2)} TDs expected`}</span></div><span class="p">${pcS(L.nba?r.pTop:r.pAny)}<small>${L.nba?'top scorer':'anytime'}</small></span></div>`).join('')}</div><div class="note">Model estimates from season stats and this game’s expected score, not guarantees.</div></details>`;}
 function watchNew(){const g=curGame();if(!g)return;stopTimer();
   const base=ensureBase(g,'watch',()=>{W.loading=false;watchNew();});
   if(!base){if(!(RUN.active&&RUN.kind==='calib')){SB.toast('Finish or cancel the current run first.');return;}
     W.gid=g.id;W.ev=null;W.loading=true;W.playing=false;rerender();return;}
-  const P=CORE.applyWI(specFor(g,S.wi),base),ev={steps:[],log:[]},rec={};
+  const P=CORE.applyWI(specFor(g,S.wi),base),pools=scorerPools(g),ev={steps:[],log:[],pick:pools?(t=>pickWho(pools[t])):null},rec={};
   CORE.simOne(P,CORE.rng((Date.now()^(++W.n*2654435761))>>>0),rec,ev);
+  W.likely=likelyScorers(g,P);
   Object.assign(W,{gid:g.id,ev,pos:0,playing:true,flash:-1,loading:false,wk:wiKey(S.wi)});rerender();watchLoop();}
 function watchLoop(){stopTimer();if(!W.playing||!W.ev)return;const g=SB.gameById(W.gid);if(!g){W.playing=false;return;}
   const last=W.ev.steps.length-1;if(W.pos>=last){W.playing=false;paintWatch();return;}
@@ -914,11 +948,11 @@ function logText(g,e){const T=t=>t?g.away.abbr:g.home.abbr,sc=` <span style="col
     case 'so':return `🎯 Shootout: ${esc(g.home.abbr)} ${e.r0?'✅':'❌'} · ${esc(g.away.abbr)} ${e.r1?'✅':'❌'} <span style="color:var(--dim)">(${e.sh}–${e.sa})</span>`;
     case 'sow':return `🏆 <b>${esc(T(e.team))} win the shootout</b>${sc}`;
     case 'ft':return `🏁 <b>${esc(g.sport==='soccer'?'Full-time':e.c)}</b>${sc}`;
-    case 'pts':return `🏀 ${esc(T(e.team))} ${e.pts===3?'<b>3-pointer</b>':e.pts===2?'2 points':'free throw'}${sc}`;
+    case 'pts':return `🏀 ${esc(T(e.team))} ${e.pts===3?'<b>3-pointer</b>':e.pts===2?'2 points':'free throw'}${e.who?' · <b>'+esc(e.who)+'</b>':''}${sc}`;
     case 'kneel':return `🧎 ${esc(T(e.team))} take a knee${sc}`;
     case 'otp':return `🏈 ${esc(T(e.team))} OT possession${sc}`;
     case 'drive':{const D={td1:'🏈 <b>Touchdown</b> + extra point',td0:'🏈 <b>Touchdown</b>, extra point missed',td2:'🏈 <b>Touchdown</b> + 2-point conversion',td2x:'🏈 <b>Touchdown</b>, 2-point try fails',fg:'🥅 <b>Field goal</b>',saf:'🛡️ <b>Safety</b> (defense +2)',dtd:'↩️ <b>Defensive touchdown</b>',punt:'Punt',to:'Turnover',downs:'Turnover on downs'};
-      return `${esc(T(e.team))} drive: ${D[e.kind]||esc(e.kind)}${sc}`;}}
+      return `${esc(T(e.team))} drive: ${D[e.kind]||esc(e.kind)}${e.who?' · <b>'+esc(e.who)+'</b>':''}${sc}`;}}
   return esc(e.k);}
 function flowSVG(g){const st=W.ev.steps,n=st.length;if(n<2)return '';const pos=W.pos,Wd=340,H=70,pl=4,pr=4;let mx=1;for(const s of st)mx=Math.max(mx,Math.abs(s.h-s.a));
   const X=i=>pl+(Wd-pl-pr)*i/(n-1),Y=d=>H/2-(H/2-6)*d/mx;
@@ -938,6 +972,7 @@ function watchBody(g){
     <div class="sm-ctl"><button class="btn" data-a="wplay" aria-label="${W.playing?'Pause':'Play'}">${W.playing?'⏸ Pause':ended?'🔁 Replay':'▶ Play'}</button>
       <div class="seg" role="group" aria-label="Playback speed">${[1,4,16].map(s=>`<button data-a="wspeed" data-s="${s}" class="${W.speed===s?'on':''}" aria-pressed="${W.speed===s}">${s}×</button>`).join('')}</div>
       <button class="btn ghost" data-a="wskip" ${ended?'disabled':''}>⏭ Skip to end</button><button class="btn ghost" data-a="wnew">🎲 New game</button></div>
+    ${likeHTML(g)}
     <div class="sm-tk" id="smTk">${log.map((e,i)=>`<div class="${/goal|ft|sow|ht/.test(e.k)||e.kind&&e.kind.startsWith('td')?'hl':''}"><b>${esc(e.k==='ft'||e.k==='ht'||e.k==='per'?'':e.c)}</b><span>${logText(g,e)}</span></div>`).join('')||'<div><span style="color:var(--dim)">Kick-off…</span></div>'}</div>`;}
 function paintWatch(){const b=document.getElementById('smWBody');const g=SB.gameById(W.gid);if(!b||!g||g.id!==S.gid)return;b.innerHTML=watchBody(g);}
 

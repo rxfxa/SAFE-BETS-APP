@@ -162,6 +162,29 @@ def main():
         g['props'] = sorted(g['props'], key=lambda p: (-p['v'], p['over']['a'] - p['over']['b']))[:(400 if g['sport'] == 'nba' else 40)]
         g['volume'], g['liquidity'] = round(g['volume']), round(g['liquidity'])
         keep.append(g)
+    # Polymarket drops a game once it starts, so an hourly snapshot loses today's games at tip-off. Keep games that
+    # started in the last 36 hours from the previous snapshot (marked stale, with the time they were last seen) so
+    # Slip Check can still match them and show their last prices and props.
+    try:
+        with open(out) as f:
+            prev = json.load(f)
+    except (OSError, ValueError):
+        prev = {'games': []}
+    have = {g['slug'] for g in keep}
+    for g in prev.get('games', []):
+        if g.get('slug') in have:
+            continue
+        try:
+            st = datetime.fromisoformat(str(g.get('start', '')).replace('Z', '+00:00'))
+        except ValueError:
+            continue
+        if now - timedelta(hours=36) <= st <= now:
+            g['stale'] = True
+            g.setdefault('seen', prev.get('updated'))
+            keep.append(g)
+    for g in keep:
+        if not g.get('stale'):
+            g['seen'] = now.strftime('%Y-%m-%dT%H:%M:%SZ')
     keep.sort(key=lambda g: g['start'])
     data = {'updated': now.strftime('%Y-%m-%dT%H:%M:%SZ'), 'source': 'Polymarket Gamma API (gamma-api.polymarket.com)', 'games': keep}
     with open(out, 'w') as f:

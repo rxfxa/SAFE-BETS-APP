@@ -135,6 +135,28 @@ function findRotation(name) { // NBA rotation player via lottos.js (team model),
   for (const abbr of Object.keys(L.ROLES.teams || {})) { const m = L.teamModel(abbr); const p = m.players.find(x => nameKey(x.name) === k); if (p) return p; }
   return null;
 }
+// Polymarket's own board: the snapshot keeps a game for a while after it starts, so its last prices stay available
+function pmGameFor(g) {
+  const P = window.__polymarket; if (!P || !P.PM) return null;
+  for (const pg of P.PM.games || []) { try { const m = P.matchOf(pg); if (m && m.g && m.g.id === g.id) return { pg, swap: !!m.swap }; } catch (e) { /* skip */ } }
+  return null;
+}
+function pmPriceFor(g, side) { // side 'H' or 'A' (our game's sides): the last Polymarket moneyline price we have for that team
+  const m = pmGameFor(g); if (!m || !m.pg.ml) return null;
+  const key = (side === 'H') !== m.swap ? 'home' : 'away', q = m.pg.ml[key];
+  return q && q.m != null ? { price: q.m, seen: m.pg.seen || null, stale: !!m.pg.stale } : null;
+}
+function findPM(leg) { // a Polymarket game named in this leg (for the message when our feed doesn't have the game)
+  const P = window.__polymarket; if (!P || !P.PM) return null;
+  const text = N(`${leg.event} ${leg.pick} ${leg.sel || ''}`);
+  return (P.PM.games || []).find(pg => teamScore(pg.home, text) + teamScore(pg.away, text) >= 4) || null;
+}
+function pmSeenText(x) { return x.stale && x.seen ? `as of ${new Date(x.seen).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} before tip-off` : 'live'; }
+function startedWhy(g, key) {
+  const m = /^SC:ml:([HA])$/.exec(key || ''), pm = m ? pmPriceFor(g, m[1]) : null;
+  if (pm) return `Started. Last Polymarket price for this team: ${Math.round(pm.price * 100)}¢ (${pmSeenText(pm)}). No live price here, so it can't be scored yet.`;
+  return 'Game already started: no pre-game price, and no Polymarket price saved for it';
+}
 function findGame(leg, teamHint) {
   const text = N(`${leg.event} ${leg.pick} ${leg.sel || ''}`), sport = SPORT_ALIAS[N(leg.sport)] || null;
   let best = null, bs = 0;
@@ -167,7 +189,7 @@ function matchLeg(leg) {
     if (!out.key) { out.g = out.g || findGame(leg); out.status = out.g ? 'game' : 'none'; return out; }
   } else {
     const g = findGame(leg); out.g = g;
-    if (!g) { out.why = 'Game not found on our board'; return out; }
+    if (!g) { out.why = findPM(leg) ? 'On Polymarket, but not in our games feed yet. Try again after the feed refreshes.' : 'Game not found in our games feed or on Polymarket'; return out; }
     const pick = `${leg.pick} ${leg.sel || ''}`, s = sideOf(g, pick);
     if (mk === 'moneyline') { if (/\b(draw|tie)\b/i.test(pick) && g.sport === 'soccer') out.key = 'SC:ml:D'; else if (s) out.key = `SC:ml:${s}`; else out.why = 'Which team?'; }
     else if (mk === 'draw') out.key = g.sport === 'soccer' ? 'SC:ml:D' : null;
@@ -182,7 +204,7 @@ function matchLeg(leg) {
   }
   out.p = out.g ? SB.p1(out.g, out.key) : 0;
   out.label = SB.legLabel({ gid: out.g.id, key: out.key });
-  if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key)) { out.status = 'game'; out.why = SB.started(out.g) ? 'Game already started: no pre-game price' : 'No price for this game yet'; return out; }
+  if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key)) { out.status = 'game'; out.why = SB.started(out.g) ? startedWhy(out.g, out.key) : 'No price for this game yet'; return out; }
   if (!(out.p > 0)) { out.status = 'game'; out.why = /^L:/.test(out.key) ? 'Player is listed out or not in the rotation' : 'Could not price this line'; return out; }
   out.status = 'matched';
   return out;

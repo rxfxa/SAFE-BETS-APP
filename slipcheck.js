@@ -171,14 +171,25 @@ function findGame(leg, teamHint) {
   return bs >= 2 ? best : null;
 }
 function sideOf(g, text) { const t = N(text); const h = teamScore(g.home, t), a = teamScore(g.away, t); return h > a ? 'H' : a > h ? 'A' : null; }
-function bookLeg(out, g, leg, mk, side, line, dec) { // a leg priced from the odds on the slip
+function bookLeg(out, g, leg, mk, side, line, dec, pOverride) { // a leg priced from the odds on the slip, or from the player model
   out.g = g; out.bookOnly = true;
   const sideTxt = side === 'O' ? 'over' : side === 'U' ? 'under' : '';
-  out.label = [str(leg.pick), sideTxt, line != null ? String(line) : '', marketName(mk)].filter(Boolean).join(' ');
+  out.label = [str(leg.pick), sideTxt, line != null ? String(line) : '', mk === 'player_other' ? 'prop' : marketName(mk)].filter(Boolean).join(' ');
   out.key = `B:${mk}:${side || '-'}:${line != null ? line : '-'}:${N(str(leg.pick)).replace(/\s+/g, '-')}`;
-  out.p = Math.min(0.999, 1 / dec);
+  if (mk === 'moneyline') { const sd = sideOf(g, `${str(leg.pick)} ${str(leg.sel)}`); if (sd) out.gameKey = `SC:ml:${sd}`; }
+  out.p = pOverride != null ? pOverride : Math.min(0.999, 1 / dec);
   out.status = 'matched';
   return out;
+}
+// chance a player leg hits from the player model alone (yards: normal; touchdown: Poisson), or null when there is no model
+function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
+function playerProb(leg, g, side, line) {
+  const key = `B:${leg.market}:${side || '-'}:${line != null ? line : 0}:x`;
+  if (line == null && leg.market !== 'anytime_td') return null;  // a yards leg needs its line
+  const pm = playerModel({ src: leg, g, key }); if (!pm) return null;
+  if (pm.td) return Math.min(0.999, 1 - Math.exp(-pm.mean));
+  const z = (pm.line - pm.mean) / Math.max(1e-6, pm.sd), underCdf = 0.5 * (1 + erf(z / Math.SQRT2));
+  return Math.min(0.999, Math.max(0.001, pm.over ? 1 - underCdf : underCdf));
 }
 function matchLeg(leg) {
   const out = { status: 'none', g: null, key: null, label: '', p: 0, why: '' };
@@ -198,6 +209,8 @@ function matchLeg(leg) {
     } else out.why = mk === 'player_other' ? 'We only price points, rebounds and assists' : !side ? 'Pick over or under' : line == null ? 'Add the line' : 'Player not in our props';
     if (!out.key) {
       const g = out.g || findGame(leg), dec = bookDec(leg.odds);
+      const pmv = g ? playerProb(leg, g, side, line) : null;
+      if (g && pmv != null) return bookLeg(out, g, leg, mk, side, line, dec, pmv);  // no odds needed: our player model prices it
       if (g && dec) return bookLeg(out, g, leg, mk, side, line, dec);  // no model: the book's price on the slip prices it
       out.g = g; out.status = g ? 'game' : 'none';
       if (g && !dec && (BOOK_PROP.has(mk) || mk === 'player_other')) out.why = 'No model for this prop. Type the book\'s odds (e.g. +150) to price it.';
@@ -220,6 +233,12 @@ function matchLeg(leg) {
   }
   out.p = out.g ? SB.p1(out.g, out.key) : 0;
   out.label = SB.legLabel({ gid: out.g.id, key: out.key });
+  if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key) && mk === 'moneyline' && pmPriceFor(out.g, sideOf(out.g, `${leg.pick} ${leg.sel || ''}`))) {
+    const sd = sideOf(out.g, `${leg.pick} ${leg.sel || ''}`), pm = pmPriceFor(out.g, sd);
+    const r0 = bookLeg(out, out.g, leg, mk, null, null, null, pm.price); r0.gameKey = `SC:ml:${sd}`;
+    r0.why = pm.stale ? `Priced by Polymarket (${pmSeenText(pm)}); the feed hasn't priced this game yet.` : 'Priced by Polymarket; the feed hasn\'t priced this game yet.';
+    return r0;
+  }
   if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key)) { out.status = 'game'; out.why = SB.started(out.g) ? startedWhy(out.g, out.key) : 'No price for this game yet'; return out; }
   if (!(out.p > 0)) { out.status = 'game'; out.why = /^L:/.test(out.key) ? 'Player is listed out or not in the rotation' : 'Could not price this line'; return out; }
   out.status = 'matched';
@@ -444,35 +463,81 @@ function editor() {
 }
 // ---------------- simulate the slip: 500,000 runs ----------------
 const SIM_RUNS = 500000, MARGIN_SPORTS = new Set(['nba', 'nfl', 'ncaaf']);
-// Each run plays the game once: a leg that has a game model (moneyline, spread, total in the margin sports) is read from that run,
-// so legs from the same game move together. Legs with no game model (player props, book prices, soccer and NHL) are drawn at their
-// own chance each run. Unpriced legs aren't in the run at all.
+const PSTAT = { passing_yards: 'passing_yards', rushing_yards: 'rushing_yards', receiving_yards: 'receiving_yards', anytime_td: 'anytime_td' };
+let PS = null;  // playerstats.json: per-game averages and each team's defence (see the file's note)
+fetch('playerstats.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null).then(d => { PS = d; });
+// A player leg's model: his average, scaled by the opponent's defence against that stat (league average = 1) and by the game's total
+// in each run. Returns null when the player or the stat isn't in the file.
+function playerModel(r) {
+  if (!PS || !PS.players || !r.src) return null;
+  const k = nameKey(str(r.src.pick)), hit = Object.entries(PS.players).find(([n]) => nameKey(n) === k);
+  // "Other player prop" takes the stat from the player's entry; the named markets must match it
+  const mk = r.src.market === 'player_other' ? (hit && hit[1].stat) : r.src.market;
+  if (!hit || !PSTAT[mk] || hit[1].stat !== mk) return null;
+  const [name, p] = hit, opp = p.team === r.g.home.abbr ? r.g.away.abbr : r.g.home.abbr, D = PS.defense && PS.defense[opp], L = PS.league;
+  if (!D || !L) return null;
+  const passF = D.passYdsAllowed / L.passYds, rushF = D.rushYdsAllowed / L.rushYds;
+  const dfac = p.stat === 'rushing_yards' ? rushF : p.stat === 'anytime_td' ? (passF + rushF) / 2 : passF;  // defence used for each stat
+  const parts = str(r.key).split(':'), side = parts[2], line = parseFloat(parts[3]);
+  return { name, mean: p.mean * dfac, sd: p.sd, td: p.stat === 'anytime_td', over: side !== 'U', line: isFinite(line) ? line : 0, opp, dfac };
+}
+// the game model: from the feed's prices, or from Polymarket's moneyline and total when the feed hasn't priced the game yet
+function simModelGame(g, N) {
+  if (g.prob) return SB.simGame(g, N);
+  const m = pmGameFor(g); if (!m || !m.pg.ml || !m.pg.ml.home || !m.pg.ml.away) return null;
+  const hq = m.swap ? m.pg.ml.away : m.pg.ml.home, aq = m.swap ? m.pg.ml.home : m.pg.ml.away;
+  if (!(hq.m > 0) || !(aq.m > 0)) return null;
+  const tot = (m.pg.totals || []).slice().sort((x, y) => (y.v || 0) - (x.v || 0))[0];
+  return SB.simGame({ ...g, prob: { home: hq.m, away: aq.m }, total: tot && tot.line > 0 ? tot.line : undefined }, N);
+}
+// Each run plays the game once: a leg with a game model (moneyline, spread, total in the margin sports) is read from that run,
+// so legs from the same game move together. A player leg with a model is simulated from his average, the opponent's defence and that
+// run's game total. Other legs (book prices, soccer, NHL) are drawn at their own chance each run. Unpriced legs aren't in the run.
 function simulateSlip(A, N = SIM_RUNS) {
   const legs = (A.M || []).filter(r => r.g);
   if (!legs.length) return null;
-  const games = new Map();
-  for (const r of legs) {
-    if (!(MARGIN_SPORTS.has(r.g.sport) && /^SC:(ml|sp|tot):/.test(r.key))) continue;
-    if (!games.has(r.g.id)) games.set(r.g.id, { S: SB.simGame(r.g, N), legs: [], fns: [] });
-    const G = games.get(r.g.id); G.legs.push(r); G.fns.push(scCore(r.key));
+  const games = new Map(), gameOf = r => (MARGIN_SPORTS.has(r.g.sport) ? games.get(r.g.id) || null : null);
+  const pms = legs.map(r => (MARGIN_SPORTS.has(r.g.sport) && !/^SC:/.test(r.key) ? playerModel(r) : null));
+  for (let k = 0; k < legs.length; k++) {
+    const r = legs[k], gk = r.gameKey || r.key, isGame = MARGIN_SPORTS.has(r.g.sport) && /^SC:(ml|sp|tot):/.test(gk);
+    if (!(isGame || pms[k])) continue;
+    if (!games.has(r.g.id)) { const S = simModelGame(r.g, N); games.set(r.g.id, S ? { S, legs: [], fns: [] } : null); }
+    const G = games.get(r.g.id);
+    if (G && isGame) { G.legs.push(r); G.fns.push(scCore(gk)); }
   }
-  const meta = legs.map(r => { const G = games.get(r.g.id); const j = G ? G.legs.indexOf(r) : -1; return j >= 0 ? { S: G.S, f: G.fns[j] } : null; });
+  const meta = legs.map((r, k) => {
+    const G = gameOf(r);
+    if (G && G.legs.includes(r)) return { type: 'game', S: G.S, f: G.fns[G.legs.indexOf(r)] };
+    if (G && pms[k]) return { type: 'player', S: G.S, pm: pms[k], avgT: G.S.tt.reduce((x, y) => x + y, 0) / N };
+    if (pms[k]) return { type: 'player', S: null, pm: pms[k], avgT: 1 };  // the game has no model: no game-total swings
+    return null;
+  });
   const rnd = SB.rng(0x51ab + legs.length * 7919), legHits = new Array(legs.length).fill(0);
+  const gauss = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd());
   let hits = 0;
   for (let i = 0; i < N; i++) {
     let ok = true;
     for (let k = 0; k < legs.length; k++) {
       const mt = meta[k]; let pass;
-      if (mt) { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
-      else pass = rnd() < legs[k].p;
+      if (mt && mt.type === 'game') { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
+      else if (mt && mt.type === 'player') {
+        const pm = mt.pm, scale = mt.S ? mt.S.tt[i] / mt.avgT : 1;   // this run's game total relative to the average game
+        if (pm.td) pass = rnd() < 1 - Math.exp(-pm.mean * scale);
+        else { const v = Math.max(0, pm.mean * scale + pm.sd * gauss()); pass = pm.over ? v > pm.line : v < pm.line; }
+      } else pass = rnd() < legs[k].p;
       if (pass) legHits[k]++; else ok = false;
     }
     if (ok) hits++;
   }
-  const rate = hits / N;
+  const rate = hits / N, simmed = [...games.values()].filter(Boolean).length;
   return { N, hits, rate, ci: 1.96 * Math.sqrt(rate * (1 - rate) / N), sig: A.rows.map(r => r.text).join('|'),
-    joint: A.p, book: A.decCmp ? 1 / A.decCmp : null, gamesSimmed: games.size, unpriced: (A.U || []).length,
-    legs: legs.map((r, k) => ({ label: r.label, rate: legHits[k] / N, how: meta[k] ? 'game simulation' : 'drawn at its own chance (no game model)' })) };
+    joint: A.p, book: A.decCmp ? 1 / A.decCmp : null, gamesSimmed: simmed, unpriced: (A.U || []).length,
+    legs: legs.map((r, k) => {
+      const mt = meta[k];
+      const how = !mt ? 'drawn at its own chance (no model)' : mt.type === 'game' ? 'game simulation'
+        : `${!mt.S ? 'no game model yet · ' : ''}${mt.pm.name}: average ${mt.pm.mean.toFixed(1)}${mt.pm.td ? ' TDs' : ' yds'} vs ${mt.pm.opp} (${Math.round(mt.pm.dfac * 100)}% of league average defence)`;
+      return { label: r.label, rate: legHits[k] / N, how };
+    }) };
 }
 function simBlock(A) {
   const sig = A.rows.map(r => r.text).join('|'), R = st.simRes && st.simRes.sig === sig ? st.simRes : null;
@@ -638,5 +703,5 @@ document.head.appendChild(css);
 const TAB = { key: 'slipcheck', label: '📸 Slip Check', after: 'mine', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="slipcheck"]')) SB.registerTab(TAB); }, 0));
-window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, PROMPT, get state() { return st; }, get ai() { return aiState; } };
+window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, playerProb, setPlayerStats: d => { PS = d; }, PROMPT, get state() { return st; }, get ai() { return aiState; } };
 })();

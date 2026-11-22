@@ -1,0 +1,59 @@
+{
+ "updated": "2026-11-22",
+ "note": "Per-game averages and opponent defence for the Slip Check player model. Estimates from search results that disagree and are partly out of date: check NFL.com game logs before relying on them.",
+ "league": {
+  "passYds": 235,
+  "rushYds": 115,
+  "recYds": 235,
+  "note": "approximate league average per team per game, assumed"
+ },
+ "defense": {
+  "MIN": {
+   "passYdsAllowed": 173.2,
+   "rushYdsAllowed": 86.6,
+   "source": "weekly-refreshed team table (passing 3rd fewest, rushing ~5th)"
+  },
+  "SF": {
+   "passYdsAllowed": 211.0,
+   "rushYdsAllowed": 80.9,
+   "source": "Legion Report 49ers defensive stats (date not shown)"
+  }
+ },
+ "players": {
+  "Brock Purdy": {
+   "team": "SF",
+   "stat": "passing_yards",
+   "mean": 245,
+   "sd": 65,
+   "source": "about 252/game over 4 games (betting site); 263/game over 3 (CBS Sports)"
+  },
+  "Kaelon Black": {
+   "team": "SF",
+   "stat": "rushing_yards",
+   "mean": 24,
+   "sd": 16,
+   "source": "ESPN/NBC game notes: 65, 25, 17, 13, 34 in recent games; role shrank with McCaffrey back"
+  },
+  "George Kittle": {
+   "team": "SF",
+   "stat": "receiving_yards",
+   "mean": 56,
+   "sd": 28,
+   "source": "44 catches, 557 yards this season (NFL.com/Field Level Media)"
+  },
+  "Justin Jefferson": {
+   "team": "MIN",
+   "stat": "receiving_yards",
+   "mean": 52,
+   "sd": 26,
+   "source": "career-low 56.1/game through 8 games (CBS); 92, 55, 32 in first three games (ESPN)"
+  },
+  "Christian McCaffrey": {
+   "team": "SF",
+   "stat": "anytime_td",
+   "mean": 0.85,
+   "sd": 0,
+   "source": "10 rushing TDs this season (Field Level Media), shrunk toward one per game"
+  }
+ }
+}

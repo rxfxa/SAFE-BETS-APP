@@ -55,7 +55,7 @@ try {
     const { ctx, page, errors } = await open({ tab: 'upsets', ready: "!/Loading Polymarket/.test(document.querySelector('#main').textContent) && document.getElementById('upLegs')" });
     const dogs = () => page.evaluate(() => {
       const G = __polymarket.PM.games, bad = [], n = { up: 0 };
-      for (const el of document.querySelectorAll('#main .leg')) {
+      for (const el of document.querySelectorAll('#upMain .leg, #upForm .leg')) {  // the upset cards (close-game edge legs can be slight favourites)
         const label = el.querySelector('b').textContent, m = /^(.*) to beat (.*)$/.exec(label); if (!m) continue; n.up++;
         const pg = G.find(g => (g.home.name === m[1] && g.away.name === m[2]) || (g.away.name === m[1] && g.home.name === m[2]));
         const me = pg.home.name === m[1] ? pg.ml.home : pg.ml.away, other = pg.home.name === m[1] ? pg.ml.away : pg.ml.home;

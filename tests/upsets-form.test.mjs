@@ -36,6 +36,10 @@ const FORM = { updated: '2026-11-20T08:00:00Z', teams: [
   team(B.g[B.fav].name, B.g.sport, { winStreak: 4, unbeaten: 4, last5: 'L W W W W', games: [{ date: '2026-11-09', opp: 'Opp x', result: 'L', score: '90-100', oppPos: 2, oppOf: 15 }, ...g5([14, 12, 15, 3])], soft: true, vsBottom: 3, runKnown: 4 }),
   team(Cg.g[Cg.dog].name, Cg.g.sport, { winStreak: 5, unbeaten: 5, last5: 'W W W W W', confidence: 'partial' }),
 ] };
+// two close games (no side over 62%) for the edge section: away team short-handed -> home pick; home team short -> away pick
+const closeG = PMJ.games.filter(g => !g.stale && g.sport !== 'soccer' && Date.parse(g.start) > NOW && Date.parse(g.start) - NOW <= 48 * 3600e3 && g.ml && g.ml.home && g.ml.away && g.ml.home.a != null && g.ml.away.a != null && Math.max(g.ml.home.m, g.ml.away.m) <= .62 && Math.min(g.ml.home.m, g.ml.away.m) >= .38).slice(0, 2);
+const inj = (g, side, names) => names.map(n => ({ sport: g.sport, team: g[side].abbr, teamName: 'Test ' + g[side].name, player: n, status: 'out', injury: 'x', updated: '2026-11-20' }));
+const INJ = { updated: '2026-11-20T06:00:00Z', injuries: [...inj(closeG[0], 'away', ['Player A1', 'Player A2']), ...inj(closeG[1], 'home', ['Player H1', 'Player H2', 'Player H3'])] };
 const browser = await chromium.launch();
 const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
 const errors = [];
@@ -43,6 +47,7 @@ page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 await page.clock.setFixedTime(new Date(NOW));
 await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA }));
 await page.route('**/polymarket.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PMJ) }));
+await page.route('**/injuries.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(INJ) }));
 await page.route('**/form.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FORM) }));
 await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('upsets')));
 try {
@@ -58,6 +63,17 @@ try {
   check('streak check marks the soft run and lists who the wins came against', /Soft run/.test(txt) && /Opp 1 \(12th of 15\)/.test(txt) && /3 of the 4 wins we could place came against bottom-half sides/.test(txt));
   check('a team not confirmed by a second source is marked ?', /title="not confirmed by a second source"/.test(await page.innerHTML('#main')));
   check('the page never says a loss is "due" (only that it is not)', !/loss is due|due for a loss/i.test(txt.replace(/doesn't make a loss due/g, '')));
+  // close games with an edge
+  check('fixture has 2 close games', closeG.length === 2, closeG.map(g => g.slug).join(','));
+  const E = await page.evaluate(() => __upsets.edgeLegs().map(l => ({ game: l.game, team: l.team, why: l.edge.why.join(' · '), mid: l.mid, sport: l.sport })));
+  const e0 = E.find(x => x.game === closeG[0].slug), e1 = E.find(x => x.game === closeG[1].slug);
+  check('away side missing 2 players: the home side is the pick, with both reasons', e0 && e0.team === closeG[0].home.name && /at home/.test(e0.why) && /missing Player A1 \(out\), Player A2 \(out\)/.test(e0.why), JSON.stringify(e0));
+  check('home side missing 3 players: the away side is the pick despite home court', e1 && e1.team === closeG[1].away.name && !/at home/.test(e1.why) && /missing Player H1/.test(e1.why), JSON.stringify(e1));
+  check('every edge pick is a close game (2-way: 38-62%; soccer: under 50%)', E.length > 0 && E.every(x => x.sport === 'soccer' ? x.mid <= .5 : x.mid >= .38 && x.mid <= .62), JSON.stringify(E.map(x => x.sport + ' ' + x.mid)));
+  check('the section is on the page with its own parlay and an honest note', /Close games with an edge/.test(txt) && /these are reasons, not a lock/.test(txt) && (await page.locator('#upEdge').count()) === 1);
+  await page.click('[data-up-sim="upEdge"]');
+  await page.waitForFunction(() => /500,000 runs/.test((document.querySelector('[data-up-out="upEdge"]') || {}).textContent || ''), null, { timeout: 30000 });
+  check('the edge parlay simulates 500,000 runs', await page.evaluate(() => __upsets.SIMS.upEdge && __upsets.SIMS.upEdge.mkt.hits >= 0 && __upsets.N_SIM === 500000));
   // 500,000 runs on the main parlay
   const mids = await page.$$eval('#upMain .leg .legp', xs => xs.map(x => parseFloat(x.textContent) / 100));
   await page.click('[data-up-sim="upMain"]');

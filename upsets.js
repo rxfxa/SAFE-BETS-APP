@@ -21,6 +21,26 @@
     if (d && Array.isArray(d.teams)) { FORM = { ...d, by: new Map(d.teams.map(t => [t.sport + '|' + nk(t.name), t])) }; if (document.querySelector('#tabs [data-t="upsets"].on')) SB.render(); }
   });
   loadForm();
+  // injury report (injuries.json, the same file the Injuries tab reads), matched to a board team by code or name
+  let INJ = null;
+  const loadInj = () => fetch('injuries.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null).then(d => { if (d && Array.isArray(d.injuries)) INJ = d; });
+  loadInj();
+  const W_INJ = { out: 1, doubtful: .75, questionable: .25, 'day-to-day': .25 };
+  function injOf(sport, t) {
+    if (!INJ) return [];
+    const a = String(t.abbr || '').toUpperCase(), n = nk(t.name);
+    return INJ.injuries.filter(e => e && e.sport === sport && W_INJ[e.status] != null && (e.team === a || (n && (nk(e.teamName).endsWith(n) || n.endsWith(nk(e.teamName))))));
+  }
+  // what a side is missing: NBA = points a game (season averages via lottos.js's team model), else a weighted head count
+  function missing(sport, t) {
+    const E = injOf(sport, t); if (!E.length) return { w: 0, list: [], pts: null };
+    let pts = null;
+    if (sport === 'nba' && window.__lottos && __lottos.teamModel) {
+      try { const m = __lottos.teamModel(t.abbr); if (m && m.absent > 0) pts = m.absent; } catch (e) {}
+    }
+    const w = pts != null ? Math.min(3, pts / 10) : Math.min(2, E.reduce((s, e) => s + .5 * W_INJ[e.status], 0));
+    return { w, pts, list: E.filter(e => e.status === 'out' || e.status === 'doubtful').map(e => `${e.player} (${e.status})`) };
+  }
   const formOf = (sport, name) => (FORM && FORM.by.get(sport + '|' + nk(name))) || null;
   const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
   const L5 = f => (f && f.last5 ? f.last5.trim().split(/\s+/).map(r => `<i class="f5 f5${r === 'W' ? 'w' : r === 'D' ? 'd' : 'l'}">${esc(r === 'OTL' ? 'OT' : r)}</i>`).join('') : '');
@@ -120,10 +140,10 @@
     const sports = [...new Set(legs.map(l => l.sport))];
     return `<div class="pc" id="${id}"><div class="pchead"><span class="pctitle">${esc(title || `${legs.length}-leg upset parlay`)}</span><span class="hit h-lo">${PP(prob)} market chance</span></div>
       <div class="why">${sports.length} sport${sports.length === 1 ? '' : 's'} · one leg per game${sub ? ' · ' + esc(sub) : ''}</div>
-      <div style="margin:8px 0">${legs.map((l, i) => `<div class="leg"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : 'underdog'} · ${C(l.ask)} to buy${l.model != null ? ` · our model ${P(l.model)}` : ''} · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span>
+      <div style="margin:8px 0">${legs.map((l, i) => `<div class="leg"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : l.kind === 'edge' ? 'close game' : 'underdog'} · ${C(l.ask)} to buy${l.model != null ? ` · our model ${P(l.model)}` : ''} · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span>
         ${l.fd || l.ff ? `<div class="fbox2">${formLine(l.team, l.fd, l.sport)}${formLine(l.vs, l.ff, l.sport)}${l.edge && l.edge.why.length ? `<span class="fwhy">${esc(l.edge.why.join(' · '))}</span>` : ''}</div>` : ''}</div><span class="legp mono">${P(l.mid)}</span></div>`).join('')}</div>
       <div class="kpis"><div class="kpi"><b class="mono">${dec ? '×' + dec.toFixed(1) : '—'}</b><span>pays at Polymarket prices</span></div><div class="kpi"><b class="mono">${st && dec ? '$' + (st * dec).toFixed(2) : '—'}</b><span>returns on $${st}</span></div></div>
-      <button class="btn full ghost" data-up-sim="${id}" style="margin-top:8px">🎲 Simulate 500,000 runs</button><div class="upsim" data-up-out="${id}">${simHTML(id)}</div>
+      <button class="btn full ghost" data-up-sim="${id}" style="margin-top:8px">${SIMS[id] && SIMS[id].sig === sigOf(legs) ? '🎲 Run again' : '🎲 Simulate 500,000 runs'}</button><div class="upsim" data-up-out="${id}">${simHTML(id)}</div>
       <div class="note">Crazy on purpose: most of these lose. The % on each leg is the market's chance; form is shown beside it, not added to it.</div></div>`;
   }
   // ---------------- 500,000-run simulation ----------------
@@ -176,9 +196,43 @@
       </div>
       ${legs.length ? parlayCard(legs, 'upMain') : `<div class="pc"><div class="why">Not enough underdogs or draws on the board for these filters right now. Try "All sports" or a longer window.</div></div>`}
       <div class="note">${cands.length} candidate legs from ${new Set(cands.map(c => c.game)).size} games in the next ${ST.hours} hours.</div>
+      ${edgeSection()}
       ${formSections(cands)}`;
   }
 
+  // close games (no side over 62%; soccer: neither over 50% and within 15 points) where one side has the edge: home court /
+  // ground, and what the other side is missing from the injury report. The pick is that side to win.
+  function edgeLegs() {
+    const now = Date.now(), out = [];
+    for (const pg of board()) {
+      if (pg.stale || !(Date.parse(pg.start) > now && Date.parse(pg.start) - now <= ST.hours * 3600e3)) continue;
+      if (!ST.sports.includes('all') && !ST.sports.includes(pg.sport)) continue;
+      const ml = pg.ml || {}, h = ml.home, a = ml.away; if (!h || !a || h.m == null || a.m == null) continue;
+      const close = pg.sport === 'soccer' ? Math.max(h.m, a.m) <= .5 && Math.abs(h.m - a.m) <= .15 : Math.max(h.m, a.m) <= .62 && Math.min(h.m, a.m) >= .38;
+      if (!close) continue;
+      const mh = missing(pg.sport, pg.home), ma = missing(pg.sport, pg.away);
+      const sc = { home: 1 + ma.w - mh.w, away: mh.w - ma.w };  // home +1; each side gains what the other is missing
+      const side = sc.home >= sc.away ? 'home' : 'away', diff = Math.abs(sc.home - sc.away); if (diff < 1) continue;
+      const me = pg[side], op = pg[side === 'home' ? 'away' : 'home'], mo = side === 'home' ? ma : mh, mm = side === 'home' ? mh : ma, q = ml[side];
+      if (q.a == null) continue;
+      const why = [];
+      if (side === 'home') why.push('at home');
+      if (mo.list.length) why.push(`${op.name} missing ${mo.list.slice(0, 4).join(', ')}${mo.list.length > 4 ? ` +${mo.list.length - 4} more` : ''}${mo.pts ? ` (about ${Math.round(mo.pts)} points a game)` : ''}`);
+      if (mm.list.length) why.push(`but ${me.name} missing ${mm.list.slice(0, 3).join(', ')}${mm.pts ? ` (about ${Math.round(mm.pts)} points a game)` : ''}`);
+      out.push({ kind: 'edge', label: `${me.name} to beat ${op.name}`, sport: pg.sport, comp: pg.comp, game: pg.slug, url: pg.url, start: pg.start, mid: q.m, ask: q.a,
+        team: me.name, vs: op.name, fd: formOf(pg.sport, me.name), ff: formOf(pg.sport, op.name), edge: { score: diff, why }, model: modelP(pg, side === 'home' ? 'H' : 'A') });
+    }
+    return out.sort((x, y) => y.edge.score - x.edge.score || y.mid - x.mid);
+  }
+  function edgeSection() {
+    const E = edgeLegs(), legs = E.slice(0, ST.legs);
+    const idate = INJ && INJ.updated ? new Date(INJ.updated).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric' }) : null;
+    return `<h2>Close games with an edge <small>home side, or the other team short-handed</small></h2>
+      <div class="note">Games the market calls close (no side over 62%; soccer: neither side over 50%), where one team plays at home and/or the other is missing players on the injury report${idate ? ` (checked ${esc(idate)})` : ''}. The market already prices home advantage and announced injuries, so these are reasons, not a lock: the % on each leg is still the market's.</div>
+      ${legs.length >= 2 ? parlayCard(legs, 'upEdge', `${legs.length}-leg close-game edge parlay`, 'home side or opponent injuries') : ''}
+      ${E.length ? `<div class="panel" style="padding:2px 14px">${E.slice(0, 12).map(l => `<div class="mrow"><div class="lbl">${esc(l.label)} <small>${esc(l.comp)} · market ${P(l.mid)}${l.model != null ? ` · our model ${P(l.model)}` : ''} · ${C(l.ask)} to buy</small><span class="fwhy">${esc(l.edge.why.join(' · '))}</span></div></div>`).join('')}${E.length > 12 ? `<div class="note">${E.length - 12} more close games lean to the home side only.</div>` : ''}</div>`
+        : `<div class="pc"><div class="why">No close game in this window has a home or injury edge right now${ST.sports.includes('all') ? '' : ' for these sports'}.</div></div>`}`;
+  }
   // the upsets the researched form backs (underdog on a run, favourite in a slump), and the runs themselves
   function formSections(cands) {
     if (!FORM) return '';
@@ -250,6 +304,6 @@
 
   SB.registerTab({ key: 'upsets', label: '💥 Upset Parlays', after: 'polymarket', render });
   // the board arrives with Polymarket's data: redraw when it does
-  SB.on && SB.on('data', () => { loadForm(); if (document.querySelector('#tabs [data-t="upsets"].on')) SB.render(); });
-  window.__upsets = { formOf, formEdge, formWords, simulate, get CARDS() { return CARDS; }, get SIMS() { return SIMS; }, N_SIM };
+  SB.on && SB.on('data', () => { loadForm(); loadInj(); if (document.querySelector('#tabs [data-t="upsets"].on')) SB.render(); });
+  window.__upsets = { formOf, formEdge, formWords, simulate, edgeLegs, missing, get CARDS() { return CARDS; }, get SIMS() { return SIMS; }, N_SIM };
 })();

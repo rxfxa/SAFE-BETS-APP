@@ -193,7 +193,7 @@ h2 a{font-size:14px;color:var(--blue);cursor:pointer;font-weight:700}
 .steps{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:18px}
 .steps div{flex:1;border-radius:2px 2px 0 0;background:linear-gradient(180deg,var(--cyan),var(--blue-fill));box-shadow:0 0 10px color-mix(in srgb,var(--glow) 40%,transparent);position:relative;min-height:4px}
 .steps div span{position:absolute;top:-19px;left:0;right:0;text-align:center;font-size:11.5px;font-weight:800;font-style:italic;color:var(--text);font-variant-numeric:tabular-nums}
-.steplbl{display:flex;gap:6px;margin-top:5px}.steplbl span{flex:1;text-align:center;font-size:11px;color:var(--dim);font-weight:600}
+.steplbl{display:flex;gap:6px;margin-top:5px}.steplbl span{flex:1;min-width:0;overflow:hidden;text-align:center;font-size:11px;color:var(--dim);font-weight:600}
 .inrow{display:flex;gap:8px;align-items:center}
 input[type=text],input[type=number]{background:var(--soft);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:11px 12px;font:600 16px var(--f);width:100%;font-variant-numeric:tabular-nums}
 input[type=text]:focus,input[type=number]:focus{outline:none;border-color:var(--glow);box-shadow:0 0 0 1px var(--glow),0 0 14px color-mix(in srgb,var(--glow) 30%,transparent)}
@@ -399,7 +399,7 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const pct=(p,d=0)=>(p*100).toFixed(d)+'%';
 const cents=p=>Math.max(1,Math.min(99,Math.round(p*100)))+'¢';
 // ---------------- odds maths (all prices shown in the app go through fmtOdds / fmtPrice) ----------------
-const PMIN=1e-4;
+const PMIN=1e-7; // price floor: 1 in 10 million (long parlays go far below 1 in 10,000)
 const p2am=p=>{p=clamp(p,PMIN,1-PMIN);const a=Math.round(p>=.5?-100*p/(1-p):100*(1-p)/p);return a===-100?100:a;}; // even money prints +100 everywhere
 const fmtAm=a=>(a>0?'+':'')+a;
 const am2dec=a=>a>0?1+a/100:1+100/(-a);
@@ -411,10 +411,11 @@ const kelly=(p,dec,fraction=1)=>dec>1?Math.max(0,(p*dec-1)/(dec-1))*fraction:0; 
 // standard UK bookmaker fractions (what a punter expects to see: -110 = 10/11, 2.05 = 21/20)
 const FRAC_LADDER='1/100 1/50 1/33 1/25 1/20 1/16 1/14 1/12 1/10 1/9 1/8 1/7 1/6 1/5 2/9 1/4 2/7 3/10 1/3 4/11 2/5 4/9 1/2 8/15 4/7 8/13 4/6 8/11 4/5 5/6 10/11 20/21 1/1 21/20 11/10 6/5 5/4 11/8 3/2 13/8 7/4 15/8 2/1 9/4 5/2 11/4 3/1 10/3 7/2 4/1 9/2 5/1 11/2 6/1 13/2 7/1 15/2 8/1 17/2 9/1 10/1 11/1 12/1 14/1 16/1 18/1 20/1 25/1 33/1 40/1 50/1 66/1 80/1 100/1 125/1 150/1 200/1 250/1 300/1 400/1 500/1 750/1 1000/1'
   .split(' ').map(t=>{const [n,d]=t.split('/').map(Number);return [n,d,n/d];});
-function fracStr(x){ // x = decimal-1 > 0 -> nearest ladder rung within 2%, else smallest-denominator fraction within 1% (best up to /100)
-  let r=null;for(const L of FRAC_LADDER){const e=Math.abs(L[2]-x)/x;if(!r||e<r.e)r={L,e};}
-  if(r.e<=.02)return r.L[0]===1&&r.L[1]===1?'Evens':r.L[0]+'/'+r.L[1];
-  let best=null;for(let d=1;d<=100;d++){const n=Math.max(1,Math.round(x*d)),e=Math.abs(n/d-x)/x;if(!best||e<best.e-1e-12)best={n,d,e};if(e<.01)break;}
+function fracStr(x){ // x = decimal-1 > 0 -> the nearest ladder rung AT OR ABOVE x within 2%, else the smallest-denominator fraction
+  // at or above x within 1% (best up to /100). Rounding up keeps "bet only at X or better" from ever naming a price under break-even.
+  let r=null;for(const L of FRAC_LADDER){if(L[2]<x*(1-1e-9))continue;const e=(L[2]-x)/x;if(!r||e<r.e)r={L,e};}
+  if(r&&r.e<=.02)return r.L[0]===1&&r.L[1]===1?'Evens':r.L[0]+'/'+r.L[1];
+  let best=null;for(let d=1;d<=100;d++){const n=Math.max(1,Math.ceil(x*d-1e-9)),e=(n/d-x)/x;if(!best||e<best.e-1e-12)best={n,d,e};if(e<.01)break;}
   return best.n+'/'+best.d;}
 const probStr=p=>p<.01?(p*100).toFixed(2)+'%':p<.1?(p*100).toFixed(1)+'%':Math.round(p*100)+'%';
 const ODDSFMTS=[['american','US','American (+150)'],['decimal','Dec','Decimal (2.50)'],['fractional','Frac','Fractional (3/2)'],['prob','%','Probability (40%)']];
@@ -716,7 +717,9 @@ function playerP(pl,thr){const a=pl.avg*(1+(pl.boost||0));
   if(pl.stat==='pts'){const sd=.28*a+3;return 1-Phi((thr-.5-a)/sd);}
   if(pl.stat==='ast'||pl.stat==='reb'){const sd=Math.sqrt(a)*1.25+.5;return 1-Phi((thr-.5-a)/sd);}
   let c=0;for(let k=0;k<thr;k++)c+=pois(a,k);return 1-c;}
-function playerById(id){return (DATA.players||[]).find(p=>p.id===id);}
+// posted props first; then the season-average record of a game whose props were posted after a pick locked it (so the leg
+// keeps its price instead of reading as ruled out)
+function playerById(id){return (DATA.players||[]).find(p=>p.id===id)||(DATA.estById&&DATA.estById.get(id))||undefined;}
 const isP=k=>k.startsWith('P:')||k.startsWith('U:');
 function pLegInfo(key){const [kind,id,thr]=key.split(':');const pl=playerById(id);if(!pl)return null;
   if(kind==='U'){const n=Math.floor(+thr)+1;return {pl,thr:+thr,under:true,p:1-playerP(pl,n),label:`${pl.name} under ${thr} ${STATN[pl.stat]}`};}
@@ -842,6 +845,7 @@ let undoSlip=null;
 function replaceSlip(legs,bk){
   const prev=slip.map(L=>({...L})),pb=baseKey,sig=a=>a.map(l=>l.gid+'|'+l.key).sort().join(',');
   setSlip(legs,bk);
+  if(sig(prev)!==sig(slip)){bookPx='';legPx={};} // the price typed was for the old parlay
   if(prev.length&&sig(prev)!==sig(slip)){undoSlip={prev,pb};toast(`Replaced your ${prev.length}-leg slip · <button type="button" class="linkbtn" id="undoSlip" style="margin:-10px 0;padding:10px 6px">Undo</button>`,7000);}
   else undoSlip=null;
   return slip;}
@@ -868,7 +872,7 @@ function card(g){
    ${rows.map(([t,k,p])=>`<div class="orow"><div class="team" data-open="${g.id}">${k==='D'?'<span class="ab" style="--tc:var(--chrome-lo)">X</span>':abBox(t)}<span class="tn">${esc(t.name)}</span></div>
      <span class="pct">${fin?(k==='D'?'':(k==='H'?g.score.home:g.score.away)):P?pct(p/tot):'—'}</span>
      ${fin?'<span></span>':`<button class="yes ${inSlip(g.id,k)?'in':''}" data-leg="${g.id}|${k}" ${can?'':'disabled'}${P&&can?` aria-label="${esc((k==='D'?'Draw':t.name+' win')+' at '+fmtOdds(p/tot))}"`:''}>${P&&can?(oddsFmt==='prob'?'Add':'Yes '+fmtOdds(p/tot)):vd?'Off':st?'Closed':'Soon'}</button>`}</div>`).join('')}
-   <div class="mkfoot"><span>${P?(g.src==='Sportradar'?'Win chance · Sportradar':'Win chance · Safe Bets estimate'):'Prices posting soon'}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</span><button type="button" class="linkbtn" data-open="${esc(g.id)}" aria-label="${esc((can?'All '+marketsFor(g).length+' markets':'Details')+' for '+g.home.name+' vs '+g.away.name)}">${can?marketsFor(g).length+' markets ›':'Details ›'}</button></div>
+   <div class="mkfoot"><span>${P?(g.src==='Sportradar'?'Win chance · Sportradar':'Win chance · Safe Bets estimate'):isFinal(g)?'Final':isVoid(g)?'Postponed or cancelled':started(g)?'In progress':'Prices posting soon'}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</span><button type="button" class="linkbtn" data-open="${esc(g.id)}" aria-label="${esc((can?'All '+marketsFor(g).length+' markets':'Details')+' for '+g.home.name+' vs '+g.away.name)}">${can?marketsFor(g).length+' markets ›':'Details ›'}</button></div>
   </div>`;
 }
 document.addEventListener('click',e=>{
@@ -880,9 +884,11 @@ document.addEventListener('click',e=>{
   const op=e.target.closest('[data-open]');if(op&&!e.target.closest('#sheet')){openGame(op.dataset.open);return;}
   const sp=e.target.closest('[data-savep],[data-simp]');
   if(sp){const id=sp.dataset.savep||sp.dataset.simp,T=autoCache[id];if(!T||!T.legs||!T.legs.length){toast('These legs have moved on. Refresh the tab and try again.');return;}
-    const legs=T.legs.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:(gameById(L.gid)||{}).sport}));
-    if(sp.dataset.savep){const ok=SB.saveParlay({legs,p:T.p,dec:p2dec(T.p),src:id});toast(ok?'Added to My Parlays':'Could not save these legs');}
-    else{const title=(sp.closest('.pc')&&sp.closest('.pc').querySelector('.pctitle')||{}).textContent||'Parlay';SB.goTab('sim',{legs,title:title.trim(),from:id,p:T.p});}
+    const legs=T.legs.map(L=>{const g=gameById(L.gid)||{};return {gid:L.gid,key:L.key,label:L.label,sport:g.sport,comp:g.comp,home:g.home&&g.home.abbr,away:g.away&&g.away.abbr,start:g.start,p1:L.p!=null?L.p:p1(g,L.key)};});
+    const sig=a=>a.map(L=>L.gid+'|'+L.key).sort().join(',');
+    if(sp.dataset.savep){if(saved.some(x=>x.legs&&sig(x.legs)===sig(legs))){toast('Already in My Parlays');return;}
+      const ok=SB.saveParlay({legs,p:T.p,src:id});toast(ok?'Added to My Parlays':'Could not save these legs');}
+    else{const title=T.title||(sp.closest('.pc')&&sp.closest('.pc').querySelector('.pctitle')||{}).textContent||'Parlay';SB.goTab('sim',{legs,title:title.trim(),from:id,p:T.p});}
     return;}
   const ap=e.target.closest('[data-addp]');if(ap){const P=autoCache[ap.dataset.addp];if(P){replaceSlip(P.legs.map(L=>({...L})),P.legs[0].gid+'|'+P.legs[0].key);openSlip();}return;}
 });
@@ -953,8 +959,9 @@ function renderSub(tab){
 }
 $('sub').onclick=e=>{const w=e.target.closest('[data-win]');if(w){win=w.dataset.win;store.set('win',win);autoCache={};render();return;}
   const b=e.target.closest('[data-sub]');if(!b)return;subf=b.dataset.sub;render();};
-function dayBucket(g){const d=new Date(g.start),t=new Date();const dd=Math.round((new Date(d.toDateString())-new Date(t.toDateString()))/864e5);return dd<=0?'Today':dd===1?'Tomorrow':'Later';}
+function dayBucket(g){const d=new Date(g.start),t=new Date();const dd=Math.round((new Date(d.toDateString())-new Date(t.toDateString()))/864e5);return dd===0?'Today':dd<0?'Earlier':dd===1?'Tomorrow':'Later';} // finals from earlier days only show under All
 function updatedLine(){const u=DATA.updated?new Date(DATA.updated):null,stale=lastGood&&now()-lastGood>25*60e3;
+  if(DATA.seeded)return `<div class="updated" style="color:var(--no)"><i></i>Today's games didn't load. This is a saved slate from ${u?u.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'}):'an earlier day'}, not today's board. Retrying every minute.</div>`;
   return `<div class="updated"><i></i>Real schedules · updated ${u?u.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'—'} · refreshes hourly${stale?` · last good check ${new Date(lastGood).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:''}</div>`;}
 function render(){
   booted=true;pendingRender=false;
@@ -1058,19 +1065,21 @@ function renderMine(){
   for(const s of saved)for(const L of s.legs||[]){const g=gameById(L.gid);if(g&&isFinal(g)){s.res=s.res||{};const r=s.res[L.gid];
     if(!r||r.h!==g.score.home||r.a!==g.score.away){s.res[L.gid]={h:+g.score.home,a:+g.score.away};changed=true;}}}
   if(changed)store.set('saved',saved);
-  let n=0,w=0,staked=0,pl=0,exp=0,money=0;
+  let n=0,w=0,staked=0,pl=0,exp=0,money=0,repriced=0;
   const rows=saved.map((s,i)=>{const S=parlayStatus(s);
-    if(S.st==='won'||S.st==='lost'){n++;exp+=+s.p||0;if(S.st==='won')w++;if(s.stake>0&&s.dec>1){money++;staked+=s.stake;pl+=S.st==='won'?s.stake*(s.dec-1):-s.stake;}}
+    // a win with a void leg (postponed game, player sat) is repriced by the book without that leg, at a price we don't know:
+    // it is left out of profit / loss rather than counted at the full parlay price
+    if(S.st==='won'||S.st==='lost'){n++;exp+=+s.p||0;if(S.st==='won')w++;if(s.stake>0&&s.dec>1){if(S.st==='won'&&S.live<(s.legs||[]).length)repriced++;else{money++;staked+=s.stake;pl+=S.st==='won'?s.stake*(s.dec-1):-s.stake;}}}
     const tag={won:['Won 🎉','h-hi'],lost:['Lost','h-lo'],void:['Void','h-mid'],pending:[S.done?`${S.done}/${S.live} hit`:'Pending','h-mid']}[S.st];
     return `<div class="pc"><div class="pchead"><span class="pctitle">${(s.legs||[]).length}-leg parlay${s.book?' · '+esc(s.book):''}</span><span class="hit ${tag[1]}">${tag[0]}</span></div>
      ${(s.legs||[]).map((L,j)=>{const g=gameById(L.gid)||stubGame(L),r=legResult(s,L),man=L.manual===true||L.manual===false,need=legNeedsManual(s,L);
        const res=s.res&&s.res[L.gid];
        return `<div class="leg"><span class="legdot">${r===true?'✓':r===false?'✗':r==='void'?'–':'•'}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${g?esc(g.home.abbr+' vs '+g.away.abbr+(res?` · ${res.h}-${res.a}`:'')+' · '+(g.start?when(g):'')):'Game no longer listed'}${r==='void'?' · void':''}${man?' · graded by you':''}</span>
          ${need?`<div class="grade"><button type="button" data-grade="${i}|${j}|1">✓ hit</button><button type="button" data-grade="${i}|${j}|0">✗ missed</button></div>`:man?`<div class="grade"><button type="button" data-grade="${i}|${j}|x">Undo</button></div>`:''}</div></div>`;}).join('')}
-     <div class="pcfoot"><div class="odds mono">${pct(+s.p||0)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}${s.stake>0?' · $'+s.stake+' stake':''}</small></div><button class="btn ghost" data-simmine="${i}">🎲 Simulate</button><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
+     <div class="pcfoot"><div class="odds mono">${(+s.p||0)>0&&s.p<.01?pct(+s.p,s.p>=.001?1:2):pct(+s.p||0)}<small>Hit chance when saved${s.dec?' · bet at '+fmtPrice(s.dec):s.odds?' · bet at '+fmtPrice(am2dec(s.odds)):''}${s.stake>0?' · $'+s.stake+' stake':''}</small></div><button class="btn ghost" data-simmine="${i}">🎲 Simulate</button><button class="btn ghost" data-del="${i}">Remove</button></div></div>`;}).reverse();
   const roi=staked>0?pl/staked:null;
   const sum=saved.length?`<div class="panel"><div class="kpis"><div class="kpi"><b class="mono">${w}/${n}</b><span>Won / settled</span></div><div class="kpi"><b class="mono" style="color:${pl>0?'var(--yes)':pl<0?'var(--no)':'var(--text)'}">${money?(pl<0?'−$':'$')+Math.abs(pl).toFixed(2):'—'}</b><span>Profit / loss${money?` on $${staked.toFixed(0)}`:''}</span></div><div class="kpi"><b class="mono">${roi==null?'—':signPct(roi)}</b><span>ROI</span></div></div>
-     <div class="note">${n?`Model expected ${exp.toFixed(1)} wins from ${n} settled parlay${n>1?'s':''} (the hit chances when you saved them); you won ${w}.`:'Nothing settled yet.'} Profit counts parlays saved with a stake and your book's price.</div></div>`:'';
+     <div class="note">${n?`Model expected ${exp.toFixed(1)} wins from ${n} settled parlay${n>1?'s':''} (the hit chances when you saved them); you won ${w}.`:'Nothing settled yet.'} Profit counts parlays saved with a stake and your book's price.${repriced?` ${repriced} win${repriced>1?'s':''} with a void leg ${repriced>1?'are':'is'} left out of profit: the book reprices ${repriced>1?'them':'it'} without that leg.`:''}</div></div>`:'';
   $('main').innerHTML=updatedLine()+`<h2>My parlays <small>${saved.length} saved</small></h2>`+sum+(rows.length?`<div class="grid">${rows.join('')}</div>`:`<div class="empty">Save a parlay from the builder and it will grade itself here as games finish.</div>`);
   $('main').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{saved.splice(+b.dataset.del,1);store.set('saved',saved);renderMine();});
   $('main').querySelectorAll('[data-simmine]').forEach(b=>b.onclick=()=>{const s=saved[+b.dataset.simmine];if(s&&s.legs&&s.legs.length)SB.goTab('sim',{legs:s.legs,title:`${s.legs.length}-leg parlay`,from:'mine',p:s.p});});
@@ -1120,10 +1129,12 @@ function ticketCard(id,title,T,sub){
   return `<div class="pc"><div class="pchead"><span class="pctitle">${title}</span><span class="hit ${hc}">${T.p>=.01?pct(T.p):pct(T.p,1)} to hit</span></div>${gaugeHTML(T.p)}${sub?`<div class="why" style="margin-top:4px">${sub}</div>`:''}
    <div style="margin-top:6px">${T.legs.map(L=>{const g=gameById(L.gid);const pi=isP(L.key)?pLegInfo(L.key):null;
      return `<div class="leg"><span class="sp" title="${esc(SPORTNAME[g.sport]||g.sport)}">${sportIco(g.sport)}</span><div class="legtxt"><b>${esc(L.label)}${pi&&pi.pl.boost?'<span class="link">NEXT MAN UP</span>':''}</b><span>${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(L.p)}</span></div>`;}).join('')}</div>
-   <div class="pcfoot"><div class="odds mono">${fmtOdds(T.p)}<small>Fair odds · $10 pays ~$${pay.toLocaleString()}</small></div><button class="btn" data-addp="${id}">Open in builder</button></div><div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-simp="${id}">🎲 Simulate</button></div><div class="note">${minPriceLine(T.p)}</div></div>`;
+   <div class="pcfoot"><div class="odds mono">${fmtOdds(T.p)}<small>Fair odds · $10 wins ~$${pay.toLocaleString()}</small></div><button class="btn" data-addp="${id}">Open in builder</button></div><div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-simp="${id}">🎲 Simulate</button></div><div class="note">${minPriceLine(T.p)}</div></div>`;
 }
-function lineupBanner(){const lu=DATA.lineups||{};const chk=lu.checked?new Date(lu.checked).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):null;
-  return `<div class="lineup"><span>📋</span><div>${chk?`<b>Lineups checked ${esc(chk)}.</b> `:'<b>Built on normal / recent lineups.</b> '}Rechecked every morning around 6 AM and again right before each game. Players ruled out are removed, and teammates who pick up their minutes get a <b>Next man up</b> boost.</div></div>`;}
+// the newest of the props file's lineup check and the injury report; says plainly when that is more than a day and a half old
+function lineupBanner(){const lu=DATA.lineups||{},t=Math.max(Date.parse(lu.checked)||0,Date.parse(INJ_LAST&&INJ_LAST.updated)||0);
+  const chk=t?new Date(t).toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):null,old=t&&now()-t>36*3600e3;
+  return `<div class="lineup"><span>📋</span><div>${chk?`<b>Injury report checked ${esc(chk)}.</b> `:'<b>Built on normal / recent lineups.</b> '}${old?'<b style="color:var(--no)">That is over a day old: check the latest report before betting.</b> ':''}Re-checked once a day by the morning run. Players ruled out are removed; questionable ones are left out of the auto parlays. Player lines without a posted prop use season averages.</div></div>`;}
 function renderFantasy(){
   const minP=fz.safe==='safer'?.8:.7;
   const F=buildTicket({n:fz.n,sports:fz.sports,minP,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed});
@@ -1142,28 +1153,36 @@ function renderFantasy(){
 // same game parlay: every leg from one game, same scroller and style as the fantasy parlay
 function sgpGames(){const lim=now()+7*864e5;
   return DATA.games.filter(g=>openG(g)&&startMs(g)<=lim&&fz.sports.includes(g.sport)&&(priced(g)||(DATA.players||[]).some(p=>p.gid===g.id))).sort((a,b)=>startMs(a)-startMs(b));}
-function sgpTicket(g,n,minP,seed,relax){let T;for(const m of relax?[minP,.7,.6,.55].filter(x=>x<=minP):[minP]){T=buildTicket({n,sports:[g.sport],gids:[g.id],minP:m,propsOnly:false,perPlayer:1,perGame:n,seed});T.minP=m;if(T.legs.length>=n)break;}return T;}
+// the game chips: the next 36 hours (or the next 7 days if that is empty), sports taken in turn so no sport is crowded out
+function sgpChips(games){const soon=games.filter(g=>startMs(g)-now()<=36*3600e3),L=soon.length?soon:games,by=new Map();
+  for(const g of L){if(!by.has(g.sport))by.set(g.sport,[]);by.get(g.sport).push(g);}
+  const out=[],lists=[...by.values()];while(out.length<30&&lists.some(x=>x.length))for(const x of lists)if(x.length&&out.length<30)out.push(x.shift());
+  return out.sort((a,b)=>startMs(a)-startMs(b));}
+function sgpTicket(g,n,minP,seed,relax){let T,most=0;for(const m of relax?[minP,.7,.6,.55].filter(x=>x<=minP):[minP]){T=buildTicket({n,sports:[g.sport],gids:[g.id],minP:m,propsOnly:false,perPlayer:1,perGame:n,seed});T.minP=m;most=Math.max(most,T.legs.length);if(T.legs.length>=n)break;}T.most=most;return T;}
 function sgpHTML(allS){
-  const games=sgpGames();if(!games.length)return `<h2>Same game parlay</h2><div class="pc"><div class="why">No open games for these sports right now.</div></div>`;
+  const games=sgpChips(sgpGames());if(!games.length)return `<h2>Same game parlay</h2><div class="pc"><div class="why">No open games for these sports right now.</div></div>`;
   const n=fz.sgpN||4,minP=fz.safe==='safer'?.8:.7;let g=games.find(x=>x.id===fz.sgpG),T=g&&sgpTicket(g,n,minP,fzSeed,true);
-  if(!g){for(const x of games.slice(0,24)){const t=sgpTicket(x,n,minP,fzSeed,true);if(!T||t.legs.length>T.legs.length){g=x;T=t;}if(t.legs.length>=n)break;}}
-  const most=T.legs.length;
+  if(!g){for(const x of games){const t=sgpTicket(x,n,minP,fzSeed,true);if(!T||t.legs.length>T.legs.length){g=x;T=t;}if(t.legs.length>=n)break;}}
+  const most=T.most||T.legs.length;
   return `<h2>Same game parlay <small>every leg from one game · 2 to 10 legs</small></h2>
    <div class="fbox"><div class="ctrl"><div><div class="big mono" id="sgpN">${n}</div><div style="font-size:13px;color:var(--dim);font-weight:700">LEGS</div></div><input type="range" id="sgpR" min="2" max="10" value="${n}" aria-label="Same game parlay legs"></div>
-   <div class="sec" style="margin-top:14px">Game</div><div style="display:flex;gap:7px;flex-wrap:wrap">${games.slice(0,24).map(x=>`<button class="chip ${x.id===g.id?'on':''}" data-sgpg="${esc(x.id)}">${sportIco(x.sport)}${esc(x.away.abbr)} @ ${esc(x.home.abbr)}</button>`).join('')}</div></div>`+
-   (most<n?`<div class="pc"><div class="pchead"><span class="pctitle">${esc(g.away.abbr)} @ ${esc(g.home.abbr)}</span></div><div class="why">This game has ${most} leg${most===1?'':'s'} at this safety level. Lower the legs or pick another game.</div></div>`
+   <div class="sec" style="margin-top:14px">Game</div><div style="display:flex;gap:7px;flex-wrap:wrap">${games.map(x=>`<button class="chip ${x.id===g.id?'on':''}" data-sgpg="${esc(x.id)}">${sportIco(x.sport)}${esc(x.away.abbr)} @ ${esc(x.home.abbr)}</button>`).join('')}</div></div>`+
+   (most<n?`<div class="pc"><div class="pchead"><span class="pctitle">${esc(g.away.abbr)} @ ${esc(g.home.abbr)}</span></div><div class="why">This game has at most ${most} leg${most===1?'':'s'} that fit together right now. Lower the legs or pick another game.</div></div>`
      :ticketCard('sgp',`${n}-leg same game parlay · ${esc(g.away.abbr)} @ ${esc(g.home.abbr)}`,T,`${esc(when(g))}.${T.minP<minP?` <b>This game is short of ${Math.round(minP*100)}% legs, so some legs here are down to ${Math.round(T.minP*100)}%.</b>`:''} Legs in the same game move together (a blowout helps some legs and hurts others), so the game lines are priced jointly from the simulation.`))+
    `<button class="btn full ghost" id="sgpNew" style="margin-bottom:6px">🔀 New same game mix</button>`;
 }
 // 20 legs: the 3 safest legs from each of the best games (2 from the last), every leg ~85% or more
 function megaTicket(){
-  const cands=[];for(const g of sgpGames()){const T=sgpTicket(g,3,.85,0);if(T.legs.length>=2)cands.push({g,T});}
+  // every leg on one day (Los Angeles): the first of the next 3 days whose games can make 20 legs, so the ticket settles that day
+  const all=sgpGames(),days=[...new Set(all.map(g=>dayOf(startMs(g))))].slice(0,3);let cands=[];
+  for(const d of days){cands=[];for(const g of all){if(dayOf(startMs(g))!==d)continue;const T=sgpTicket(g,3,.85,0);if(T.legs.length>=2)cands.push({g,T});}
+    if(cands.reduce((s,c)=>s+Math.min(3,c.T.legs.length),0)>=20)break;}
   cands.sort((a,b)=>b.T.legs.length-a.T.legs.length||b.T.p-a.T.p);
   const legs=[];const games=[];for(const c of cands){if(legs.length>=20)break;const take=c.T.legs.slice(0,20-legs.length);legs.push(...take);games.push(c.g);}
-  return {legs,p:parlayProb(legs).p,n:20,games};}
+  return {legs,p:parlayProb(legs).p,n:20,games,day:games.length?dayOf(startMs(games[0])):null};}
 function megaHTML(){const M=megaTicket();
-  return `<h2>20-leg safest combo <small>3 legs from each game · ~85%+ legs</small></h2>`+
-   ticketCard('mega20','20 legs · '+M.games.length+' games',M,`The 3 likeliest legs from each of ${M.games.length} games. Each leg is about 85-95% on its own, but 20 of them together still miss most of the time. Use a small stake.`);}
+  return `<h2>20-leg safest combo <small>up to 3 legs per game · one day · ~85%+ legs</small></h2>`+
+   ticketCard('mega20','20 legs · '+M.games.length+' games'+(M.day?' · '+dayLabel(M.day):''),M,`Up to 3 of the likeliest legs from each of ${M.games.length} games, all on ${M.day?dayLabel(M.day):'one day'}. Each leg is about 85-95% on its own, but 20 of them together still miss most of the time. Use a small stake.`);}
 
 // ---------------- My Parlay Picks (Trending): chosen once a day, every leg on one day (America/Los_Angeles) ----------------
 // Order of trust: mypicks.json from the daily job for that day → the picks this device locked for that day → build and lock now.
@@ -1171,7 +1190,9 @@ function megaHTML(){const M=megaTicket();
 const MP_TZ='America/Los_Angeles',MPV=1;
 const mpFmt=new Intl.DateTimeFormat('en-CA',{timeZone:MP_TZ,year:'numeric',month:'2-digit',day:'2-digit'});
 const dayOf=ms=>mpFmt.format(new Date(ms));
+const nextDay=day=>{const [y,m,d]=day.split('-').map(Number);return new Date(Date.UTC(y,m-1,d+1)).toISOString().slice(0,10);}; // calendar day: safe across DST
 const dayGames=day=>DATA.games.filter(g=>openG(g)&&dayOf(startMs(g))===day).sort((a,b)=>startMs(a)-startMs(b));
+const mpTime=ms=>new Date(ms).toLocaleString([], {timeZone:MP_TZ,weekday:'short',hour:'numeric',minute:'2-digit'})+' PT';
 const dayLabel=day=>{const [y,m,d]=day.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString([], {weekday:'long',month:'short',day:'numeric',timeZone:'UTC'});};
 // one leg as stored: enough to draw and grade it after its game leaves the feed
 function mpLeg(L){const g=gameById(L.gid);return {gid:L.gid,key:L.key,label:L.label||legLabel(L),p:+(+L.p).toFixed(4),sport:g.sport,comp:g.comp,home:g.home.abbr,away:g.away.abbr,start:g.start};}
@@ -1190,12 +1211,27 @@ function mpExact(day){
 // same game parlay, 5 legs: the game whose 5-leg ticket is likeliest (80%+ legs where the game has them)
 function mpSgp(day){let best=null;
   for(const g of dayGames(day)){const T=sgpTicket(g,5,.8,0,true);if(T.legs.length<5)continue;const sc=T.p-(T.minP<.8?.1:0);if(!best||sc>best.sc)best={legs:T.legs,sc,g};}
+  if(best)return best.legs;
+  // no game reaches 5 under the one-per-market-group rule (soccer / NFL / NHL days): build greedily from every 50-95% market of
+  // the game (combos and alternate lines included, exact scores left out), each step adding the leg that keeps the joint chance
+  // highest while still adding something; keep the game whose 5 legs are likeliest together
+  for(const g of dayGames(day)){if(!priced(g))continue;
+    const C=marketsFor(g).filter(m=>!m.cs&&!/^CSO/.test(m.key)&&!m.gen).map(m=>({gid:g.id,key:m.key,label:m.label,p:p1(g,m.key),sport:g.sport,kind:'game'})).filter(x=>x.p>=.5&&x.p<=.95);
+    const legs=[];let cur=1;
+    while(legs.length<5){let pick=null,pp=0;for(const x of C){if(legs.includes(x))continue;const a=parlayProb([...legs,x]).p;if(a>0&&a<cur*.995&&a>pp){pp=a;pick=x;}}
+      if(!pick)break;legs.push(pick);cur=pp;}
+    if(legs.length===5&&(!best||cur>best.p))best={legs,p:cur};}
   return best?best.legs:[];}
-// 10 legs across every sport and league on the day: one leg per game (its likeliest 75-95% leg), leagues taken in turn so every
+// 10 legs across every sport and league on the day: one leg per game (its likeliest leg, at most 95%), leagues taken in turn so every
 // league gets a leg before any gets a second; a second leg per game only when the day has fewer than 10 games
 function mpMixed(day,n=10){
   const G=dayGames(day);if(!G.length)return [];
-  const pool=ticketPool({sports:[...new Set(G.map(g=>g.sport))],gids:G.map(g=>g.id),minP:.75,propsOnly:false},72).filter(x=>x.p<=.95);
+  // 75%+ legs; a league with none (NHL: no totals in the feed, favourites ~55-67%) gets its likeliest 50%+ leg instead, so every
+  // league is in the first pass. (ticketPool keeps each market group's lowest line above the floor, so the floors are separate pools.)
+  const sp=[...new Set(G.map(g=>g.sport))],hi=ticketPool({sports:sp,gids:G.map(g=>g.id),minP:.75,propsOnly:false},72).filter(x=>x.p<=.95);
+  const lg=x=>{const g=gameById(x.gid);return g.sport+'|'+g.comp;},have=new Set(hi.map(lg));
+  const lo=ticketPool({sports:sp,gids:G.filter(g=>!have.has(g.sport+'|'+g.comp)).map(g=>g.id),minP:.5,propsOnly:false},72).filter(x=>x.p<=.95);
+  const pool=hi.concat(lo);
   const byGame=new Map();for(const x of pool){if(!byGame.has(x.gid))byGame.set(x.gid,[]);byGame.get(x.gid).push(x);}
   for(const xs of byGame.values())xs.sort((a,b)=>b.p-a.p);
   const byComp=new Map();for(const [gid,xs] of byGame){const g=gameById(gid),k=g.sport+'|'+g.comp;if(!byComp.has(k))byComp.set(k,[]);byComp.get(k).push(xs);}
@@ -1206,7 +1242,7 @@ function mpMixed(day,n=10){
   const games=[];while(order.some(c=>c.games.length))for(const c of order)if(c.games.length)games.push(c.games.shift());
   const legs=[],ok=x=>{const b=legs.length?parlayProb(legs).p:1,a=parlayProb([...legs,x]).p;return a>0&&!(legs.length&&a>=b*.995)&&!legs.some(y=>y.who&&y.who===x.who);};
   for(const xs of games){if(legs.length>=n)break;const x=xs.find(ok);if(x)legs.push(x);}
-  for(const xs of games){if(legs.length>=n)break;const x=xs.find(y=>!legs.includes(y)&&ok(y));if(x)legs.push(x);}
+  for(const xs of games){if(legs.length>=n)break;const x=xs.find(y=>y.p>=.75&&!legs.includes(y)&&ok(y));if(x)legs.push(x);}
   return legs;}
 // NBA, player props only, 15 legs: every NBA game on the day gets a leg (2 at most), lines "a point or two" from the player's
 // average (points ±2, rebounds / assists ±1); 'below' = over a line just under his average, 'above' = over a line just above it
@@ -1235,35 +1271,49 @@ function buildMyPicks(day){
   add('sgp5','Same game parlay · 5 legs','Five legs from the one game where they are most likely to land together, priced jointly.',mpSgp(day),{need:5});
   add('mixed10','10-leg mix · every sport and league','One leg from a game in each league on the day before any league gets a second.',mpMixed(day),{need:10});
   const lo=mpNba(day,'below'),hi=mpNba(day,'above');
-  add('nba15','NBA player props · 15 legs','Lines a point or two under each player\'s average (points 2, rebounds and assists 1). Every NBA game on the day, 2 legs at most per game.',lo.legs,{need:Math.min(15,2*lo.games),games:lo.games});
-  add('nba15up','NBA player props · 15 legs (above average)','Lines a point or two over each player\'s average. Each leg is under 50%, so this one is a lottery ticket.',hi.legs,{need:Math.min(15,2*hi.games),games:hi.games});
+  add('nba15',`NBA player props · ${lo.legs.length||15} legs`,'Lines a point or two under each player\'s average (points 2, rebounds and assists 1). Every NBA game on the day, 2 legs at most per game.'+(lo.games&&lo.games<8?` ${lo.games} NBA games on the day, so ${Math.min(15,2*lo.games)} legs at most.`:''),lo.legs,{need:Math.min(15,2*lo.games),games:lo.games});
+  add('nba15up',`NBA player props · ${hi.legs.length||15} legs (above average)`,'Lines a point or two over each player\'s average. Each leg is under 50%, so this one is a lottery ticket.',hi.legs,{need:Math.min(15,2*hi.games),games:hi.games});
   add('dog3','Underdog moneylines · 3 legs','The three likeliest underdogs on the day to win outright.',mpDogs(day,3),{need:3});
   add('dog5','Underdog moneylines · 5 legs','The five likeliest underdogs on the day to win outright.',mpDogs(day,5),{need:5});
   return {v:MPV,day,tz:MP_TZ,made:new Date(now()).toISOString(),parlays:P};}
-// today's picks if any were made for today; else tomorrow's; else make them (today while it still has 3+ open games)
+// how complete a set of picks is: each parlay counts up to 1 by legs found / legs wanted
+const mpScore=b=>b.parlays.reduce((s,P)=>s+(P.need?Math.min(1,P.legs.length/P.need):1),0);
+// the day to pick: today while its remaining games can fill the parlays at least as well as tomorrow's; otherwise tomorrow
+// (a first visit at 5 PM with 3 games left picks tomorrow instead of locking a thin day). The daily job uses the same rule.
+function mpChoose(){const today=dayOf(now()),tom=nextDay(today);
+  if(dayGames(today).length<3)return buildMyPicks(tom);
+  const a=buildMyPicks(today);if(a.parlays.every(P=>!P.need||P.legs.length>=P.need))return a;
+  const b=buildMyPicks(tom);return mpScore(a)>=mpScore(b)?a:b;}
+// today's picks if any were made for today; else tomorrow's; else make them. A build with no legs at all (feed down, board
+// empty) is shown but never locked, so the real picks are made once the board is back.
 function myPicks(){
-  const today=dayOf(now()),tom=dayOf(now()+864e5),srv=DATA.mypicks,loc=store.get('mypicks',null);
+  const today=dayOf(now()),tom=nextDay(today),srv=DATA.mypicks,loc=store.get('mypicks',null);
   for(const day of [today,tom]){if(srv&&srv.day===day)return {...srv,src:'daily'};if(loc&&loc.day===day&&loc.v===MPV)return mpFill(loc);}
-  const day=dayGames(today).length>=3?today:tom,b=buildMyPicks(day);store.set('mypicks',b);return {...b,src:'device'};}
+  const b=mpChoose();if(b.parlays.some(P=>P.legs.length))store.set('mypicks',b);return {...b,src:'device'};}
 // a parlay that was empty when the picks were locked (props not posted yet, say) is filled once, while its day's games are open
-function mpFill(loc){let ch=false;
-  for(const P of loc.parlays){if(P.legs.length||P.filled)continue;const b=buildMyPicks(loc.day).parlays.find(x=>x.id===P.id);if(b&&b.legs.length){Object.assign(P,b,{filled:new Date(now()).toISOString()});ch=true;}}
+function mpFill(loc){let ch=false,B=null;
+  for(const P of loc.parlays){if(P.legs.length||P.filled)continue;B=B||buildMyPicks(loc.day);const b=B.parlays.find(x=>x.id===P.id);if(b&&b.legs.length){Object.assign(P,b,{filled:new Date(now()).toISOString()});ch=true;}}
   if(ch)store.set('mypicks',loc);return {...loc,src:'device'};}
 function mpCard(P){
-  const legs=P.legs.map(L=>{const g=gameById(L.gid)||null,st=!g?'gone':isFinal(g)?'final':started(g)?'live':isVoid(g)?'void':'open';
+  const legs=P.legs.map(L=>{const g=gameById(L.gid)||null,st=!g?'gone':isFinal(g)?'final':isVoid(g)?'void':started(g)?'live':'open';
     // a player leg whose player has dropped off the board since the pick (ruled out in a later injury report) is flagged, not priced
     const gone=st==='open'&&isP(L.key)&&!pLegInfo(L.key);
     const res=g&&isFinal(g)?evalActual(g,L.key):null,p=gone?0:st==='open'?(p1(g,L.key)||L.p):L.p;return {...L,st,res,p,gone};});
   const id='mp-'+P.id,open=legs.filter(L=>L.st==='open');
   if(!legs.length)return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span></div><div class="why">${P.id.startsWith('exact')?'No soccer on this day, so no exact-score parlay.':P.id.startsWith('nba')?'No NBA games with player data on this day.':P.id.startsWith('dog')?'Not enough underdogs priced 25-46% on this day.':'Not enough legs on this day.'}</div></div>`;
-  const allOpen=open.length===legs.length,p=allOpen?parlayProb(legs).p:+P.p||0,lost=legs.some(L=>L.res===false),won=legs.every(L=>L.res===true);
+  // the chance that what is left still hits: open legs priced together now, started legs at their price when picked; legs that
+  // already hit, void legs and legs whose player was ruled out (books void those) are left out
+  const outN=legs.filter(L=>L.gone).length,live=legs.filter(L=>L.st!=='void'&&!L.gone),allOpen=open.length===legs.length&&!outN;
+  const p=allOpen?parlayProb(legs).p:parlayProb(live.filter(L=>L.st==='open')).p*live.filter(L=>L.st!=='open'&&L.res!==true).reduce((a,L)=>a*(+L.p||0),1);
+  const lost=legs.some(L=>L.res===false),won=live.length>0&&live.every(L=>L.res===true);
   const usable=open.filter(L=>!L.gone);  // the builder / My Parlays / Simulator get the legs that can still be bet
-  autoCache[id]={legs:usable.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:L.sport,p:L.p})),p:parlayProb(usable).p,n:usable.length};
+  autoCache[id]={legs:usable.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:L.sport,p:L.p})),p:parlayProb(usable).p,n:usable.length,
+    title:usable.length<legs.length?`${P.title} · the ${usable.length} legs still to play`:P.title};
   const hc=lost?'h-lo':won?'h-hi':p>=.4?'h-hi':p>=.12?'h-mid':'h-lo',tag=lost?'Lost':won?'Won 🎉':`${p>=.01?pct(p):pct(p,p>=.0001?2:4)} to hit`;
-  const short=P.need&&legs.length<P.need?`<div class="why">Only ${legs.length} legs qualified${P.games!=null?` (${P.games} NBA game${P.games===1?'':'s'} on the day)`:''}.</div>`:'';
+  const short=(outN?`<div class="why" style="color:var(--no)">${outN} leg${outN>1?'s':''} ruled out since the pick: swap ${outN>1?'them':'it'} (books usually void a leg whose player sits). The chance shown leaves ${outN>1?'them':'it'} out.</div>`:'')+(P.need&&legs.length<P.need?`<div class="why">Only ${legs.length} legs qualified${P.games!=null?` (${P.games} NBA game${P.games===1?'':'s'} on the day)`:''}.</div>`:'');
   return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span><span class="hit ${hc}">${tag}</span></div>${lost||won?'':gaugeHTML(p)}<div class="why" style="margin-top:4px">${esc(P.sub||'')}</div>${short}
-   <div style="margin-top:6px">${legs.map(L=>`<div class="leg"><span class="sp" title="${esc(SPORTNAME[L.sport]||L.sport)}">${sportIco(L.sport)}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${esc(L.away)} @ ${esc(L.home)} · ${esc(L.comp||'')} · ${L.gone?'<b style="color:var(--no)">ruled out since the pick: swap this leg</b>':L.st==='open'?esc(when({start:L.start})):L.st==='final'?(L.res===true?'✓ hit':L.res===false?'✗ missed':'final'):L.st==='live'?'started':L.st==='void'?'void':'no longer listed'}</span></div><span class="legp mono">${pct(L.p)}</span></div>`).join('')}</div>
-   <div class="pcfoot"><div class="odds mono">${allOpen?fmtOdds(p):'—'}<small>${allOpen?`Fair odds · $10 pays ~$${Math.round(10*(p2dec(p)-1)).toLocaleString()}`:`${open.length} of ${legs.length} legs still to start`}</small></div>${usable.length?`<button class="btn" data-addp="${id}">${allOpen&&usable.length===legs.length?'Open in builder':'Open remaining legs'}</button>`:''}</div>
+   <div style="margin-top:6px">${legs.map(L=>`<div class="leg"><span class="sp" title="${esc(SPORTNAME[L.sport]||L.sport)}">${sportIco(L.sport)}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${esc(L.away)} @ ${esc(L.home)} · ${esc(L.comp||'')} · ${L.gone?'<b style="color:var(--no)">ruled out since the pick: swap this leg</b>':L.st==='open'?esc(mpTime(Date.parse(L.start))):L.st==='final'?(L.res===true?'✓ hit':L.res===false?'✗ missed':'final'):L.st==='live'?'started':L.st==='void'?'void':'no longer listed'}</span></div><span class="legp mono">${pct(L.p)}</span></div>`).join('')}</div>
+   <div class="pcfoot"><div class="odds mono">${allOpen?fmtOdds(p):'—'}<small>${allOpen?`Fair odds · $10 wins ~$${Math.round(10*(p2dec(p)-1)).toLocaleString()}`:`${open.length} of ${legs.length} legs still to start · chance for what is left`}</small></div>${usable.length?`<button class="btn" data-addp="${id}">${allOpen&&usable.length===legs.length?'Open in builder':'Open remaining legs'}</button>`:''}</div>
    ${usable.length?`<div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-simp="${id}">🎲 Simulate</button></div>`:''}${allOpen?`<div class="note">${minPriceLine(p)}</div>`:''}</div>`;}
 let mpNbaMode=store.get('mpNba','below');
 function myPicksHTML(){
@@ -1332,7 +1382,7 @@ function pickCard(P){
   return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)} ${tag}</span><span class="hit ${hc}">${pct(p)} to hit</span></div>${gaugeHTML(p)}
    ${P.note?`<div class="why" style="margin-top:4px">${esc(P.note)}</div>`:''}
    <div style="margin-top:6px">${legs.map((L,i)=>`<div class="leg"><span class="legdot ${i===0?'base':''}">${i===0?'★':i+1}</span><div class="legtxt"><b>${esc(L.label)}${L.under?'<span class="link">UNDER</span>':''}</b><span>${esc(L.g.away.abbr)} @ ${esc(L.g.home.abbr)} · ${started(L.g)?'started':esc(when(L.g))}</span></div><span class="legp mono">${pct(L.p)}</span></div>`).join('')}</div>
-   <div class="pcfoot"><div class="odds mono">${fmtOdds(p)}<small>Fair odds · $10 pays ~$${pay.toLocaleString()}</small></div>${open.length?`<button class="btn" data-addp="pick-${esc(P.id)}">${live?'Open remaining legs':'Open in builder'}</button>`:'<span class="final">Live now</span>'}</div>${open.length?`<div class="note">${minPriceLine(p)}</div>`:''}</div>`;
+   <div class="pcfoot"><div class="odds mono">${fmtOdds(p)}<small>Fair odds · $10 wins ~$${pay.toLocaleString()}</small></div>${open.length?`<button class="btn" data-addp="pick-${esc(P.id)}">${live?'Open remaining legs':'Open in builder'}</button>`:'<span class="final">Live now</span>'}</div>${open.length?`<div class="note">${minPriceLine(p)}</div>`:''}</div>`;
 }
 function picksHTML(limit){
   const picks=(DATA.picks||[]).filter(P=>pickLegs(P).length);if(!picks.length)return '';
@@ -1493,7 +1543,7 @@ function openGame(id){
    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">${abBox(g.away)}<b style="font-size:19px">${esc(g.away.name)}</b></div>`;
   if(isFinal(g))html+=`<div class="panel"><b style="font-size:22px">${g.score.home} – ${g.score.away}</b><div class="note">Final score</div></div>`;
   if(isVoid(g))html+=`<div class="panel" style="border-color:var(--no)"><b>This game is ${esc(String(g.status).toLowerCase())}.</b> <span style="color:var(--mute)">It can't be bet here, and legs on it count as void.</span></div>`;
-  if(!g.prob){openSheet(html+`<div class="empty">Win chances for this game post closer to start time. The app refreshes every hour.</div><button class="btn full ghost" id="closeS">Close</button>`,{type:'game',id,label:lbl});$('closeS').onclick=()=>closeSheet();return;}
+  if(!g.prob){openSheet(html+`<div class="empty">${isFinal(g)?'This game is over.':isVoid(g)?'This game was postponed or cancelled.':started(g)?'This game has started.':'Win chances for this game post closer to start time. The app refreshes every hour.'}</div><button class="btn full ghost" id="closeS">Close</button>`,{type:'game',id,label:lbl});$('closeS').onclick=()=>closeSheet();return;}
   const m=fit(g);
   if(m.kind==='goals'){
     const M=scoreMatrix(g),nhl=M.otHome!=null,cells=[];let tie=0;
@@ -1534,7 +1584,7 @@ function renderSlipBar(){
   slip=liveSlip();
   const on=slip.length>0;$('slipbar').classList.toggle('on',on);if(!on)return;
   const pr=parlayProb(slip);$('slipN').textContent=slip.length;
-  $('slipT').innerHTML=`Parlay builder<small>${pct(pr.p)} to hit · tap to open</small>`;$('slipO').textContent=pr.p>0?fmtOdds(pr.p):'—';
+  $('slipT').innerHTML=`Parlay builder<small>${pr.p>0&&pr.p<.01?pct(pr.p,pr.p>=.001?1:2):pct(pr.p)} to hit · tap to open</small>`;$('slipO').textContent=pr.p>0?fmtOdds(pr.p):'—';
 }
 $('slipbar').onclick=()=>openSlip();
 function openSlip(){
@@ -1563,10 +1613,10 @@ function openSlip(){
    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)"><span>Stake on all ${slip.length} legs $</span><input type="number" id="stakeTop" class="stakein" min="0" step="0.01" inputmode="decimal" value="${esc(stakeV)}" style="max-width:96px" aria-label="Stake on the whole parlay, in dollars"></label><div id="payTop" class="mono" style="font-size:14px;line-height:1.5;text-align:right"></div></div>
    ${pr.p>0?`<div class="note">${minPriceLine(pr.p)} Model estimate, not a guarantee.</div>`:''}</div>
    <div class="sec">Legs <span style="text-transform:none;font-weight:600;letter-spacing:0">· ★ = your anchor leg (the one you're most sure of)</span></div>
-   <div class="panel" style="padding:4px 14px">${order.map(i=>{const L=slip[i],g=gameById(L.gid),id=L.gid+'|'+L.key,isB=i===bi,conn=!isB&&L.gid===base.gid;
+   <div class="panel" style="padding:4px 14px">${order.map(i=>{const L=slip[i],g=gameById(L.gid),id=L.gid+'|'+L.key,isB=i===bi,conn=!isB&&L.gid===base.gid&&g&&probOf(g,[base.key,L.key])>p1(g,base.key)*p1(g,L.key)*1.02;
      return `<div class="leg" style="align-items:center"><button class="star ${isB?'on':''}" data-star="${esc(id)}" aria-pressed="${isB}" aria-label="${esc((isB?'Anchor leg: ':'Make anchor leg: ')+legLabel(L))}">★</button><div class="legtxt"><b>${esc(legLabel(L))}${conn?'<span class="link">CONNECTED</span>':''}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</b><span>${esc(g.home.abbr)} vs ${esc(g.away.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(legP[i])}</span><button class="x" data-rm="${esc(id)}" aria-label="${esc('Remove '+legLabel(L))}">✕</button></div>`;}).join('')}</div>
    <div class="sec">How your chances shrink</div>
-   <div class="panel"><div class="steps">${steps.map(p=>`<div style="height:${Math.max(4,p*100)}%"><span>${pct(p)}</span></div>`).join('')}</div><div class="steplbl">${steps.map((p,i)=>`<span>${i+1} leg${i?'s':''}</span>`).join('')}</div>
+   <div class="panel"><div class="steps">${(()=>{const n=steps.length,k=Math.ceil(n/7);return steps.map((p,i)=>`<div style="height:${Math.max(4,p*100)}%"><span>${i%k===0||i===n-1?(p<.01?pct(p,p>=.001?1:2):pct(p)):''}</span></div>`).join('');})()}</div><div class="steplbl">${steps.map((p,i)=>`<span>${steps.length>6?i+1:`${i+1} leg${i?'s':''}`}</span>`).join('')}</div>${steps.length>6?'<div class="note" style="margin-top:2px">Bars = number of legs.</div>':''}
    ${slip.length>=3&&weakest!=null?`<button class="btn full ghost" id="trimBtn">Trim weakest leg → ${pct(parlayProb(slip.filter((L,i)=>i!==weakest)).p)} to hit</button>`:''}</div>
    <div class="sec">Coach</div><div class="panel" style="padding:4px 14px">${tips.map(([c,i,t])=>`<div class="coach"><span class="ic ${c}">${i}</span><div>${t}</div></div>`).join('')}</div>
    <div class="sec">Check your sportsbook's price</div>
@@ -1841,8 +1891,9 @@ async function load(){ // -> true when DATA was replaced
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
-    try{d=sanitizeFeed(JSON.parse($('seed').textContent));}catch(e){}
-    if(!d)return false;}
+    try{d=sanitizeFeed(JSON.parse($('seed').textContent));if(d)d.seeded=true;}catch(e){}
+    if(!d)return false;
+    setTimeout(()=>refreshTick(),60e3);} // today's feed failed: try again in a minute, not 10
   if(!pr&&dataLoaded)pr={players:DATA.players,picks:DATA.picks,lineups:DATA.lineups}; // a failed side file keeps its last good copy
   if(!sc&&dataLoaded)sc=DATA.scorers;
   if(pr){const ids=new Set((pr.players||[]).map(p=>p.id));d.players=[...(pr.players||[]),...(d.players||[]).filter(p=>!ids.has(p.id))];
@@ -1852,7 +1903,7 @@ async function load(){ // -> true when DATA was replaced
   addRolePlayers(d,ro,inj);d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
   applyLines(d);
   const ids=new Set(d.games.map(g=>g.id));for(const [k,v] of SIMC)if(!ids.has(k.slice(0,k.indexOf('|'))))SIMC.delete(k);
-  DATA=d;pCache.clear();autoCache={};dataLoaded=true;lastGood=Date.now();emit('data',DATA);return true;
+  DATA=d;pCache.clear();autoCache={};dataLoaded=true;if(!d.seeded)lastGood=Date.now();emit('data',DATA);return true;
 }
 let lastGood=null,ROLES_LAST=null,INJ_LAST=null;
 // NBA games with no posted props: one player record per rotation player and stat from nbaroles.json season averages (points 8+,
@@ -1861,16 +1912,17 @@ let lastGood=null,ROLES_LAST=null,INJ_LAST=null;
 const nameKey=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 function addRolePlayers(d,roles,inj){
   if(!roles||!roles.teams||typeof roles.teams!=='object')return;
-  const have=new Set(d.players.map(p=>p.gid)),stat=new Map();
+  const have=new Set(d.players.map(p=>p.gid)),stat=new Map();d.estById=new Map();
   for(const e of (inj&&Array.isArray(inj.injuries)?inj.injuries:[]))if(e&&e.sport==='nba')stat.set(e.team+'|'+nameKey(e.player),String(e.status||'').toLowerCase());
   const add=[];
-  for(const g of d.games){if(g.sport!=='nba'||have.has(g.id)||isFinal(g)||isVoid(g))continue;
+  for(const g of d.games){if(g.sport!=='nba'||isFinal(g)||isVoid(g))continue;
     for(const side of ['home','away']){const ab=g[side].abbr,R=roles.teams[ab];if(!Array.isArray(R))continue;
       for(const r of R){if(!r||!r.name||!(+r.gp>=3)||!(+r.mpg>=18))continue;
         const st=stat.get(ab+'|'+nameKey(r.name))||'active';if(st==='out'||st==='doubtful')continue;
         const status=st==='questionable'||st==='day-to-day'?'questionable':'active',note=status==='active'?'':st;
         for(const [k,v,min] of [['pts',+r.ppg,8],['reb',+r.rpg,4],['ast',+r.apg,3]])if(v>=min)
-          add.push({id:`${nameKey(r.name)}-${k}~${g.id}`,gid:g.id,name:r.name,stat:k,avg:+v.toFixed(1),status,note,team:ab,est:true});}}}
+          {const rec={id:`${nameKey(r.name)}-${k}~${g.id}`,gid:g.id,name:r.name,stat:k,avg:+v.toFixed(1),status,note,team:ab,est:true};
+           if(have.has(g.id))d.estById.set(rec.id,rec);else add.push(rec);}}}}
   d.players=d.players.concat(add);}
 registerTab({key:'odds',label:'💰 Odds Tools',after:'parlays',render:renderOddsTools});
 applyTheme();renderTabs();
@@ -1889,7 +1941,7 @@ function refreshAll(){
 function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
 document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
 setInterval(refreshTick,10*60*1000);
-window.__fm2={buildMyPicks,myPicks,dayOf,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+window.__fm2={buildMyPicks,myPicks,mpChoose,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

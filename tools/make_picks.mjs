@@ -2,7 +2,7 @@
 //   node tools/make_picks.mjs [--day YYYY-MM-DD] [--out mypicks.json]
 // It opens the app headless on this folder's files (data.json, props.json, nbaroles.json, injuries.json, ...) with the real clock
 // and calls the page's own builder, so the picks use exactly the model the app shows. Without --day it picks the day the way the
-// page does: today (America/Los_Angeles) while today still has 3+ games to start, otherwise tomorrow.
+// page does: today (America/Los_Angeles) while its remaining games can fill the parlays at least as well as tomorrow's, else tomorrow.
 // Exits 1 (and writes nothing) if the page fails to load, throws, or no parlay has any legs.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -33,11 +33,8 @@ try {
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__fm2 && __fm2.buildMyPicks, null, { timeout: 120000 });
-  const picks = await page.evaluate(day => {
-    const F = __fm2, today = F.dayOf(Date.now()), tom = F.dayOf(Date.now() + 864e5);
-    const d = day || (F.dayGames(today).length >= 3 ? today : tom);
-    return F.buildMyPicks(d);
-  }, DAY);
+  // without --day the page's own rule picks the day (today while its remaining games can fill the parlays, else tomorrow)
+  const picks = await page.evaluate(day => day ? __fm2.buildMyPicks(day) : __fm2.mpChoose(), DAY);
   if (errors.length) throw new Error('page errors: ' + errors.slice(0, 3).join(' | '));
   if (!picks || !Array.isArray(picks.parlays) || !picks.parlays.some(P => P.legs.length)) throw new Error('no parlay has any legs for ' + (picks && picks.day));
   picks.by = 'tools/make_picks.mjs';

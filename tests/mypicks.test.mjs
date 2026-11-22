@@ -79,6 +79,26 @@ try {
   check('8 cards on the page (3 exact, SGP, mix, NBA, 2 underdog)', cards === 8, `cards=${cards}`);
   await page.click('#mpNbaSeg [data-v="above"]');
   check('NBA switch shows the over-average parlay', /above average/.test(await page.locator('#main').textContent()));
+  // QA fixes: long shots keep their real price; card saves keep what grading needs, once
+  const up = await page.evaluate(() => [...document.querySelectorAll('#main .pc')].find(c => /above average/.test(c.textContent)).querySelector('.odds').textContent);
+  check('a 0.003% ticket is not priced at the old +999900 cap', !/\+999900\b/.test(up) && /\+\d{6,}/.test(up.replace(/,/g, '')), up);
+  await page.locator('[data-savep="mp-dog3"]').click();
+  await page.locator('[data-savep="mp-dog3"]').click();
+  const sv = await page.evaluate(() => JSON.parse(localStorage.getItem('fm2.saved') || '[]'));
+  check('＋ My Parlays saves once (second tap is a no-op)', sv.length === 1, `saved=${sv.length}`);
+  check('a card-saved leg keeps start, teams and its chance (so it can be graded after the game leaves the feed)', sv[0] && sv[0].legs.every(L => L.start && L.home && L.away && L.p1 > 0) && sv[0].dec == null, JSON.stringify(sv[0] && sv[0].legs[0]));
+  // a postponed leg is void: the rest winning makes the card Won
+  const vw = await page.evaluate(() => {
+    const M = __fm2.myPicks(), P = M.parlays.find(x => x.id === 'dog3'), D = __fm2.DATA;
+    const gs = P.legs.map(L => D.games.find(g => g.id === L.gid)), keep = gs.map(g => ({ status: g.status, score: g.score, start: g.start }));
+    gs[0].status = 'postponed';
+    for (let i = 1; i < gs.length; i++) { const L = P.legs[i]; gs[i].status = 'closed'; gs[i].score = L.key === 'H' ? { home: 3, away: 1 } : { home: 1, away: 3 }; gs[i].start = '2026-11-21T20:00:00Z'; }
+    SB.render(); const c = [...document.querySelectorAll('#main .pc')].find(x => /Underdog moneylines · 3 legs/.test(x.textContent));
+    const t = c.querySelector('.hit').textContent;
+    gs.forEach((g, i) => Object.assign(g, keep[i])); if (!keep[0].score) delete gs[0].score; SB.render();
+    return t;
+  });
+  check('a postponed leg is void and the other legs winning grades the card Won', /Won/.test(vw), vw);
   // chosen once a day: a reload hours later with moved prices keeps the same legs
   await page.clock.setFixedTime(new Date('2026-11-22T15:00:00Z'));
   await page.route('**/data.json', r => { const d = JSON.parse(DATA); for (const g of d.games) if (g.prob && g.sport !== 'soccer') { g.prob.home = Math.min(.95, g.prob.home + .04); g.prob.away = 1 - g.prob.home; } r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(d) }); });

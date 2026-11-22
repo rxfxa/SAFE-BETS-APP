@@ -36,7 +36,8 @@ try {
     // a stats file for this game's two teams: the home player averages 245 passing yards against an away defence allowing 173
     __slipcheck.setPlayerStats({ league: { passYds: 235, rushYds: 115, recYds: 235 },
       defense: { [g.away.abbr]: { passYdsAllowed: 173.2, rushYdsAllowed: 86.6 }, [g.home.abbr]: { passYdsAllowed: 211, rushYdsAllowed: 80.9 } },
-      players: { 'Test Passer': { team: g.home.abbr, stat: 'passing_yards', mean: 245, sd: 65 }, 'Test Scorer': { team: g.home.abbr, stat: 'anytime_td', mean: 0.85, sd: 0 } } });
+      players: { 'Test Passer': { team: g.home.abbr, stat: 'passing_yards', mean: 245, sd: 65 }, 'Test Scorer': { team: g.home.abbr, stat: 'anytime_td', mean: 0.85, sd: 0 },
+        'Big Test Passer': { team: g.home.abbr, stat: 'passing_yards', mean: 300, sd: 65 } } });
     const base = { event: `${g.away.name} @ ${g.home.name}`, sport: 'nfl', sel: '' };
     const A = __slipcheck.analyze({ legs: [
       { ...base, pick: 'Test Passer', market: 'passing_yards', side: 'over', line: '209.5', odds: '' },
@@ -44,7 +45,15 @@ try {
     ], totalOdds: '' });
     const S = __slipcheck.simulateSlip(A);
     const Ao = __slipcheck.analyze({ legs: [{ ...base, pick: 'Test Passer', market: 'player_other', side: 'over', line: '209.5', odds: '' }], totalOdds: '' });
-    return { otherP: Ao.M[0] && Ao.M[0].p, passP: A.M[0] && A.M[0].p, tdP: A.M[1] && A.M[1].p, n: A.M.length, S: S && { rate: S.rate, legs: S.legs.map(l => [l.rate, l.how]), N: S.N }, away: g.away.abbr };
+    // the AI photo reader puts the whole printed line in the pick: "210+ | Test Passer Passing Yards" (210+ means 210 or more)
+    const messy = (pick, side, line, market = 'passing_yards') => __slipcheck.analyze({ legs: [{ ...base, pick, market, side, line, odds: '' }], totalOdds: '' });
+    const m1 = messy('210+ | Test Passer Passing Yards', 'over', '210'), m2 = messy('210+ | Test Passer Passing Yards', '', '210');
+    const m3 = messy('Test Scorer | Anytime TD Scorer', '', '', 'anytime_td'), m4 = messy('210+ | Big Test Passer Passing Yards', 'over', '210');
+    const m5 = messy('211+ | Test Passer Passing Yards', 'over', '211');
+    const Sm = __slipcheck.simulateSlip(m1);
+    const one = A => A.M[0] ? { p: A.M[0].p, label: A.M[0].label, key: A.M[0].key } : { p: null, why: A.rows && A.rows[0] && A.rows[0].why };
+    const messyR = { m1: one(m1), m2: one(m2), m3: one(m3), m4: one(m4), m5: one(m5), simHow: Sm && Sm.legs[0] && Sm.legs[0].how };
+    return { messyR, otherP: Ao.M[0] && Ao.M[0].p, passP: A.M[0] && A.M[0].p, tdP: A.M[1] && A.M[1].p, n: A.M.length, S: S && { rate: S.rate, legs: S.legs.map(l => [l.rate, l.how]), N: S.N }, away: g.away.abbr };
   });
   if (!r) { check('an NFL game is on the saved board', false); }
   else {
@@ -56,6 +65,17 @@ try {
     check('the touchdown leg is simulated per run and matches its Poisson chance (within 1.5 points)', Math.abs(r.S.legs[1][0] - r.tdP) < 0.015, `${(r.S.legs[1][0] * 100).toFixed(2)}% vs ${(r.tdP * 100).toFixed(2)}%`);
     check('the leg says whose average and which defence it used', /average/.test(r.S.legs[0][1]) && /vs /.test(r.S.legs[0][1]), r.S.legs[0][1]);
     check('the slip rate is below either leg', r.S.rate <= Math.min(r.S.legs[0][0], r.S.legs[1][0]) + 1e-9, `${(r.S.rate * 100).toFixed(2)}%`);
+  }
+  if (r && r.messyR) {
+    const M = r.messyR;
+    check('messy pick "210+ | Test Passer Passing Yards" is priced from the model', M.m1.p > 0, JSON.stringify(M.m1));
+    check('"210+" is read as 210 or more: same chance as over 209.5', M.m1.p != null && Math.abs(M.m1.p - r.passP) < 1e-9, `${M.m1.p} vs ${r.passP}`);
+    check('"210+" with no side picked is treated as over', M.m2.p != null && Math.abs(M.m2.p - r.passP) < 1e-9, `${M.m2.p}`);
+    check('"211+" is a harder line than "210+"', M.m5.p != null && M.m5.p < M.m1.p, `${M.m5.p}`);
+    check('the label uses the player name, not the printed line', M.m1.label === 'Test Passer over 209.5 Passing yards', M.m1.label);
+    check('messy anytime TD pick "Test Scorer | Anytime TD Scorer" is priced like the clean name', M.m3.p != null && Math.abs(M.m3.p - r.tdP) < 1e-9, JSON.stringify(M.m3));
+    check('when several names fit, the longest wins ("Big Test Passer", not "Test Passer")', M.m4.p > M.m1.p && /^Big Test Passer /.test(M.m4.label), JSON.stringify(M.m4));
+    check('the simulation reads the messy leg from the player model', /Test Passer: average/.test(M.simHow || ''), M.simHow);
   }
   check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (e) { check('suite ran to completion', false, e.stack || e.message); }

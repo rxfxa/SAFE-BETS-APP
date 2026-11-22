@@ -126,15 +126,43 @@ function boardGames() {
   const now = Date.now();
   return ((SB.DATA && SB.DATA.games) || []).filter(g => { const t = SB.startMs(g); return isFinite(t) && t > now - 30 * 3600e3 && t < now + 10 * 86400e3; });
 }
+// how well a player's name fits the pick text: 2 = the pick is just his name; 1 + length = his full name (two words or more) appears
+// as whole words inside it, e.g. "25+ | Kaelon Black Rushing Yards"; 0 = no fit. A longer name wins over a shorter one it contains.
+function nameFit(name, text) {
+  const n = nameKey(name), t = typeof text === 'string' ? text : ''; if (!n || !t) return 0;
+  if (n === t) return 1e6;
+  return n.includes(' ') && (' ' + t + ' ').includes(' ' + n + ' ') ? n.length : 0;
+}
+function bestByName(items, nameOf, pick) { // the item whose name fits the pick text best, or null
+  const t = nameKey(pick); let best = null, bs = 0;
+  for (const it of items) { const s = nameFit(nameOf(it), t); if (s > bs) { bs = s; best = it; } }
+  return best;
+}
 function findPlayer(name, stat) {
-  const k = nameKey(name); if (!k) return null;
-  const P = ((SB.DATA && SB.DATA.players) || []).filter(p => nameKey(p.name) === k);
+  const t = nameKey(name); if (!t) return null;
+  const all = (SB.DATA && SB.DATA.players) || [], top = bestByName(all, p => p.name, name); if (!top) return null;
+  const k = nameKey(top.name), P = all.filter(p => nameKey(p.name) === k);
   return P.find(p => p.stat === stat) || P[0] || null;
 }
 function findRotation(name) { // NBA rotation player via lottos.js (team model), for points lines not in props.json
-  const L = window.__lottos; if (!L || !L.ROLES) return null; const k = nameKey(name);
-  for (const abbr of Object.keys(L.ROLES.teams || {})) { const m = L.teamModel(abbr); const p = m.players.find(x => nameKey(x.name) === k); if (p) return p; }
-  return null;
+  const L = window.__lottos; if (!L || !L.ROLES) return null; if (!nameKey(name)) return null;
+  let best = null, bs = 0;
+  for (const abbr of Object.keys(L.ROLES.teams || {})) { const m = L.teamModel(abbr); for (const x of m.players) { const s = nameFit(x.name, nameKey(name)); if (s > bs) { bs = s; best = x; } } if (bs >= 1e6) break; }
+  return best;
+}
+// "25+" printed on a slip means 25 or more: over 24.5. Returns { side, line } for the leg, read from the pick text when it has "N+".
+function plusLine(leg, side, line) {
+  const m = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*\+(?![\d])/.exec(String(leg.pick ?? '')); if (!m || side === 'U') return { side, line };
+  const n = parseFloat(m[1]);
+  if (line == null || Math.abs(line - n) < 1e-9) return { side: 'O', line: Number.isInteger(n) ? n - 0.5 : n };
+  return { side: side || 'O', line };
+}
+function psPlayer(pick) { // the playerstats.json entry [name, stats] named in the pick text, or null
+  return PS && PS.players ? bestByName(Object.entries(PS.players), e => e[0], str(pick)) : null;
+}
+function playerName(leg) { // the clean player name for a label: from playerstats.json or the props feed, else the pick as typed
+  const h = psPlayer(leg.pick); if (h) return h[0];
+  const p = findPlayer(leg.pick); return p ? p.name : str(leg.pick);
 }
 // Polymarket's own board: the snapshot keeps a game for a while after it starts, so its last prices stay available
 function pmGameFor(g) {
@@ -174,7 +202,8 @@ function sideOf(g, text) { const t = N(text); const h = teamScore(g.home, t), a 
 function bookLeg(out, g, leg, mk, side, line, dec, pOverride) { // a leg priced from the odds on the slip, or from the player model
   out.g = g; out.bookOnly = true;
   const sideTxt = side === 'O' ? 'over' : side === 'U' ? 'under' : '';
-  out.label = [str(leg.pick), sideTxt, line != null ? String(line) : '', mk === 'player_other' ? 'prop' : marketName(mk)].filter(Boolean).join(' ');
+  const who = STAT[mk] || mk === 'player_other' || BOOK_PROP.has(mk) ? playerName(leg) : str(leg.pick);
+  out.label = [who, sideTxt, line != null ? String(line) : '', mk === 'player_other' ? 'prop' : marketName(mk)].filter(Boolean).join(' ');
   out.key = `B:${mk}:${side || '-'}:${line != null ? line : '-'}:${N(str(leg.pick)).replace(/\s+/g, '-')}`;
   if (mk === 'moneyline') { const sd = sideOf(g, `${str(leg.pick)} ${str(leg.sel)}`); if (sd) out.gameKey = `SC:ml:${sd}`; }
   out.p = pOverride != null ? pOverride : Math.min(0.999, 1 / dec);
@@ -193,10 +222,12 @@ function playerProb(leg, g, side, line) {
 }
 function matchLeg(leg) {
   const out = { status: 'none', g: null, key: null, label: '', p: 0, why: '' };
-  const mk = MARKET_IDS.includes(leg.market) ? leg.market : 'other', side = /^under$/i.test(leg.side) ? 'U' : /^over$/i.test(leg.side) ? 'O' : null;
-  const line = num(leg.line);
+  const mk = MARKET_IDS.includes(leg.market) ? leg.market : 'other';
+  let side = /^under$/i.test(leg.side) ? 'U' : /^over$/i.test(leg.side) ? 'O' : null;
+  let line = num(leg.line);
   // player props
   if (STAT[mk] || mk === 'player_other' || BOOK_PROP.has(mk)) {
+    if (mk !== 'anytime_td') ({ side, line } = plusLine(leg, side, line));
     const stat = STAT[mk];
     const pr = stat ? findPlayer(leg.pick, stat) : null;
     if (pr && pr.stat === stat && line != null && side) {
@@ -470,7 +501,7 @@ fetch('playerstats.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : nu
 // in each run. Returns null when the player or the stat isn't in the file.
 function playerModel(r) {
   if (!PS || !PS.players || !r.src) return null;
-  const k = nameKey(str(r.src.pick)), hit = Object.entries(PS.players).find(([n]) => nameKey(n) === k);
+  const hit = psPlayer(r.src.pick);
   // "Other player prop" takes the stat from the player's entry; the named markets must match it
   const mk = r.src.market === 'player_other' ? (hit && hit[1].stat) : r.src.market;
   if (!hit || !PSTAT[mk] || hit[1].stat !== mk) return null;

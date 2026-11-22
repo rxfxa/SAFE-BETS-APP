@@ -617,6 +617,44 @@ function simBlock(A) {
     <div class="note">${R.gamesSimmed} game${R.gamesSimmed === 1 ? '' : 's'} simulated ${R.N.toLocaleString()} times each.${R.unpriced ? ` ${R.unpriced} leg${R.unpriced === 1 ? '' : 's'} we couldn't price ${R.unpriced === 1 ? 'is' : 'are'} not in this run.` : ''} This is how often the slip lands in the simulation, not a guarantee.</div>`;
   return `<div class="pc sc-sim"><div class="pchead"><span class="pctitle">Simulate the slip</span>${btn}</div>${body}</div>`;
 }
+// ---------------- recommended changes: lower a weak leg, remove it, or swap in a more likely player ----------------
+const Z65 = -0.3853;  // a line the player clears about two times in three sits 0.385 standard deviations under his expected output
+const overChance = (N, pm) => 1 - 0.5 * (1 + erf(((N - 0.5) - pm.mean) / Math.max(1e-6, pm.sd) / Math.SQRT2));  // P(at least N)
+const safeLine = pm => { const t = pm.mean + Z65 * pm.sd; return t >= 20 ? Math.floor(t / 5) * 5 : Math.floor(t); };  // books post 5s
+function replacementFor(r, onSlip) {
+  if (!PS || !PS.players || !r.g || /^fallback-/.test(r.g.id)) return null;
+  let best = null;
+  for (const [name, p] of Object.entries(PS.players)) {
+    if (onSlip.has(name) || (p.team !== r.g.home.abbr && p.team !== r.g.away.abbr)) continue;
+    const pm = playerModel({ src: { pick: name, market: p.stat }, g: r.g, key: `B:${p.stat}:O:0:x` }); if (!pm) continue;
+    let text, pp;
+    if (pm.td) { pp = 1 - Math.exp(-pm.mean); text = `${name} anytime touchdown`; }
+    else { const N = safeLine(pm); if (N < 1) continue; pp = overChance(N, pm); text = `${name} ${N}+ ${marketName(p.stat).toLowerCase()}`; }
+    if (pp > r.p && (!best || pp > best.p)) best = { text, p: pp };
+  }
+  return best;
+}
+function recommendations(A) {
+  const sig = A.rows.map(r => r.text).join('|'), base = st.simRes && st.simRes.sig === sig ? st.simRes.rate : A.p;
+  const onSlip = new Set(A.M.map(r => { const h = psPlayer(str(r.src && r.src.pick)); return h ? h[0] : null; }).filter(Boolean));
+  const out = [];
+  for (const r of A.M.slice().sort((a, b) => a.p - b.p)) {
+    if (r.p >= 0.6) continue;  // a leg at 60%+ is left alone
+    const rec = { label: r.label, p: r.p, opts: [] }, pm = /^B:/.test(r.key) && r.g ? playerModel(r) : null;
+    if (pm && !pm.td && pm.over) { const N = safeLine(pm); if (N >= 1 && N - 0.5 < pm.line) { const pn = overChance(N, pm); rec.opts.push({ kind: 'lower', text: `Lower to ${N}+`, p: pn, slip: Math.min(1, base * pn / r.p) }); } }
+    const rep = replacementFor(r, onSlip);
+    if (rep) rec.opts.push({ kind: 'replace', text: `Replace with ${rep.text}`, p: rep.p, slip: Math.min(1, base * rep.p / r.p) });
+    rec.opts.push({ kind: 'remove', text: 'Remove this leg', p: null, slip: Math.min(1, base / r.p) });
+    out.push(rec);
+  }
+  return { base, items: out };
+}
+function recHTML(A) {
+  const R = recommendations(A); if (!R.items.length) return '';
+  return `<h2>Recommended changes <small>weakest legs first</small></h2><div class="pc sc-rec">${R.items.map(it => `<div class="sc-tr"><span><b>${esc(it.label)}</b><small>now ${pctS(it.p, 0)} to hit</small></span></div>
+    ${it.opts.map(o => `<div class="kv ${o.kind === 'remove' ? '' : 'kpos'}"><span>${esc(o.text)}${o.p != null ? ` · ${pctS(o.p, 0)} to hit` : ''}</span><b>slip ≈ ${pctS(o.slip, 1)}</b></div>`).join('')}`).join('')}
+    <div class="note">Slip chances are estimates from ${st.simRes ? 'the last simulation' : 'our model'} (now ${pctS(R.base, 2)}), changing one leg at a time. Lowering or removing a leg also lowers the payout: the book reprices the slip.</div></div>`;
+}
 function results() {
   const A = st.A; if (!A) return '';
   const R = reasons(A), cls = { hi: 'h-hi', mid: 'h-mid', lo: 'h-lo' }[A.tone];
@@ -647,7 +685,7 @@ function results() {
     <button class="btn ghost" data-sc-build ${bl.length ? '' : 'disabled'}>Open in builder</button>
     ${document.querySelector('#tabs [data-t="sim"]') && bl.length ? '<button class="btn ghost" data-sc-sim>Open in game simulator</button>' : ''}</div>
     <div class="note">Track saves the whole slip to My Parlays with ${st.slip.book ? esc(st.slip.book) + "'s" : 'the book\'s'} odds and your stake. Legs we price grade themselves when games finish; the others get ✓ / ✗ buttons. My Parlays is saved on this device.</div></div>`;
-  return cmp + simBlock(A) + verdict + legsA + injuryWorry(A) + why + act;
+  return cmp + simBlock(A) + recHTML(A) + verdict + legsA + injuryWorry(A) + why + act;
 }
 // ---------------- injury worry: who is out or doubtful in the games on this slip ----------------
 function injuryWorry(A) {
@@ -768,5 +806,5 @@ document.head.appendChild(css);
 const TAB = { key: 'slipcheck', label: '📸 Slip Check', after: 'mine', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="slipcheck"]')) SB.registerTab(TAB); }, 0));
-window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, playerProb, setPlayerStats: d => { PS = d; }, PROMPT, get state() { return st; }, get ai() { return aiState; } };
+window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, playerProb, recommendations, setPlayerStats: d => { PS = d; }, PROMPT, get state() { return st; }, get ai() { return aiState; } };
 })();

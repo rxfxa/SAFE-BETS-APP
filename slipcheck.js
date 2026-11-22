@@ -456,7 +456,28 @@ function results() {
     <button class="btn ghost" data-sc-build ${bl.length ? '' : 'disabled'}>Open in builder</button>
     ${document.querySelector('#tabs [data-t="sim"]') && bl.length ? '<button class="btn ghost" data-sc-sim>Simulate 100k</button>' : ''}</div>
     <div class="note">Track saves the whole slip to My Parlays with ${st.slip.book ? esc(st.slip.book) + "'s" : 'the book\'s'} odds and your stake. Legs we price grade themselves when games finish; the others get ✓ / ✗ buttons. My Parlays is saved on this device.</div></div>`;
-  return verdict + cmp + legsA + why + act;
+  return verdict + cmp + legsA + injuryWorry(A) + why + act;
+}
+// ---------------- injury worry: who is out or doubtful in the games on this slip ----------------
+function injuryWorry(A) {
+  const L = window.__lottos, INJ = L && L.INJ;
+  const games = [...new Set((A.groups || []).map(G => G.g).filter(Boolean))];
+  if (!games.length) return '';
+  const hrs = INJ && INJ.updated ? (Date.now() - Date.parse(INJ.updated)) / 3600e3 : null;
+  const fresh = !INJ ? 'The injury file did not load, so there is no injury check.'
+    : hrs != null && hrs <= 24 ? `Injury file updated ${esc(new Date(INJ.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}.`
+    : `Injury file last updated ${esc(INJ ? new Date(INJ.updated).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric' }) : '')}, so it may be out of date. Check today's reports before you bet.`;
+  const legNames = (A.M || []).map(r => String(r.label || '').toLowerCase());
+  const cards = games.map(g => {
+    const teams = [g.home, g.away].map(t => ({ t, xs: INJ ? INJ.injuries.filter(x => x.sport === g.sport && x.team === t.abbr && (x.status === 'out' || x.status === 'doubtful')) : [] }));
+    const n = teams.reduce((s, x) => s + x.xs.length, 0), big = teams.some(x => x.xs.length >= 3);
+    const level = big ? ['High', 'h-lo'] : n ? ['Watch', 'h-mid'] : ['Clear', 'h-hi'];
+    const onSlip = x => legNames.some(l => l.includes(String(x.player).toLowerCase()));
+    return `<div class="pc sc-worry"><div class="pchead"><span class="pctitle">${esc(`${g.away.abbr} @ ${g.home.abbr}`)}</span><span class="hit ${level[1]}">${level[0]} worry</span></div>
+      ${teams.map(({ t, xs }) => `<div class="why"><b>${esc(t.abbr)}</b>: ${xs.length ? xs.map(x => `${esc(x.player)} (${esc(x.pos || '')}) ${esc(String(x.status).toUpperCase())}${x.injury ? ' · ' + esc(x.injury) : ''}${x.returnEst ? ' · ' + esc(x.returnEst) : ''}${onSlip(x) ? ' <span class="sc-neg">⚠ on your slip</span>' : ''}`).join('<br>') : 'nobody listed out or doubtful'}</div>`).join('')}
+    </div>`;
+  }).join('');
+  return `<h2>2b · Injury worry <small>who is out or doubtful</small></h2><div class="sc-why"><div class="note" style="margin:0 0 8px">${fresh} Opponent form and benching against weaker teams aren't in our data yet, so that part is only as good as the research done for this slip.</div>${cards}</div>`;
 }
 function render(main) {
   const head = `<h2>Slip Check <small>bring a bet from any app</small></h2>
@@ -555,5 +576,5 @@ document.head.appendChild(css);
 const TAB = { key: 'slipcheck', label: '📸 Slip Check', after: 'mine', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="slipcheck"]')) SB.registerTab(TAB); }, 0));
-window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, PROMPT, get state() { return st; }, get ai() { return aiState; } };
+window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, PROMPT, get state() { return st; }, get ai() { return aiState; } };
 })();

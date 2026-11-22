@@ -88,9 +88,9 @@ try {
   await page.waitForSelector('.sc-verdict', { timeout: 20000 });
   const call = await page.evaluate(() => window.__calls.find(c => c.kind === 'json'));
   check('reading: one sample.json call with the image and the slip prompt', call && call.images === 1 && /bet slip/.test(call.input) && /"legs"/.test(call.input));
-  const A = await page.evaluate(() => { const A = window.__slipcheck.state.A; return { rows: A.rows.map(r => ({ st: r.status, key: r.key, p: r.p })), p: A.p, indep: A.indep, ev: A.ev, dec: A.decCmp, verdict: A.verdict, full: A.full, corr: A.corr.length }; });
+  const A = await page.evaluate(() => { const A = window.__slipcheck.state.A; return { rows: A.rows.map(r => ({ st: r.status, key: r.key, p: r.p, own: !!r.ownOdds, fb: !!r.fallback })), p: A.p, indep: A.indep, ev: A.ev, dec: A.decCmp, verdict: A.verdict, full: A.full, corr: A.corr.length }; });
   const keys = A.rows.map(r => r.key);
-  check('matching: 5 legs priced, the MLB prop kept as not priced', A.rows.filter(r => r.st === 'matched').length === 5 && A.rows[5].st !== 'matched', JSON.stringify(A.rows.map(r => r.st)));
+  check('matching: 5 legs priced by the model, the MLB prop filled from its own odds or the fallback (never blank) and marked', A.rows.slice(0, 5).every(r => r.st === 'matched' && !r.own && !r.fb) && A.rows[5].st === 'matched' && (A.rows[5].own || A.rows[5].fb), JSON.stringify(A.rows.map(r => [r.st, r.own, r.fb])));
   check('matching: keys for winner, total, spread, player points and BTTS', keys[0] === 'SC:ml:H' && keys[1] === 'SC:tot:O:220.5' && keys[2] === 'SC:sp:A:5.5' && /^P:[^:]+:\d+$/.test(keys[3]) && keys[4] === 'SC:btts:Y', keys.join(' | '));
   const xs = await page.evaluate(([g1, sc]) => { const G = SB.gameById(g1), S = SB.gameById(sc);
     return { ml: [SB.p1(G, 'SC:ml:H'), SB.p1(G, 'H')], btts: [SB.p1(S, 'SC:btts:Y'), SB.p1(S, 'BTTS')], sp: [SB.p1(G, 'SC:sp:H:-5.5'), SB.p1(G, 'H5.5')] }; }, [G1.id, soc.id]);
@@ -98,13 +98,13 @@ try {
   check('pricing: soccer BTTS from the score grid matches the engine exactly', Math.abs(xs.btts[0] - xs.btts[1]) < 1e-9, JSON.stringify(xs.btts));
   check('pricing: home -5.5 matches the engine "win by 6+" market', Math.abs(xs.sp[0] - xs.sp[1]) < 0.01, JSON.stringify(xs.sp));
   check('analysis: same-game legs priced together (one correlated group)', A.corr === 1 && A.p > 0 && Math.abs(A.p - A.indep) > 1e-6, JSON.stringify({ p: A.p, indep: A.indep }));
-  check('analysis: partial slip compares only the priced legs against their book prices', A.full === false && Math.abs(A.dec - [1.6667, 1.9091, 1.9091, 1.8333, 1.8].reduce((s, x) => s * x, 1)) < 0.05, String(A.dec));
+  check('analysis: every leg is priced, so the slip is compared with a book price for all six legs', A.full === true && A.dec > 1, String(A.dec));
   check('verdict: a direct verdict with model and book numbers', ['Value bet', 'Fair price', 'Overpriced', 'Long shot'].includes(A.verdict) && /model/.test(await page.textContent('.sc-op')), A.verdict);
   const ui = await page.evaluate(() => ({ rows: document.querySelectorAll('.sc-tbl .sc-tr').length, can: document.querySelectorAll('.sc-why .pc:first-child li').length, not: document.querySelectorAll('.sc-why .pc:last-child li').length,
     weak: !!document.querySelector('.b-live'), text: document.querySelector('#main').textContent }));
   check('compare table: header + 6 legs + parlay row', ui.rows === 8, String(ui.rows));
   check('reasons: both "why it can hit" and "why it might not" are filled', ui.can > 0 && ui.not > 0, `${ui.can}/${ui.not}`);
-  check('reasons: unpriced leg is called out', /Not priced: .*Ohtani/.test(ui.text));
+  check('reasons: the leg priced without our stats is called out', /Ohtani[^.]*(own odds only|estimated from the slip)/.test(ui.text));
   check('copy: honest (no lock / guaranteed / sure win)', !/\block\b|\bguaranteed\b|sure win/i.test(ui.text));
   // Claude's take
   await page.click('[data-sc-take]');

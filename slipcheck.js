@@ -307,7 +307,24 @@ function jointFor(rows) { // model chance that all matched legs hit, with same-g
   return { p, groups };
 }
 function analyze(slip) {
-  const rows = slip.legs.map((L, i) => { const m = matchLeg(L); return { ...m, why: m.status === 'matched' && !m.bookOnly ? '' : m.why, i, src: L, dec: bookDec(L.odds), text: legText(L) }; });
+  // a priced leg keeps only a note about where its price came from, never an old "not priced" message
+  const rows = slip.legs.map((L, i) => { const m = matchLeg(L); return { ...m, why: m.status === 'matched' && !/^Priced by Polymarket/.test(m.why || '') ? '' : m.why, i, src: L, dec: bookDec(L.odds), text: legText(L) }; });
+  // Fallback, so no leg is left blank: a leg with no stats and no odds gets the chance left over from the slip's own parlay price
+  // after the legs we could price (parlay chance ÷ the priced legs, spread evenly over the rest). Labelled as a fallback.
+  { const anyG = rows.find(r => r.g), stub = r => r.g || { id: `fallback-${r.i}`, sport: 'other', comp: '', start: anyG ? anyG.g.start : new Date().toISOString(), home: { abbr: '—', name: '' }, away: { abbr: '—', name: '' } };
+    for (const r of rows) if (r.status !== 'matched' && bookDec(r.src.odds)) {  // its own odds on the slip
+      r.status = 'matched'; r.p = Math.min(0.999, 1 / bookDec(r.src.odds)); r.bookOnly = true; r.ownOdds = true; r.label = r.label || r.text; r.key = r.key || `X:odds:${r.i}`; r.g = stub(r);
+      r.why = 'Priced from its own odds on the slip: no stats for this leg';
+    }
+    const tot = bookDec(slip.totalOdds), rest = rows.filter(r => r.status !== 'matched');
+    if (tot && rest.length) {
+      const known = rows.filter(r => r.status === 'matched').reduce((x, r) => x * r.p, 1);
+      const pf = Math.min(0.95, Math.max(0.02, Math.pow((1 / tot) / Math.max(known, 1e-9), 1 / rest.length)));
+      for (const r of rest) {
+        r.status = 'matched'; r.p = pf; r.bookOnly = true; r.fallback = true; r.label = r.label || r.text; r.key = r.key || `X:fallback:${r.i}`; r.g = stub(r);
+        r.why = `Fallback: worked out from the slip's ${str(slip.totalOdds)} after the legs we could price, because there are no stats or odds for this leg`;
+      }
+    } }
   for (const r of rows) { r.inj = r.status !== 'none' ? injuryNote(r) : ''; r.edge = r.status === 'matched' && r.dec ? r.p * r.dec - 1 : null; }
   const M = rows.filter(r => r.status === 'matched'), U = rows.filter(r => r.status !== 'matched');
   const J = M.length ? jointFor(M) : { p: 0, groups: [] };
@@ -352,6 +369,8 @@ function reasons(A) {
     if (r.p < 0.4) not.push(`${r.label} is only ${pctS(r.p, 0)} to hit`);
     if (r.edge != null && r.edge <= -0.08) not.push(`${r.label} is overpriced (${signPct(r.edge)} vs fair)`);
     if (r.inj) not.push(`Injuries: ${r.inj}`);
+    if (r.fallback) not.push(`${r.label}: estimated from the slip's total price (no stats or odds for this leg)`);
+    else if (r.ownOdds) not.push(`${r.label}: priced from its own odds only (no stats for this leg)`);
   }
   for (const c of A.corr) {
     if (c.ratio > 1.05) can.push(`Same-game legs in ${c.g.away.abbr} @ ${c.g.home.abbr} tend to win together (${signPct(c.ratio - 1)} vs unrelated)`);
@@ -437,14 +456,16 @@ function track() {
   const legs = A.rows.map((r, i) => {
     const g = r.g;
     const base = g ? { sport: g.sport, comp: g.comp, home: g.home.abbr, away: g.away.abbr, start: g.start } : {};
-    if (r.status === 'matched') return { gid: g.id, key: r.key, label: r.label, p1: r.p, ...base, bookOdds: r.src.odds || null };
-    return { gid: g ? g.id : `x-${now}-${i}`, key: xKey(r.text), label: r.text, custom: true, ...base, bookOdds: r.src.odds || null };
+    // legs our engine can settle grade themselves; legs priced from a player model, their own odds or the fallback are graded by hand
+    if (r.status === 'matched' && !/^(B|X):/.test(r.key)) return { gid: g.id, key: r.key, label: r.label, p1: r.p, ...base, bookOdds: r.src.odds || null };
+    const real = g && !/^fallback-/.test(g.id);
+    return { gid: real ? g.id : `x-${now}-${i}`, key: xKey(r.text), label: r.label || r.text, custom: true, ...(r.status === 'matched' ? { p1: r.p } : {}), ...(real ? base : {}), bookOdds: r.src.odds || null };
   });
   const dec = A.bookTot || null;
   const ok = SB.saveParlay ? SB.saveParlay({ legs, p: A.M.length ? A.p : null, odds: dec ? SB.dec2am(dec) : null, dec, stake: A.stake, book: st.slip.book || null, src: 'slipcheck', partial: !A.full }) : false;
   SB.toast(ok ? `Tracking in My Parlays${st.slip.book ? ' · ' + esc(st.slip.book) : ''}` : 'Couldn\'t save this bet');
 }
-function builderLegs() { return st.A ? st.A.M.filter(r => !SB.started(r.g)).map(r => ({ gid: r.g.id, key: r.key })) : []; }
+function builderLegs() { return st.A ? st.A.M.filter(r => !/^(B|X):/.test(r.key) && !SB.started(r.g)).map(r => ({ gid: r.g.id, key: r.key })) : []; }  // only legs the builder can price
 
 // ---------------- markup ----------------
 function uploadPanel() {
@@ -510,7 +531,11 @@ function playerModel(r) {
   const passF = D.passYdsAllowed / L.passYds, rushF = D.rushYdsAllowed / L.rushYds;
   const dfac = p.stat === 'rushing_yards' ? rushF : p.stat === 'anytime_td' ? (passF + rushF) / 2 : passF;  // defence used for each stat
   const parts = str(r.key).split(':'), side = parts[2], line = parseFloat(parts[3]);
-  return { name, mean: p.mean * dfac, sd: p.sd, td: p.stat === 'anytime_td', over: side !== 'U', line: isFinite(line) ? line : 0, opp, dfac };
+  // injuries: out = he doesn't play, doubtful = a quarter of his usual output, questionable = 85%
+  const INJ = window.__lottos && window.__lottos.INJ, inj = INJ && (INJ.injuries || []).find(x => nameKey(x.player) === nameKey(name));
+  const injF = !inj ? 1 : inj.status === 'out' ? 0 : inj.status === 'doubtful' ? 0.25 : inj.status === 'questionable' ? 0.85 : 1;
+  return { name, mean: p.mean * dfac * injF, sd: p.sd * (injF > 0 ? Math.sqrt(injF) : 0), td: p.stat === 'anytime_td', rush: p.stat === 'rushing_yards', over: side !== 'U', line: isFinite(line) ? line : 0,
+    opp, dfac, inj: inj ? String(inj.status) : '', home: p.team === r.g.home.abbr, sport: r.g.sport };
 }
 // the game model: from the feed's prices, or from Polymarket's moneyline and total when the feed hasn't priced the game yet
 function simModelGame(g, N) {
@@ -552,7 +577,12 @@ function simulateSlip(A, N = SIM_RUNS) {
       const mt = meta[k]; let pass;
       if (mt && mt.type === 'game') { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
       else if (mt && mt.type === 'player') {
-        const pm = mt.pm, scale = mt.S ? mt.S.tt[i] / mt.avgT : 1;   // this run's game total relative to the average game
+        const pm = mt.pm; let scale = mt.S ? mt.S.tt[i] / mt.avgT : 1;   // this run's game total relative to the average game
+        if (mt.S) {  // blowouts: the leading side's starters sit late; the trailing side throws more and runs less
+          const lead = pm.home ? mt.S.mg[i] : -mt.S.mg[i], big = pm.sport === 'nba' ? 20 : 17;
+          if (lead >= big) scale *= pm.td ? 1 : 0.8;
+          else if (lead <= -big) scale *= pm.td ? 1 : pm.rush ? 0.85 : 1.1;
+        }
         if (pm.td) pass = rnd() < 1 - Math.exp(-pm.mean * scale);
         else { const v = Math.max(0, pm.mean * scale + pm.sd * gauss()); pass = pm.over ? v > pm.line : v < pm.line; }
       } else pass = rnd() < legs[k].p;
@@ -566,7 +596,7 @@ function simulateSlip(A, N = SIM_RUNS) {
     legs: legs.map((r, k) => {
       const mt = meta[k];
       const how = !mt ? 'drawn at its own chance (no model)' : mt.type === 'game' ? 'game simulation'
-        : `${!mt.S ? 'no game model yet · ' : ''}${mt.pm.name}: average ${mt.pm.mean.toFixed(1)}${mt.pm.td ? ' TDs' : ' yds'} vs ${mt.pm.opp} (${Math.round(mt.pm.dfac * 100)}% of league average defence)`;
+        : `${!mt.S ? 'no game model yet · ' : ''}${mt.pm.inj ? `listed ${mt.pm.inj.toUpperCase()} · ` : ''}${mt.pm.name}: average ${mt.pm.mean.toFixed(1)}${mt.pm.td ? ' TDs' : ' yds'} vs ${mt.pm.opp} (${Math.round(mt.pm.dfac * 100)}% of league average defence)`;
       return { label: r.label, rate: legHits[k] / N, how };
     }) };
 }

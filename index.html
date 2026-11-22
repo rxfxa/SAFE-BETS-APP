@@ -1002,16 +1002,23 @@ function renderHero(){
     <div class="hero-stats"><div><b>${fmtN(S.open)}</b><span>Games</span></div><div><b>${fmtN(S.comps)}</b><span>Competitions</span></div><div><b>${fmtN(S.props)}</b><span>Player props</span></div></div>
     <p class="hero-line">${S.sims?`<b>${fmtN(S.sims)}</b> NBA, NFL and college football games priced from <b>100,000</b> seeded simulations each`:`NBA, NFL and college football games are priced from <b>100,000</b> seeded simulations each`}${S.grid?`; <b>${fmtN(S.grid)}</b> soccer and NHL games from exact score grids.`:'.'}</p>
     <div class="hero-cta"><button type="button" class="btn" data-gotab="parlays">Best parlays</button>${hasSim?'<button type="button" class="btn ghost" data-gotab="sim">Simulator</button>':''}</div>`;}
+let trView=store.get('trView','trend');
+function wireTr(){
+  const sg=$('trSeg');if(sg)sg.onclick=e=>{const b=e.target.closest('button');if(!b)return;trView=b.dataset.v;store.set('trView',trView);renderTrending();};
+  const nb=$('mpNbaSeg');if(nb)nb.onclick=e=>{const b=e.target.closest('button');if(!b)return;mpNbaMode=b.dataset.v;store.set('mpNba',mpNbaMode);renderTrending();};}
 function renderTrending(){
   const soon=gamesFor(g=>priced(g)&&inWin(g)).slice(0,10);
   const locks=[];for(const g of DATA.games){if(!priced(g)||!inWin(g))continue;const m=marketsFor(g);for(const k of ['H','A']){if(!m.find(x=>x.key===k))continue;const p=p1(g,k);if(p>=.8&&p<=.95)locks.push({g,k,p,label:m.find(x=>x.key===k).label});}}
   locks.sort((a,b)=>b.p-a.p);
   const mixed=buildMixed(.55,3,.72);
   renderHero();
-  $('main').innerHTML=updatedLine()+picksHTML(2)+
+  const seg=`<div class="seg" id="trSeg" style="margin-bottom:10px"><button data-v="trend" class="${trView!=='picks'?'on':''}">🔥 Trending</button><button data-v="picks" class="${trView==='picks'?'on':''}">🧠 My Parlay Picks</button></div>`;
+  if(trView==='picks'){let h='';try{h=myPicksHTML();}catch(e){console.error(e);h='<div class="empty">My Parlay Picks could not be built right now.</div>';}$('main').innerHTML=updatedLine()+seg+h;wireTr();return;}
+  $('main').innerHTML=updatedLine()+seg+picksHTML(2)+
    `<h2>Parlay of the day <small>easy-hit mix</small></h2>${parlayCard('trend-mixed','Mixed · Easy hit',mixed)}`+
    `<h2>Strongest single picks <small>by model win chance</small></h2><div class="panel" style="padding:4px 14px">${locks.slice(0,8).map(x=>`<div class="mrow"><div class="lbl" data-open="${x.g.id}" style="cursor:pointer">${esc(x.label)}<small>${esc(x.g.home.abbr)} vs ${esc(x.g.away.abbr)} · ${esc(x.g.comp)} · ${esc(when(x.g))}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes ${inSlip(x.g.id,x.k)?'in':''}" data-leg="${x.g.id}|${x.k}" aria-label="${esc(x.label+' at '+fmtOdds(x.p))}">${btnPx(x.p)}</button></div>`).join('')||'<div class="empty" style="border:0">No strong picks in this window.</div>'}</div>`+
    `<h2>Up next <small>across every sport</small></h2><div class="grid">${soon.map(card).join('')||'<div class="empty">Nothing in this window.</div>'}</div>`;
+  wireTr();
 }
 function renderParlays(){
   let html=updatedLine()+`<h2>How these are built <small>RoyBets (@ComboProps) method</small></h2>
@@ -1158,6 +1165,120 @@ function megaHTML(){const M=megaTicket();
   return `<h2>20-leg safest combo <small>3 legs from each game · ~85%+ legs</small></h2>`+
    ticketCard('mega20','20 legs · '+M.games.length+' games',M,`The 3 likeliest legs from each of ${M.games.length} games. Each leg is about 85-95% on its own, but 20 of them together still miss most of the time. Use a small stake.`);}
 
+// ---------------- My Parlay Picks (Trending): chosen once a day, every leg on one day (America/Los_Angeles) ----------------
+// Order of trust: mypicks.json from the daily job for that day → the picks this device locked for that day → build and lock now.
+// Legs never change during the day; hit chances re-price while a leg's game is still open.
+const MP_TZ='America/Los_Angeles',MPV=1;
+const mpFmt=new Intl.DateTimeFormat('en-CA',{timeZone:MP_TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+const dayOf=ms=>mpFmt.format(new Date(ms));
+const dayGames=day=>DATA.games.filter(g=>openG(g)&&dayOf(startMs(g))===day).sort((a,b)=>startMs(a)-startMs(b));
+const dayLabel=day=>{const [y,m,d]=day.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString([], {weekday:'long',month:'short',day:'numeric',timeZone:'UTC'});};
+// one leg as stored: enough to draw and grade it after its game leaves the feed
+function mpLeg(L){const g=gameById(L.gid);return {gid:L.gid,key:L.key,label:L.label||legLabel(L),p:+(+L.p).toFixed(4),sport:g.sport,comp:g.comp,home:g.home.abbr,away:g.away.abbr,start:g.start};}
+// 3 exact-score parlays (soccer): the likeliest score in each game; with fewer than 9 games the later parlays reuse games
+// with their 2nd / 3rd likeliest score (never two scores of one game in the same parlay)
+function mpExact(day){
+  const per=[];for(const g of dayGames(day)){if(g.sport!=='soccer'||!priced(g))continue;
+    const cs=marketsFor(g).filter(m=>m.cs).map(m=>({gid:g.id,key:m.key,label:`${m.label} (exact score)`,p:p1(g,m.key)})).filter(x=>x.p>0).sort((a,b)=>b.p-a.p).slice(0,3);
+    if(cs.length)per.push(cs);}
+  per.sort((a,b)=>b[0].p-a[0].p);
+  const slots=[];for(let r=0;r<3;r++)for(const cs of per)if(cs[r])slots.push(cs[r]);
+  const n=Math.min(3,per.length),out=[];
+  for(let k=0;k<3&&n;k++){const legs=[];for(let i=0;i<slots.length&&legs.length<n;i++){if(legs.some(l=>l.gid===slots[i].gid))continue;legs.push(slots.splice(i,1)[0]);i--;}
+    if(legs.length===n)out.push(legs);}
+  return out;}
+// same game parlay, 5 legs: the game whose 5-leg ticket is likeliest (80%+ legs where the game has them)
+function mpSgp(day){let best=null;
+  for(const g of dayGames(day)){const T=sgpTicket(g,5,.8,0,true);if(T.legs.length<5)continue;const sc=T.p-(T.minP<.8?.1:0);if(!best||sc>best.sc)best={legs:T.legs,sc,g};}
+  return best?best.legs:[];}
+// 10 legs across every sport and league on the day: one leg per game (its likeliest 75-95% leg), leagues taken in turn so every
+// league gets a leg before any gets a second; a second leg per game only when the day has fewer than 10 games
+function mpMixed(day,n=10){
+  const G=dayGames(day);if(!G.length)return [];
+  const pool=ticketPool({sports:[...new Set(G.map(g=>g.sport))],gids:G.map(g=>g.id),minP:.75,propsOnly:false},72).filter(x=>x.p<=.95);
+  const byGame=new Map();for(const x of pool){if(!byGame.has(x.gid))byGame.set(x.gid,[]);byGame.get(x.gid).push(x);}
+  for(const xs of byGame.values())xs.sort((a,b)=>b.p-a.p);
+  const byComp=new Map();for(const [gid,xs] of byGame){const g=gameById(gid),k=g.sport+'|'+g.comp;if(!byComp.has(k))byComp.set(k,[]);byComp.get(k).push(xs);}
+  // leagues ordered so sports alternate (best league of each sport first), games inside a league by their best leg
+  const comps=[...byComp.entries()].map(([k,a])=>({sport:k.split('|')[0],games:a.sort((x,y)=>y[0].p-x[0].p)}));
+  const bySport=new Map();for(const c of comps.sort((a,b)=>b.games[0][0].p-a.games[0][0].p)){if(!bySport.has(c.sport))bySport.set(c.sport,[]);bySport.get(c.sport).push(c);}
+  const order=[];const lists=[...bySport.values()];while(lists.some(l=>l.length))for(const l of lists)if(l.length)order.push(l.shift());
+  const games=[];while(order.some(c=>c.games.length))for(const c of order)if(c.games.length)games.push(c.games.shift());
+  const legs=[],ok=x=>{const b=legs.length?parlayProb(legs).p:1,a=parlayProb([...legs,x]).p;return a>0&&!(legs.length&&a>=b*.995)&&!legs.some(y=>y.who&&y.who===x.who);};
+  for(const xs of games){if(legs.length>=n)break;const x=xs.find(ok);if(x)legs.push(x);}
+  for(const xs of games){if(legs.length>=n)break;const x=xs.find(y=>!legs.includes(y)&&ok(y));if(x)legs.push(x);}
+  return legs;}
+// NBA, player props only, 15 legs: every NBA game on the day gets a leg (2 at most), lines "a point or two" from the player's
+// average (points ±2, rebounds / assists ±1); 'below' = over a line just under his average, 'above' = over a line just above it
+const MP_MIN={pts:12,reb:5,ast:4}; // featured players only: a real role in the box score, not a bench player's 2+ assists
+function mpNba(day,mode,n=15){
+  const per=[];for(const g of dayGames(day)){if(g.sport!=='nba')continue;const c=[];
+    for(const pl of DATA.players){if(pl.gid!==g.id||pl.status!=='active'||!(pl.avg>=(MP_MIN[pl.stat]||Infinity)))continue;
+      const d=pl.stat==='pts'?2:1,base=Math.round(pl.avg*(1+(pl.boost||0))),thr=Math.max(1,mode==='above'?base+d:base-d);
+      c.push({gid:g.id,key:`P:${pl.id}:${thr}`,label:`${pl.name} ${thr}+ ${STATN[pl.stat]}`,p:playerP(pl,thr),who:pl.name,team:pl.team,stat:pl.stat,kind:'player'});}
+    if(c.length)per.push(c.sort((a,b)=>b.p-a.p));}
+  per.sort((a,b)=>b[0].p-a[0].p);
+  const legs=[],fits=x=>!legs.some(y=>y.who===x.who||(y.gid===x.gid&&y.team===x.team&&y.stat===x.stat));
+  for(const c of per.slice(0,n)){const x=c.find(fits);if(x)legs.push(x);}
+  const seconds=per.slice(0,n).map(c=>c.find(x=>!legs.includes(x)&&fits(x))).filter(Boolean).sort((a,b)=>b.p-a.p);
+  for(const x of seconds){if(legs.length>=n)break;if(fits(x)&&legs.filter(y=>y.gid===x.gid).length<2)legs.push(x);}
+  return {legs,games:per.length};}
+// underdog moneylines: the side with the lower win chance, 25-46% (a real underdog, not a coin flip), one per game;
+// the likeliest underdogs first
+function mpDogs(day,n){
+  const out=[];for(const g of dayGames(day)){if(!priced(g))continue;const ph=p1(g,'H'),pa=p1(g,'A'),side=ph<pa?'H':'A',p=Math.min(ph,pa);if(!(p>=.25&&p<=.46))continue;
+    const t=side==='H'?g.home:g.away;out.push({gid:g.id,key:side,label:`${t.name} moneyline (underdog)`,p});}
+  return out.sort((a,b)=>b.p-a.p).slice(0,n);}
+function buildMyPicks(day){
+  const P=[],add=(id,title,sub,legs,extra)=>{legs=legs||[];P.push({id,title,sub,legs:legs.map(mpLeg),p:legs.length?+parlayProb(legs).p.toFixed(6):0,...(extra||{})});};
+  const ex=mpExact(day);for(let k=0;k<3;k++)add('exact'+(k+1),`Exact score parlay ${k+1}`,'Soccer correct scores: the likeliest score in each game. Big payout, rarely lands.',ex[k]||[],{need:3});
+  add('sgp5','Same game parlay · 5 legs','Five legs from the one game where they are most likely to land together, priced jointly.',mpSgp(day),{need:5});
+  add('mixed10','10-leg mix · every sport and league','One leg from a game in each league on the day before any league gets a second.',mpMixed(day),{need:10});
+  const lo=mpNba(day,'below'),hi=mpNba(day,'above');
+  add('nba15','NBA player props · 15 legs','Lines a point or two under each player\'s average (points 2, rebounds and assists 1). Every NBA game on the day, 2 legs at most per game.',lo.legs,{need:Math.min(15,2*lo.games),games:lo.games});
+  add('nba15up','NBA player props · 15 legs (above average)','Lines a point or two over each player\'s average. Each leg is under 50%, so this one is a lottery ticket.',hi.legs,{need:Math.min(15,2*hi.games),games:hi.games});
+  add('dog3','Underdog moneylines · 3 legs','The three likeliest underdogs on the day to win outright.',mpDogs(day,3),{need:3});
+  add('dog5','Underdog moneylines · 5 legs','The five likeliest underdogs on the day to win outright.',mpDogs(day,5),{need:5});
+  return {v:MPV,day,tz:MP_TZ,made:new Date(now()).toISOString(),parlays:P};}
+// today's picks if any were made for today; else tomorrow's; else make them (today while it still has 3+ open games)
+function myPicks(){
+  const today=dayOf(now()),tom=dayOf(now()+864e5),srv=DATA.mypicks,loc=store.get('mypicks',null);
+  for(const day of [today,tom]){if(srv&&srv.day===day)return {...srv,src:'daily'};if(loc&&loc.day===day&&loc.v===MPV)return mpFill(loc);}
+  const day=dayGames(today).length>=3?today:tom,b=buildMyPicks(day);store.set('mypicks',b);return {...b,src:'device'};}
+// a parlay that was empty when the picks were locked (props not posted yet, say) is filled once, while its day's games are open
+function mpFill(loc){let ch=false;
+  for(const P of loc.parlays){if(P.legs.length||P.filled)continue;const b=buildMyPicks(loc.day).parlays.find(x=>x.id===P.id);if(b&&b.legs.length){Object.assign(P,b,{filled:new Date(now()).toISOString()});ch=true;}}
+  if(ch)store.set('mypicks',loc);return {...loc,src:'device'};}
+function mpCard(P){
+  const legs=P.legs.map(L=>{const g=gameById(L.gid)||null,st=!g?'gone':isFinal(g)?'final':started(g)?'live':isVoid(g)?'void':'open';
+    // a player leg whose player has dropped off the board since the pick (ruled out in a later injury report) is flagged, not priced
+    const gone=st==='open'&&isP(L.key)&&!pLegInfo(L.key);
+    const res=g&&isFinal(g)?evalActual(g,L.key):null,p=gone?0:st==='open'?(p1(g,L.key)||L.p):L.p;return {...L,st,res,p,gone};});
+  const id='mp-'+P.id,open=legs.filter(L=>L.st==='open');
+  if(!legs.length)return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span></div><div class="why">${P.id.startsWith('exact')?'No soccer on this day, so no exact-score parlay.':P.id.startsWith('nba')?'No NBA games with player data on this day.':P.id.startsWith('dog')?'Not enough underdogs priced 25-46% on this day.':'Not enough legs on this day.'}</div></div>`;
+  const allOpen=open.length===legs.length,p=allOpen?parlayProb(legs).p:+P.p||0,lost=legs.some(L=>L.res===false),won=legs.every(L=>L.res===true);
+  const usable=open.filter(L=>!L.gone);  // the builder / My Parlays / Simulator get the legs that can still be bet
+  autoCache[id]={legs:usable.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:L.sport,p:L.p})),p:parlayProb(usable).p,n:usable.length};
+  const hc=lost?'h-lo':won?'h-hi':p>=.4?'h-hi':p>=.12?'h-mid':'h-lo',tag=lost?'Lost':won?'Won 🎉':`${p>=.01?pct(p):pct(p,p>=.0001?2:4)} to hit`;
+  const short=P.need&&legs.length<P.need?`<div class="why">Only ${legs.length} legs qualified${P.games!=null?` (${P.games} NBA game${P.games===1?'':'s'} on the day)`:''}.</div>`:'';
+  return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span><span class="hit ${hc}">${tag}</span></div>${lost||won?'':gaugeHTML(p)}<div class="why" style="margin-top:4px">${esc(P.sub||'')}</div>${short}
+   <div style="margin-top:6px">${legs.map(L=>`<div class="leg"><span class="sp" title="${esc(SPORTNAME[L.sport]||L.sport)}">${sportIco(L.sport)}</span><div class="legtxt"><b>${esc(L.label)}</b><span>${esc(L.away)} @ ${esc(L.home)} · ${esc(L.comp||'')} · ${L.gone?'<b style="color:var(--no)">ruled out since the pick: swap this leg</b>':L.st==='open'?esc(when({start:L.start})):L.st==='final'?(L.res===true?'✓ hit':L.res===false?'✗ missed':'final'):L.st==='live'?'started':L.st==='void'?'void':'no longer listed'}</span></div><span class="legp mono">${pct(L.p)}</span></div>`).join('')}</div>
+   <div class="pcfoot"><div class="odds mono">${allOpen?fmtOdds(p):'—'}<small>${allOpen?`Fair odds · $10 pays ~$${Math.round(10*(p2dec(p)-1)).toLocaleString()}`:`${open.length} of ${legs.length} legs still to start`}</small></div>${usable.length?`<button class="btn" data-addp="${id}">${allOpen&&usable.length===legs.length?'Open in builder':'Open remaining legs'}</button>`:''}</div>
+   ${usable.length?`<div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-simp="${id}">🎲 Simulate</button></div>`:''}${allOpen?`<div class="note">${minPriceLine(p)}</div>`:''}</div>`;}
+let mpNbaMode=store.get('mpNba','below');
+function myPicksHTML(){
+  const M=myPicks(),by=Object.fromEntries(M.parlays.map(P=>[P.id,P])),made=new Date(M.made);
+  const nb=by[mpNbaMode==='above'?'nba15up':'nba15']||by.nba15;
+  const card=k=>by[k]?mpCard(by[k]):'';
+  return `<h2>My Parlay Picks <small>${esc(dayLabel(M.day))} · every leg that day</small></h2>
+   <div class="lineup"><span>🧠</span><div><b>Chosen once a day${M.src==='daily'?' by the daily run':''}, ${esc(made.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}))}.</b> The legs stay the same until the next day's picks; hit chances update while a leg's game hasn't started. NBA player legs use season averages and the injury report until books post lines. These are model estimates, not sure things.</div></div>
+   <h2>Exact score parlays <small>3 parlays · soccer</small></h2><div class="grid">${card('exact1')}${card('exact2')}${card('exact3')}</div>
+   <h2>Same game parlay <small>5 legs</small></h2>${card('sgp5')}
+   <h2>Every sport, every league <small>10 legs</small></h2>${card('mixed10')}
+   <h2>NBA fantasy <small>player props only · 15 legs · 2 per game max · every game</small></h2>
+   <div class="seg" id="mpNbaSeg" style="margin-bottom:8px"><button data-v="below" class="${mpNbaMode!=='above'?'on':''}">A point or two under average</button><button data-v="above" class="${mpNbaMode==='above'?'on':''}">A point or two over average</button></div>${nb?mpCard(nb):''}
+   <h2>Underdog parlays <small>moneylines only</small></h2><div class="grid">${card('dog3')}${card('dog5')}</div>
+   <div class="note">Long parlays miss far more often than they hit, even with likely legs. Keep stakes small.</div>`;}
 function forSure(){
   const games=[...new Set((DATA.players||[]).map(p=>p.gid))].map(gameById).filter(g=>g&&g.sport==='nba'&&openG(g)).sort((a,b)=>startMs(a)-startMs(b));
   const out=[];
@@ -1714,7 +1835,9 @@ async function load(){ // -> true when DATA was replaced
   const get=async f=>{try{const r=await fetch(f,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}return null;};
   // data.json = games feed; props.json = player props + built parlays (kept apart so the hourly data.json refresh never wipes them);
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
-  let [d,pr,sc]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json')]);
+  // nbaroles.json + injuries.json = season averages and injury report: NBA games with no posted props get season-average
+  // player legs from them (addRolePlayers); mypicks.json = the once-a-day My Parlay Picks made by the daily job
+  let [d,pr,sc,ro,inj,mp]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json')]);
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
@@ -1725,11 +1848,30 @@ async function load(){ // -> true when DATA was replaced
   if(pr){const ids=new Set((pr.players||[]).map(p=>p.id));d.players=[...(pr.players||[]),...(d.players||[]).filter(p=>!ids.has(p.id))];
     d.picks=pr.picks||d.picks||[];if(pr.lineups)d.lineups=pr.lineups;}
   d.players=d.players||[];d.picks=d.picks||[];d.lineups=d.lineups||null;d.scorers=sc||null;
+  if(!ro&&dataLoaded)ro=ROLES_LAST;if(!inj&&dataLoaded)inj=INJ_LAST;if(!mp&&dataLoaded)mp=DATA.mypicks;ROLES_LAST=ro;INJ_LAST=inj;
+  addRolePlayers(d,ro,inj);d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
   applyLines(d);
   const ids=new Set(d.games.map(g=>g.id));for(const [k,v] of SIMC)if(!ids.has(k.slice(0,k.indexOf('|'))))SIMC.delete(k);
   DATA=d;pCache.clear();autoCache={};dataLoaded=true;lastGood=Date.now();emit('data',DATA);return true;
 }
-let lastGood=null;
+let lastGood=null,ROLES_LAST=null,INJ_LAST=null;
+// NBA games with no posted props: one player record per rotation player and stat from nbaroles.json season averages (points 8+,
+// rebounds 4+, assists 3+, 18+ minutes, 3+ games). Out / doubtful players are left out; questionable / day-to-day ones are kept
+// but marked, so the ticket builders (active players only) skip them. ids carry the game id, so back-to-backs never collide.
+const nameKey=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function addRolePlayers(d,roles,inj){
+  if(!roles||!roles.teams||typeof roles.teams!=='object')return;
+  const have=new Set(d.players.map(p=>p.gid)),stat=new Map();
+  for(const e of (inj&&Array.isArray(inj.injuries)?inj.injuries:[]))if(e&&e.sport==='nba')stat.set(e.team+'|'+nameKey(e.player),String(e.status||'').toLowerCase());
+  const add=[];
+  for(const g of d.games){if(g.sport!=='nba'||have.has(g.id)||isFinal(g)||isVoid(g))continue;
+    for(const side of ['home','away']){const ab=g[side].abbr,R=roles.teams[ab];if(!Array.isArray(R))continue;
+      for(const r of R){if(!r||!r.name||!(+r.gp>=3)||!(+r.mpg>=18))continue;
+        const st=stat.get(ab+'|'+nameKey(r.name))||'active';if(st==='out'||st==='doubtful')continue;
+        const status=st==='questionable'||st==='day-to-day'?'questionable':'active',note=status==='active'?'':st;
+        for(const [k,v,min] of [['pts',+r.ppg,8],['reb',+r.rpg,4],['ast',+r.apg,3]])if(v>=min)
+          add.push({id:`${nameKey(r.name)}-${k}~${g.id}`,gid:g.id,name:r.name,stat:k,avg:+v.toFixed(1),status,note,team:ab,est:true});}}}
+  d.players=d.players.concat(add);}
 registerTab({key:'odds',label:'💰 Odds Tools',after:'parlays',render:renderOddsTools});
 applyTheme();renderTabs();
 const domReady=document.readyState==='loading'?new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true})):Promise.resolve();
@@ -1747,7 +1889,7 @@ function refreshAll(){
 function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
 document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
 setInterval(refreshTick,10*60*1000);
-window.__fm2={get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+window.__fm2={buildMyPicks,myPicks,dayOf,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

@@ -317,7 +317,7 @@ function reasons(A) {
 
 // ---------------- state ----------------
 const blankLeg = () => ({ event: '', market: 'moneyline', pick: '', side: '', line: '', odds: '', sport: '', sel: '' });
-const st = { img: null, imgURL: null, slip: store.get('sc.draft', null), phase: 'idle', err: '', A: null, ctl: null, take: '', takeState: 'idle', takeCtl: null };
+const st = { img: null, imgURL: null, slip: store.get('sc.draft', null), phase: 'idle', err: '', A: null, ctl: null, take: '', takeState: 'idle', takeCtl: null, simRes: null, simBusy: false };
 if (st.slip && !Array.isArray(st.slip.legs)) st.slip = null;
 if (st.slip) st.phase = 'read';
 let sampleFn = null, aiImages = false, aiState = 'checking';
@@ -442,6 +442,51 @@ function editor() {
     <div class="sc-btns"><button class="btn ghost" data-sc-add>+ Add leg</button><button class="btn" data-sc-go>Compare and analyze</button></div>
    </div>`;
 }
+// ---------------- simulate the slip: 500,000 runs ----------------
+const SIM_RUNS = 500000, MARGIN_SPORTS = new Set(['nba', 'nfl', 'ncaaf']);
+// Each run plays the game once: a leg that has a game model (moneyline, spread, total in the margin sports) is read from that run,
+// so legs from the same game move together. Legs with no game model (player props, book prices, soccer and NHL) are drawn at their
+// own chance each run. Unpriced legs aren't in the run at all.
+function simulateSlip(A, N = SIM_RUNS) {
+  const legs = (A.M || []).filter(r => r.g);
+  if (!legs.length) return null;
+  const games = new Map();
+  for (const r of legs) {
+    if (!(MARGIN_SPORTS.has(r.g.sport) && /^SC:(ml|sp|tot):/.test(r.key))) continue;
+    if (!games.has(r.g.id)) games.set(r.g.id, { S: SB.simGame(r.g, N), legs: [], fns: [] });
+    const G = games.get(r.g.id); G.legs.push(r); G.fns.push(scCore(r.key));
+  }
+  const meta = legs.map(r => { const G = games.get(r.g.id); const j = G ? G.legs.indexOf(r) : -1; return j >= 0 ? { S: G.S, f: G.fns[j] } : null; });
+  const rnd = SB.rng(0x51ab + legs.length * 7919), legHits = new Array(legs.length).fill(0);
+  let hits = 0;
+  for (let i = 0; i < N; i++) {
+    let ok = true;
+    for (let k = 0; k < legs.length; k++) {
+      const mt = meta[k]; let pass;
+      if (mt) { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
+      else pass = rnd() < legs[k].p;
+      if (pass) legHits[k]++; else ok = false;
+    }
+    if (ok) hits++;
+  }
+  const rate = hits / N;
+  return { N, hits, rate, ci: 1.96 * Math.sqrt(rate * (1 - rate) / N), sig: A.rows.map(r => r.text).join('|'),
+    joint: A.p, book: A.decCmp ? 1 / A.decCmp : null, gamesSimmed: games.size, unpriced: (A.U || []).length,
+    legs: legs.map((r, k) => ({ label: r.label, rate: legHits[k] / N, how: meta[k] ? 'game simulation' : 'drawn at its own chance (no game model)' })) };
+}
+function simBlock(A) {
+  const sig = A.rows.map(r => r.text).join('|'), R = st.simRes && st.simRes.sig === sig ? st.simRes : null;
+  const busy = st.simBusy, ready = A.M.length > 0;
+  const btn = `<button class="btn" data-sc-simrun ${busy || !ready ? 'disabled' : ''}>${busy ? 'Simulating 500,000 runs…' : R ? 'Run 500,000 again' : 'Simulate 500,000 runs'}</button>`;
+  let body = ready ? '' : '<div class="why">Add priced legs first: the simulation needs at least one leg we can price.</div>';
+  if (R) body = `<div class="kpis"><div class="kpi"><b class="mono">${pctS(R.rate, 2)}</b><span>all legs hit in ${R.hits.toLocaleString()} of ${R.N.toLocaleString()} runs</span></div>
+      <div class="kpi"><b class="mono">±${(R.ci * 100).toFixed(2)}</b><span>95% range, points</span></div>
+      <div class="kpi"><b class="mono">${pctS(R.joint)}</b><span>our analytic estimate</span></div>
+      <div class="kpi"><b class="mono">${R.book != null ? pctS(R.book) : '—'}</b><span>book price implies</span></div></div>
+    <div class="sc-tbl">${R.legs.map(l => `<div class="sc-tr"><span><b>${esc(l.label)}</b><small>${esc(l.how)}</small></span><span class="mono">${pctS(l.rate, 1)}</span></div>`).join('')}</div>
+    <div class="note">${R.gamesSimmed} game${R.gamesSimmed === 1 ? '' : 's'} simulated ${R.N.toLocaleString()} times each.${R.unpriced ? ` ${R.unpriced} leg${R.unpriced === 1 ? '' : 's'} we couldn't price ${R.unpriced === 1 ? 'is' : 'are'} not in this run.` : ''} This is how often the slip lands in the simulation, not a guarantee.</div>`;
+  return `<div class="pc sc-sim"><div class="pchead"><span class="pctitle">Simulate the slip</span>${btn}</div>${body}</div>`;
+}
 function results() {
   const A = st.A; if (!A) return '';
   const R = reasons(A), cls = { hi: 'h-hi', mid: 'h-mid', lo: 'h-lo' }[A.tone];
@@ -470,9 +515,9 @@ function results() {
   const act = `<h2>4 · Track it here <small>all your bets in one app</small></h2><div class="pc"><div class="sc-btns">
     <button class="btn" data-sc-track>Track this bet</button>
     <button class="btn ghost" data-sc-build ${bl.length ? '' : 'disabled'}>Open in builder</button>
-    ${document.querySelector('#tabs [data-t="sim"]') && bl.length ? '<button class="btn ghost" data-sc-sim>Simulate 100k</button>' : ''}</div>
+    ${document.querySelector('#tabs [data-t="sim"]') && bl.length ? '<button class="btn ghost" data-sc-sim>Open in game simulator</button>' : ''}</div>
     <div class="note">Track saves the whole slip to My Parlays with ${st.slip.book ? esc(st.slip.book) + "'s" : 'the book\'s'} odds and your stake. Legs we price grade themselves when games finish; the others get ✓ / ✗ buttons. My Parlays is saved on this device.</div></div>`;
-  return verdict + cmp + legsA + injuryWorry(A) + why + act;
+  return cmp + simBlock(A) + verdict + legsA + injuryWorry(A) + why + act;
 }
 // ---------------- injury worry: who is out or doubtful in the games on this slip ----------------
 function injuryWorry(A) {
@@ -518,7 +563,7 @@ document.addEventListener('input', e => {
   else if (t.dataset.scS) { const k = t.dataset.scS; st.slip[k] = k === 'stake' ? num(t.value) : t.value; saveDraft(); }
 });
 document.addEventListener('click', e => {
-  const t = e.target.closest && e.target.closest('[data-sc-read],[data-sc-stop],[data-sc-manual],[data-sc-add],[data-sc-del],[data-sc-go],[data-sc-track],[data-sc-build],[data-sc-sim],[data-sc-take],[data-sc-take-stop]');
+  const t = e.target.closest && e.target.closest('[data-sc-read],[data-sc-stop],[data-sc-manual],[data-sc-add],[data-sc-del],[data-sc-go],[data-sc-track],[data-sc-build],[data-sc-sim],[data-sc-simrun],[data-sc-take],[data-sc-take-stop]');
   if (!t || !t.closest('#main')) return;
   const d = t.dataset;
   if (d.scRead != null) { readSlip(); return; }
@@ -530,6 +575,7 @@ document.addEventListener('click', e => {
   if (d.scDel != null) { st.slip.legs.splice(+d.scDel, 1); if (!st.slip.legs.length) st.slip.legs.push(blankLeg()); st.A = st.A ? analyze(st.slip) : null; saveDraft(); rerender(); return; }
   if (d.scGo != null) { st.A = analyze(st.slip); st.take = ''; st.takeState = 'idle'; rerender(); setTimeout(() => { const v = document.querySelector('#main .sc-verdict'); if (v) v.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 0); return; }
   if (d.scTrack != null) { track(); return; }
+  if (d.scSimrun != null) { if (st.simBusy) return; st.simBusy = true; rerender(); setTimeout(() => { const A = analyze(st.slip); st.simRes = simulateSlip(A); st.simBusy = false; rerender(); }, 30); return; }
   if (d.scBuild != null) { const L = builderLegs(); if (!L.length) return; (SB.replaceSlip || SB.setSlip)(L, L[0].gid + '|' + L[0].key); SB.openSlip(); return; }
   if (d.scSim != null) { const L = builderLegs(); if (L.length) SB.goTab('sim', { legs: L, title: `${st.slip.book || 'Slip'} check`, from: 'slipcheck', p: st.A.p }); return; }
   if (d.scTake != null) { claudeTake(); return; }
@@ -592,5 +638,5 @@ document.head.appendChild(css);
 const TAB = { key: 'slipcheck', label: '📸 Slip Check', after: 'mine', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="slipcheck"]')) SB.registerTab(TAB); }, 0));
-window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, PROMPT, get state() { return st; }, get ai() { return aiState; } };
+window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, PROMPT, get state() { return st; }, get ai() { return aiState; } };
 })();

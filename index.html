@@ -596,16 +596,16 @@ const NSIM=100000; // Monte-Carlo runs per game for margin sports (NBA / NFL / N
 // an hourly reload that replaces the game objects reuses them instead of re-running 100k sims per game (load() prunes old ids).
 const SIMC=new Map();
 const simSig=(g,m)=>[g.id,m.mu,m.sd,m.T,m.tsd,m.disc?1:0].join('|');
-function sim(g){ // seeded, lazy, cached: margin + total for 100,000 games
-  if(g._s)return g._s;const m=fit(g);if(!m||m.kind!=='margin')return null;
-  const sig=simSig(g,m);if(SIMC.has(sig))return g._s=SIMC.get(sig);
-  const N=NSIM,mg=new Float32Array(N),tt=new Float32Array(N),seed=hashStr(g.id),R=mulberry32(seed);
+function sim(g,n){ // seeded, lazy, cached: margin + total for 100,000 games (or n games when asked, e.g. the Slip Check's 500,000; those are not cached)
+  const N=n||NSIM;if(!n&&g._s)return g._s;const m=fit(g);if(!m||m.kind!=='margin')return null;
+  const sig=simSig(g,m)+(n?'|'+N:'');if(!n&&SIMC.has(sig))return g._s=SIMC.get(sig);
+  const mg=new Float32Array(N),tt=new Float32Array(N),seed=hashStr(g.id),R=mulberry32(seed);
   let cdf=null;if(m.disc){cdf=new Float64Array(m.pm.length);let c=0;for(let i=0;i<cdf.length;i++){c+=m.pm[i];cdf[i]=c;}cdf[cdf.length-1]=1;}
   for(let i=0;i<N;i++){let x,y,r2;do{x=2*R()-1;y=2*R()-1;r2=x*x+y*y;}while(r2>=1||r2===0); // Marsaglia polar: two independent N(0,1)
     const k=Math.sqrt(-2*Math.log(r2)/r2);tt[i]=m.T+m.tsd*y*k;
     if(cdf){const u=R();let lo=0,hi=cdf.length-1;while(lo<hi){const md=(lo+hi)>>1;if(cdf[md]<u)lo=md+1;else hi=md;}mg[i]=lo-m.kmax;} // integer margin
     else mg[i]=m.mu+m.sd*x*k;}
-  const s={N,mg,tt,kind:'margin',seed,sig,bm:{}};SIMC.set(sig,s);g._s=s;return s;
+  const s={N,mg,tt,kind:'margin',seed,sig,bm:{}};if(!n){SIMC.set(sig,s);g._s=s;}return s;
 }
 // ---------------- markets ----------------
 // each market: {group, key, label, desc, f, anch?, nopool?}. Goals sports: f(h,a) on the FINAL score.
@@ -1653,7 +1653,7 @@ const SB={version:2,NSIM,
   get DATA(){return DATA},
   $,esc,clamp,pct,when,abBox,toast,store,startMs,started,isFinal,priced,openG,gameById,
   get oddsFormat(){return oddsFmt},setOddsFormat,fmtOdds,fmtPrice,p2am,am2dec,p2dec,dec2p,dec2am,fmtAm,parseOdds,ev,kelly,noVig,
-  fit,scoreMatrix,outcomes,simGame:sim,rng:mulberry32,hashStr,marketsFor,p1,probOf,parlayProb,legLabel,evalMarket,registerLegType,
+  fit,scoreMatrix,outcomes,simGame:(g,n)=>sim(g,n),rng:mulberry32,hashStr,marketsFor,p1,probOf,parlayProb,legLabel,evalMarket,registerLegType,
   get savedParlays(){return saved;},
   saveParlay(rec){if(!rec||!Array.isArray(rec.legs)||!rec.legs.length)return false;saved.push({...rec,at:rec.at||Date.now()});store.set('saved',saved);if(tab==='mine')render();return true;},
   get slip(){return slip},toggleLeg,inSlip,setSlip,replaceSlip,openSlip,renderSlipBar,openGame,isVoid,leagueT,

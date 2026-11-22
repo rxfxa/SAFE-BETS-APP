@@ -29,11 +29,16 @@
   function injOf(sport, t) {
     if (!INJ) return [];
     const a = String(t.abbr || '').toUpperCase(), n = nk(t.name);
-    return INJ.injuries.filter(e => e && e.sport === sport && W_INJ[e.status] != null && (e.team === a || (n && (nk(e.teamName).endsWith(n) || n.endsWith(nk(e.teamName))))));
+    const fresh = e => { const t = Date.parse(e.updated || INJ.updated); return isFinite(t) && Date.now() - t <= 3 * 864e5; };  // an old report is not an edge
+    return INJ.injuries.filter(e => e && e.sport === sport && W_INJ[e.status] != null && fresh(e) && (e.team === a || (n && (nk(e.teamName).endsWith(n) || n.endsWith(nk(e.teamName))))));
   }
   // what a side is missing: NBA = points a game (season averages via lottos.js's team model), else a weighted head count
   function missing(sport, t) {
-    const E = injOf(sport, t); if (!E.length) return { w: 0, list: [], pts: null };
+    const E = injOf(sport, t);
+    if (!E.length) {  // no recent report entry: the absences today's form research found, if any
+      const f = formOf(sport, t.name), ab = f && f.absences && !/^(none|no |n\/a|healthy|full)/i.test(f.absences.trim()) ? f.absences.trim() : '';
+      return ab ? { w: .5, list: [ab.length > 90 ? ab.slice(0, 87) + '…' : ab], pts: null } : { w: 0, list: [], pts: null };
+    }
     let pts = null;
     if (sport === 'nba' && window.__lottos && __lottos.teamModel) {
       try { const m = __lottos.teamModel(t.abbr); if (m && m.absent > 0) pts = m.absent; } catch (e) {}

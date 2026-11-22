@@ -36,7 +36,7 @@ await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('u
 try {
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__polymarket && __polymarket.LOAD === 'done' && /Upset Parlays/.test(document.querySelector('#main').textContent) && !/Loading Polymarket/.test(document.querySelector('#main').textContent), null, { timeout: 60000 });
-  const legs = () => page.$$eval('#main .leg', xs => xs.map(x => ({ label: x.querySelector('b').textContent, meta: x.querySelector('.legtxt span').textContent, mid: parseFloat(x.querySelector('.legp').textContent) / 100 })));
+  const legs = () => page.$$eval('#upMain .leg', xs => xs.map(x => ({ label: x.querySelector('b').textContent, meta: x.querySelector('.legtxt span').textContent, mid: parseFloat(x.querySelector('.legp').textContent) / 100 })));
   let L = await legs();
   check('tab shows a parlay with legs', L.length >= 2, `${L.length} legs`);
   check('default 5 legs (or fewer if the board is short)', L.length <= 5 && (L.length === 5 || L.length < 5));

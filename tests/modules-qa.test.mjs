@@ -73,7 +73,7 @@ try {
     const fav = await page.evaluate(() => __polymarket.PM.games.filter(g => g.sport === 'soccer' && g.ml && g.ml.home && g.ml.away && g.ml.draw && Math.max(g.ml.home.m, g.ml.away.m) <= .5 && Math.abs(g.ml.home.m - g.ml.away.m) > .1).length);
     check('Upsets: the fixture has 3-way favourites under 50% to test against', fav > 0, String(fav));
     await page.click('[data-up-sport="all"]'); await page.click('#upMix'); await setLegs(8); await page.waitForTimeout(200);
-    const head = await page.evaluate(() => { const h = document.querySelector('#main .pchead .hit'); const mids = [...document.querySelectorAll('#main .leg .legp')].map(x => parseFloat(x.textContent) / 100); return { h: h ? h.textContent : '', prod: mids.reduce((s, x) => s * x, 1), n: mids.length }; });
+    const head = await page.evaluate(() => { const h = document.querySelector('#upMain .pchead .hit'); const mids = [...document.querySelectorAll('#upMain .leg .legp')].map(x => parseFloat(x.textContent) / 100); return { h: h ? h.textContent : '', prod: mids.reduce((s, x) => s * x, 1), n: mids.length }; });
     const shown = /^<0\.01%/.test(head.h) ? 0.0001 : parseFloat(head.h) / 100;
     check('Upsets: an 8-leg slip never says "0% market chance"', !/^0% /.test(head.h) && /market chance/.test(head.h), head.h);
     check('Upsets: the chance shown agrees with the legs (within rounding)', head.n === 8 && shown > 0 && shown / head.prod > 0.5 && shown / head.prod < 2, `${head.h} vs product of shown legs ${(head.prod * 100).toPrecision(2)}%`);

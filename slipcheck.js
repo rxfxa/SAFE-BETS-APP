@@ -138,11 +138,17 @@ function bestByName(items, nameOf, pick) { // the item whose name fits the pick 
   for (const it of items) { const s = nameFit(nameOf(it), t); if (s > bs) { bs = s; best = it; } }
   return best;
 }
-function findPlayer(name, stat) {
+function findPlayer(name, stat, leg) {
   const t = nameKey(name); if (!t) return null;
   const all = (SB.DATA && SB.DATA.players) || [], top = bestByName(all, p => p.name, name); if (!top) return null;
-  const k = nameKey(top.name), P = all.filter(p => nameKey(p.name) === k);
-  return P.find(p => p.stat === stat) || P[0] || null;
+  const k = nameKey(top.name), P = all.filter(p => nameKey(p.name) === k), S = P.filter(p => p.stat === stat);
+  // one record per game for season-average players (a team on a back-to-back has two): take the record for the slip's game;
+  // a season-average record for another game is not this leg (the rotation / game-match path below handles it)
+  if (leg && S.length && (S.length > 1 || S[0].est)) {
+    const g = findGame(leg, S[0].team), m = g && S.find(p => p.gid === g.id);
+    return m || S.find(p => !p.est) || null;
+  }
+  return S[0] || P[0] || null;
 }
 function findRotation(name) { // NBA rotation player via lottos.js (team model), for points lines not in props.json
   const L = window.__lottos; if (!L || !L.ROLES) return null; if (!nameKey(name)) return null;
@@ -229,7 +235,7 @@ function matchLeg(leg) {
   if (STAT[mk] || mk === 'player_other' || BOOK_PROP.has(mk)) {
     if (mk !== 'anytime_td') ({ side, line } = plusLine(leg, side, line));
     const stat = STAT[mk];
-    const pr = stat ? findPlayer(leg.pick, stat) : null;
+    const pr = stat ? findPlayer(leg.pick, stat, leg) : null;
     if (pr && pr.stat === stat && line != null && side) {
       const g = SB.gameById(pr.gid);
       out.g = g; out.key = side === 'O' ? `P:${pr.id}:${Math.floor(line) + 1}` : `U:${pr.id}:${line}`;

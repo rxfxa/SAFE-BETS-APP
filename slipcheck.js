@@ -535,7 +535,8 @@ function playerModel(r) {
   const INJ = window.__lottos && window.__lottos.INJ, inj = INJ && (INJ.injuries || []).find(x => nameKey(x.player) === nameKey(name));
   const injF = !inj ? 1 : inj.status === 'out' ? 0 : inj.status === 'doubtful' ? 0.25 : inj.status === 'questionable' ? 0.85 : 1;
   return { name, mean: p.mean * dfac * injF, sd: p.sd * (injF > 0 ? Math.sqrt(injF) : 0), td: p.stat === 'anytime_td', rush: p.stat === 'rushing_yards', over: side !== 'U', line: isFinite(line) ? line : 0,
-    opp, dfac, inj: inj ? String(inj.status) : '', home: p.team === r.g.home.abbr, sport: r.g.sport };
+    opp, dfac, inj: inj ? String(inj.status) : '', home: p.team === r.g.home.abbr, sport: r.g.sport,
+    tdQ: Array.isArray(p.tdQ) && p.tdQ.length === 4 ? p.tdQ : (L.tdByQuarter || [0.25, 0.25, 0.25, 0.25]) };  // touchdown share by quarter
 }
 // the game model: from the feed's prices, or from Polymarket's moneyline and total when the feed hasn't priced the game yet
 function simModelGame(g, N) {
@@ -580,7 +581,9 @@ function simulateSlip(A, N = SIM_RUNS) {
         const pm = mt.pm; let scale = mt.S ? mt.S.tt[i] / mt.avgT : 1;   // this run's game total relative to the average game
         if (mt.S) {  // blowouts: the leading side's starters sit late; the trailing side throws more and runs less
           const lead = pm.home ? mt.S.mg[i] : -mt.S.mg[i], big = pm.sport === 'nba' ? 20 : 17;
-          if (lead >= big) scale *= pm.td ? 1 : 0.8;
+          // starters always play the 1st quarter; when their side is well ahead they're rested late:
+          // a blowout loses the 4th quarter, a rout (10+ more) loses the whole 2nd half
+          if (lead >= big) scale *= pm.td ? (lead >= big + 10 ? pm.tdQ[0] + pm.tdQ[1] : 1 - pm.tdQ[3]) : 0.8;
           else if (lead <= -big) scale *= pm.td ? 1 : pm.rush ? 0.85 : 1.1;
         }
         if (pm.td) pass = rnd() < 1 - Math.exp(-pm.mean * scale);

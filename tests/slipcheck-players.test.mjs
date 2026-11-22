@@ -62,7 +62,7 @@ try {
     check('the yards leg is priced from its average and the opponent (about ' + (expect * 100).toFixed(1) + '%)', Math.abs(r.passP - expect) < 0.01, `${(r.passP * 100).toFixed(2)}%`);
     check('"Other player prop" with the same line is priced the same way', r.otherP != null && Math.abs(r.otherP - r.passP) < 1e-9, `${r.otherP}`);
     check('the simulation adds game-total swings: within 5 points of the standalone chance (it is wider because high and low scoring games move the yards)', Math.abs(r.S.legs[0][0] - r.passP) < 0.05 && r.S.legs[0][0] > 0, `${(r.S.legs[0][0] * 100).toFixed(2)}% sim vs ${(r.passP * 100).toFixed(2)}% standalone`);
-    check('the touchdown leg is simulated per run and matches its Poisson chance (within 1.5 points)', Math.abs(r.S.legs[1][0] - r.tdP) < 0.015, `${(r.S.legs[1][0] * 100).toFixed(2)}% vs ${(r.tdP * 100).toFixed(2)}%`);
+    check('the touchdown leg is simulated per run: a little below its standalone chance because starters rest in blowouts (within 8 points)', r.S.legs[1][0] <= r.tdP + 0.005 && r.tdP - r.S.legs[1][0] < 0.08, `${(r.S.legs[1][0] * 100).toFixed(2)}% vs ${(r.tdP * 100).toFixed(2)}%`);
     check('the leg says whose average and which defence it used', /average/.test(r.S.legs[0][1]) && /vs /.test(r.S.legs[0][1]), r.S.legs[0][1]);
     check('the slip rate is below either leg', r.S.rate <= Math.min(r.S.legs[0][0], r.S.legs[1][0]) + 1e-9, `${(r.S.rate * 100).toFixed(2)}%`);
   }

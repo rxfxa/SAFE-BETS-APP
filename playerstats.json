@@ -5,7 +5,14 @@
   "passYds": 235,
   "rushYds": 115,
   "recYds": 235,
-  "note": "approximate league average per team per game, assumed"
+  "note": "approximate league average per team per game, assumed",
+  "tdByQuarter": [
+   0.21,
+   0.31,
+   0.21,
+   0.27
+  ],
+  "tdNote": "share of touchdowns scored in each quarter (approximate league pattern: most in the 2nd and 4th). A player's own split can go in his entry as tdQ."
  },
  "defense": {
   "MIN": {

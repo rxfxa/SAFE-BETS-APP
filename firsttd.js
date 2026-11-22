@@ -261,7 +261,7 @@ const css = document.createElement('style'); css.id = 'firsttd-css';
 css.textContent = `
 .ft-nav{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 12px;padding:2px 16px 4px}
 .ft-nav::-webkit-scrollbar{display:none}
-.ft-card{margin-bottom:12px}
+.ft-card{margin-bottom:12px;min-width:0} /* a grid item: without this its nowrap rows widen the card past a phone screen */
 .ft-split{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin:10px 0 2px;font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
 .ft-split b{color:var(--text);font-style:italic}
 .ft-split .bar{margin:0}

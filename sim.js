@@ -299,7 +299,7 @@ function* runJob(msg,ctl){
     yield {phase:'run',done:k,hw,dr,aw,ov,cps:cps.splice(0),ms:Date.now()-t0};}
   return {N,H,A,HH,HA,X,FG,anyC,firstC,gm,exC:nex?exC:null,ext,P:{...P,sc:null,cum:null},base,hw,dr,aw,ov,ms:Date.now()-t0,transfer:[H.buffer,A.buffer,HH.buffer,HA.buffer,X.buffer,FG.buffer]};}
 /* 'parlay': every game in the slip is simulated once per iteration so same-game legs are correlated.
-   legs: {gi (game index), t:'tab', w, tab:Uint8Array over (h,a) | t:'sim', code | t:'bern', p}
+   legs: {gi (game index), t:'tab', w, tab:Uint8Array over (h,a) (1 win, 0 loss, 2 push: drawn at p) | t:'sim', code | t:'bern', p}
          | {gi, t:'cond', tab:Float32Array P(all custom legs hit | h,a)} */
 function* parlayJob(msg,ctl){
   const games=msg.games,N=msg.N||N_SIMS,R=rng(msg.seed>>>0),Ps=[],recs=[];
@@ -312,7 +312,7 @@ function* parlayJob(msg,ctl){
     for(;k<end;k++){for(let j=0;j<Ps.length;j++)simOne(Ps[j],R,recs[j]);
       let all=1;
       for(let j=0;j<nl;j++){const L=legs[j],r=recs[L.gi];let ok=0;
-        if(L.t==='tab'){const W=L.w,hh=Math.min(r.h,W-1),aa=Math.min(r.a,W-1);ok=L.tab[hh*W+aa];}
+        if(L.t==='tab'){const W=L.w,hh=Math.min(r.h,W-1),aa=Math.min(r.a,W-1);ok=L.tab[hh*W+aa];if(ok===2)ok=R()<L.p?1:0;} // 2 = push
         else if(L.t==='sim')ok=simLeg(L.code,r)?1:0;
         else if(L.t==='scorer')ok=((L.team?r.anyA:r.anyH)>>L.bit)&1;
         else if(L.t==='first')ok=r.fs===L.team*32+L.bit?1:0;
@@ -664,7 +664,7 @@ function injectCSS(){if(document.getElementById('sim-css'))return;const st=docum
 .sm-big{font:italic 900 40px var(--f);font-stretch:118%;font-variant-numeric:tabular-nums;line-height:1.05;text-shadow:0 0 20px color-mix(in srgb,var(--glow) 60%,transparent)}
 .sm-pl{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
 .sm-pl:first-child{border-top:0}
-.sm-pl .t{flex:1;min-width:0}.sm-pl .t b{display:block;font-weight:700}.sm-pl .t span{display:block;font-size:12px;color:var(--dim);font-weight:600}
+.sm-pl .t{flex:1;min-width:0}.sm-pl .t b{display:block;font-weight:700}.sm-pl .t>span{display:block;font-size:12px;color:var(--dim);font-weight:600}
 .sm-pl .p{flex:none;text-align:right;font-family:var(--f);font-style:italic;font-variant-numeric:tabular-nums;font-weight:800;font-size:14px}
 .sm-pl .p small{display:block;font-style:normal;font-size:11px;color:var(--dim);font-weight:500}
 .sm-flag{display:inline-block;font-size:10.5px;font-weight:700;font-style:italic;padding:1px 6px;border-radius:3px;background:var(--amberbg);color:var(--amber);margin-left:4px;vertical-align:1px}
@@ -852,7 +852,7 @@ function marketRows(g,R,B){
 function scorerHTML(g,R,B){if(!R.sc||!R.sc.length)return g.sport==='soccer'?`<details><summary>Goalscorers <small>no data</small></summary><div class="in note">No goalscorer data for these teams yet, so every goal is credited to “Other”.</div></details>`:'';
   const bmap=B&&B.sc?new Map(B.sc.map(x=>[x.id,x.any])):null;
   const rows=R.sc.slice().sort((a,b)=>b.any-a.any).map(p=>{const key='G:'+p.id,eng=SB.p1(g,key),ins=SB.inSlip(g.id,key),ref=bmap?bmap.get(p.id):eng>0?eng:null;
-    return `<div class="sm-row"><div class="l"><b>${esc(p.name)} <span style="display:inline;color:var(--dim)">${esc(p.team?g.away.abbr:g.home.abbr)}</span></b><span>first scorer ${pcS(p.first)} · fair ${SB.fmtOdds(p.any)}${eng>0&&!B?' · engine '+pcS(eng):''}</span></div><span class="p">${pcS(p.any)}<small>±${(ci95(p.any,R.N)*100).toFixed(1)}</small></span>${ref!=null?deltaCell(p.any-ref,Math.sqrt(p.any*(1-p.any)/R.N),!!bmap):'<span class="d">—</span>'}<button class="sm-add${ins?' in':''}" data-a="add" data-gid="${esc(g.id)}" data-key="${esc(key)}" aria-label="Add ${esc(p.name)} to score" ${eng>0&&SB.openG(g)?'':'disabled title="Scorer legs need the soccer module"'}>${ins?'✓':'+'}</button></div>`;}).join('');
+    return `<div class="sm-row"><div class="l"><b>${esc(p.name)} <span style="display:inline;color:var(--dim)">${esc(p.team?g.away.abbr:g.home.abbr)}</span></b><span>anytime fair ${SB.fmtOdds(p.any)}${eng>0&&!B?' · engine '+pcS(eng):''} · first scorer ${pcS(p.first)}</span></div><span class="p">${pcS(p.any)}<small>±${(ci95(p.any,R.N)*100).toFixed(1)}</small></span>${ref!=null?deltaCell(p.any-ref,Math.sqrt(p.any*(1-p.any)/R.N),!!bmap):'<span class="d">—</span>'}<button class="sm-add${ins?' in':''}" data-a="add" data-gid="${esc(g.id)}" data-key="${esc(key)}" aria-label="Add ${esc(p.name)} to score" ${eng>0&&SB.openG(g)?'':'disabled title="Scorer legs need the soccer module"'}>${ins?'✓':'+'}</button></div>`;}).join('');
   return `<details data-grp="scorers" ${S.dOpen.scorers===false?'':'open'}><summary>Anytime goalscorer <small>${R.sc.length} players</small></summary><div class="in sm-tbl"><div class="note" style="margin:0 0 6px">Each simulated goal is credited to a player by his share of team goals (matched to the soccer module’s scorer prices when it has them); the rest go to “Other”.</div>${rows}</div></details>`;}
 function resultsHTML(g){
   const wk=wiKey(S.wi);let R=CACHE.get(ckey(g,wk)),B=wk?CACHE.get(ckey(g,'')):null,stale=false;
@@ -997,22 +997,29 @@ function liveOut(g){const L=liveState(g),k=tsig(g);
     return '<div class="note" id="smLiveWait">Calibrating to the engine…</div>';}
   const s=liveCalc(g,base,L),GC=CORE.GC,F=s.F,H=g.home.abbr,A=g.away.abbr,c=L.h+L.a;
   const sum=f=>{let t=0;for(let h=0;h<GC;h++)for(let a=0;a<GC;a++){const p=F[h*GC+a];if(p>0&&f(h,a))t+=p;}return Math.min(1,Math.max(0,t));};
-  const row=(lab,p,sub)=>`<div class="sm-lrow"><span class="l"><b>${esc(lab)}</b>${sub?`<span>${sub}</span>`:''}</span><span class="p">${pcS(p)}</span><span class="o">${p>1e-6&&p<1-1e-9?esc(SB.fmtOdds(p)):p>=1-1e-9?'won':'—'}</span></div>`;
+  // won = every reachable final score wins it; lost = none does (exactly 0: scores below the current one carry no mass)
+  const row=(lab,p,sub)=>{const st=p>=1-1e-9?'won':p===0?'lost':'',sb=[sub,st&&'already '+st].filter(Boolean).join(' · ');
+    return `<div class="sm-lrow"><span class="l"><b>${esc(lab)}</b>${sb?`<span>${sb}</span>`:''}</span><span class="p">${pcS(p)}</span><span class="o">${st||(p>1e-6?esc(SB.fmtOdds(p)):'—')}</span></div>`;};
   const pre=k2=>{try{return 'pre-match '+pc1(SB.p1(g,k2));}catch(e){return '';}};
   let o=`<div class="sec">Result (90 minutes + stoppage)</div><div class="sm-lt">${row(H+' win',s.H,pre('H'))}${row('Draw',s.D,pre('D'))}${row(A+' win',s.A,pre('A'))}</div>`;
   o+=`<div class="sec">Total goals (full match, incl. the ${c} already scored)</div><div class="sm-lt">${[.5,1.5,2.5].map(x=>{const ln=c+x;return row('Over '+ln,sum((h,a)=>h+a>ln))+row('Under '+ln,sum((h,a)=>h+a<ln));}).join('')}
-    ${row('Both teams score',sum((h,a)=>h>0&&a>0),L.h>0&&L.a>0?'already landed':'')}</div>`;
+    ${row('Both teams score',sum((h,a)=>h>0&&a>0))}</div>`;
   const cs=[];for(let h=L.h;h<GC-1;h++)for(let a=L.a;a<GC-1;a++){const p=F[h*GC+a];if(p>1e-9)cs.push([h,a,p]);}cs.sort((x,y)=>y[2]-x[2]);
   o+=`<div class="sec">Most likely final scores</div><div class="sm-lt">${cs.slice(0,6).map(([h,a,p])=>row(`${H} ${h}–${a} ${A}`,p)).join('')}</div>`;
   // the slip, priced live: this game's legs over the live final-score grid, other games at their pre-match chance
   const slip=SB.slip||[],mine=slip.filter(l=>l.gid===g.id);
   if(mine.length){const others=slip.filter(l=>l.gid!==g.id),ok=l=>SB.evalMarket(g,l.key,0,0)!=null&&SB.evalMarket(g,l.key,1,1)!=null;
-    const rows=mine.map(l=>{let lab=l.label||l.key;try{lab=SB.legLabel(l)||lab;}catch(e){}
-      return ok(l)?row(lab,sum((h,a)=>!!SB.evalMarket(g,l.key,h,a)),'live'):`<div class="sm-lrow"><span class="l"><b>${esc(lab)}</b><span>needs data the score can’t give</span></span><span class="p">n/a live</span><span class="o"></span></div>`;}).join('');
+    const dead=[],rows=mine.map(l=>{let lab=l.label||l.key;try{lab=SB.legLabel(l)||lab;}catch(e){}
+      if(!ok(l))return `<div class="sm-lrow"><span class="l"><b>${esc(lab)}</b><span>needs data the score can’t give</span></span><span class="p">n/a live</span><span class="o"></span></div>`;
+      const p=sum((h,a)=>!!SB.evalMarket(g,l.key,h,a));if(p===0)dead.push(lab);return row(lab,p,'live');}).join('');
     const all=mine.every(ok);let po=1;try{po=others.length?SB.parlayProb(others).p:1;}catch(e){po=0;}
     const joint=all?sum((h,a)=>mine.every(l=>SB.evalMarket(g,l.key,h,a))):null,lp=joint==null?null:joint*po;let prem=null;try{prem=SB.parlayProb(slip).p;}catch(e){}
+    // busted: a leg (or the legs together) can no longer win from this score, whatever the other games do
+    const bust=dead.length>0||joint===0;
     o+=`<div class="sec">Your slip, live</div><div class="sm-lt">${rows}</div>`;
-    o+=lp==null?`<div class="note">A leg from this game can’t be priced from the score alone (scorer, half-time or player legs), so there is no live parlay chance.</div>`
+    o+=bust?`<div class="sm-kpis"><div><b>Busted</b><span>live parlay chance 0%</span></div><div><b>—</b><span>fair live price</span></div><div><b>${prem!=null?pcS(prem):'—'}</b><span>pre-match chance</span></div></div>
+        <div class="note">${dead.length?`${esc(dead.map(x=>'“'+x+'”').join(', '))} can no longer win at ${esc(g.home.abbr)} ${L.h}–${L.a} ${esc(g.away.abbr)}`:`These legs can’t all win together from ${esc(g.home.abbr)} ${L.h}–${L.a} ${esc(g.away.abbr)}`}, so the slip has lost.</div>`
+      :lp==null?`<div class="note">A leg from this game can’t be priced from the score alone (scorer, half-time or player legs), so there is no live parlay chance.</div>`
       :`<div class="sm-kpis"><div><b>${pcS(lp)}</b><span>live parlay chance</span></div><div><b>${lp>1e-6?esc(SB.fmtOdds(lp)):'—'}</b><span>fair live price</span></div><div><b>${prem!=null?pcS(prem):'—'}</b><span>pre-match chance</span></div></div>
         <div class="note">${others.length?(others.length>1?`${others.length} legs from other games keep their pre-match chances. `:'1 leg from another game keeps its pre-match chance. '):''}To bank part of a win, compare this with a live cash-out or hedge price in <a data-a="hedge" style="color:var(--blue);cursor:pointer;font-weight:700">Odds Tools → Hedge</a>.</div>`;}
   else o+=`<div class="note">Add legs from this match to your slip to see their live chances here.</div>`;
@@ -1022,40 +1029,57 @@ function paintLive(){const g=curGame(),b=document.getElementById('smLiveOut');if
   b.innerHTML=liveOut(g);}
 
 /* ---------- parlay simulator + bankroll ---------- */
-function parLegs(){const L=S.plegs&&S.plegs.length?S.plegs:SB.slip;return (L||[]).map(l=>({gid:l.gid,key:l.key,label:l.label,sport:l.sport}));}
-function legInfo(l){const g=SB.gameById(l.gid);let lab=l.label||l.key;try{lab=SB.legLabel(l)||lab;}catch(e){}return {g,lab,p:g||/^[PU]:/.test(l.key)?SB.p1(g,l.key):0};}
+// custom (hand-graded) legs, e.g. Slip Check's player-model legs, keep the chance saved with them (p1): the engine can't price them
+const legCopy=l=>({gid:l.gid,key:l.key,label:l.label,sport:l.sport,...(l.custom?{custom:true}:{}),...(+l.p1>0&&+l.p1<1?{p1:+l.p1}:{})});
+function parLegs(){const L=S.plegs&&S.plegs.length?S.plegs:SB.slip;return (L||[]).map(legCopy);}
+// src: 'engine' (priced live by the engine), 'saved' (no engine price: the chance saved with the leg), 'none' (no chance at all)
+function legInfo(l){const g=SB.gameById(l.gid);let lab=l.label||l.key;if(!l.custom)try{lab=SB.legLabel(l)||lab;}catch(e){}
+  const p=g||/^[PU]:/.test(l.key)?SB.p1(g,l.key):0,own=!(p>0)&&l.custom&&(g||/^x-/.test(l.gid)); // x-: never tied to a feed game
+  return own?(l.p1>0?{g,lab,p:l.p1,src:'saved'}:{g,lab,p:0,src:'none'}):{g,lab,p,src:'engine'};}
+// engine reference for the same legs: parlayProb on the engine-priced legs x the saved chances (drawn independently, as in the sim)
+function engOf(legs){const inf=legs.map(legInfo),E=legs.filter((l,j)=>inf[j].src==='engine'),x=inf.reduce((s,i)=>i.src==='saved'?s*i.p:s,1);
+  const e=E.length?SB.parlayProb(E):{p:1,indep:1};return {p:e.p*x,indep:e.indep*x};}
+const PROBE=[[0,0],[2,1],[1,2],[24,17],[17,24],[110,100],[100,110]];
 function buildParlayMsg(legs){
-  const games=[],gi=new Map(),out=[],notes=[],condKeys=new Map(),legRef=[];
+  const games=[],gi=new Map(),out=[],notes=[],condKeys=new Map(),legRef=[],mgc={};
   const gidx=g=>{if(!gi.has(g.id)){gi.set(g.id,games.length);games.push({gid:g.id,spec:specFor(g,{}),base:BASE.get(tsig(g))||null});}return gi.get(g.id);};
-  legs.forEach((l,j)=>{const {g,lab,p}=legInfo(l),key=String(l.key);
-    if(/^[PU]:/.test(key)){out.push({t:'bern',p,gi:0});legRef.push({j,how:'engine'});notes.push(`“${lab}”: player props are priced by the engine and drawn independently (the game sim has no player stats).`);return;}
-    if(!g){out.push({t:'bern',p:0,gi:0});legRef.push({j,how:'gone'});notes.push(`“${lab}”: game no longer in the feed.`);return;}
-    if(!SB.priced(g)&&!key.includes(':')){out.push({t:'bern',p,gi:0});legRef.push({j,how:'engine'});return;}
-    if(key.startsWith('SIM:')&&g.sport==='soccer'){out.push({t:'sim',code:key.slice(4),gi:gidx(g)});legRef.push({j,how:'sim'});return;}
+  const mg=(g,lab,c)=>{if(GOALS(g.sport))return;const o=mgc[g.id]=mgc[g.id]||{L:[],c:0};o.L.push(lab);o.c+=c;}; // margin-sport legs per game
+  // k = this leg's index in the worker's leg list (legHit), -1 when it has none
+  const put=(j,how,leg)=>{legRef.push({j,how,k:leg?out.length:-1});if(leg)out.push(leg);};
+  legs.forEach((l,j)=>{const {g,lab,p,src}=legInfo(l),key=String(l.key);
+    if(src==='none'){put(j,'none');notes.push(`“${lab}”: no chance for this leg (it wasn’t matched to a game or player), so it is left out of both figures.`);return;}
+    if(src==='saved'){put(j,'saved',{t:'bern',p,gi:0});notes.push(`“${lab}”: the game sim has no model for this leg, so it is drawn independently at the ${pc1(p)} saved with it.`);return;}
+    if(/^[PU]:/.test(key)){put(j,'engine',{t:'bern',p,gi:0});notes.push(`“${lab}”: player props are priced by the engine and drawn independently (the game sim has no player stats).`);return;}
+    if(!g){put(j,'gone',{t:'bern',p:0,gi:0});notes.push(`“${lab}”: game no longer in the feed.`);return;}
+    if(!SB.priced(g)&&!key.includes(':')){put(j,'engine',{t:'bern',p,gi:0});return;}
+    if(key.startsWith('SIM:')&&g.sport==='soccer'){put(j,'sim',{t:'sim',code:key.slice(4),gi:gidx(g)});return;}
     if(key.includes(':')){
       if(key.startsWith('G:')&&g.sport==='soccer'){const sc=specFor(g).scorers,first=key.startsWith('G:1st:'),id=key.slice(first?6:2);
-        for(let t=0;t<2;t++){const b=sc[t].findIndex(x=>x.id===id);if(b>=0){out.push({t:first?'first':'scorer',team:t,bit:b,gi:gidx(g)});legRef.push({j,how:'sim'});return;}}}
-      // custom legs that settle on the final score (e.g. SX team unders) are settled exactly by the sim like engine markets
-      if(g.sport==='soccer'&&SB.evalMarket(g,key,0,0)!=null&&SB.evalMarket(g,key,2,1)!=null){const W2=16,tab=new Uint8Array(W2*W2);
-        for(let h=0;h<W2;h++)for(let a=0;a<W2;a++)tab[h*W2+a]=SB.evalMarket(g,key,h,a)?1:0;
-        out.push({t:'tab',w:W2,tab,gi:gidx(g)});legRef.push({j,how:'sim'});return;}
-      if(g.sport==='soccer'){if(!condKeys.has(g.id))condKeys.set(g.id,[]);condKeys.get(g.id).push(key);legRef.push({j,how:'cond'});notes.push(`“${lab}”: the sim can’t settle this leg type, so it uses the engine’s chance given each simulated final score (keeps the correlation).`);return;}
-      out.push({t:'bern',p,gi:0});legRef.push({j,how:'engine'});notes.push(`“${lab}”: settled with the engine’s chance, drawn independently.`);return;}
+        for(let t=0;t<2;t++){const b=sc[t].findIndex(x=>x.id===id);if(b>=0){put(j,'sim',{t:first?'first':'scorer',team:t,bit:b,gi:gidx(g)});return;}}}
+      // custom legs that settle on the final score (Slip Check game lines, SX team unders) are settled by the sim like engine
+      // markets in every sport; a push is drawn at the engine's chance, which keeps the leg's chance at win / (win + loss)
+      if(SB.priced(g)&&SB.fit(g)&&PROBE.some(([h,a])=>SB.evalMarket(g,key,h,a)!=null)){const W2=GOALS(g.sport)?16:230,tab=new Uint8Array(W2*W2);
+        for(let h=0;h<W2;h++)for(let a=0;a<W2;a++){const v=SB.evalMarket(g,key,h,a);tab[h*W2+a]=v==null?2:v?1:0;}
+        put(j,'sim',{t:'tab',w:W2,tab,p,gi:gidx(g)});mg(g,lab,1);return;}
+      if(g.sport==='soccer'){if(!condKeys.has(g.id))condKeys.set(g.id,[]);condKeys.get(g.id).push(key);put(j,'cond');notes.push(`“${lab}”: the sim can’t settle this leg type, so it uses the engine’s chance given each simulated final score (keeps the correlation).`);return;}
+      put(j,'engine',{t:'bern',p,gi:0});notes.push(`“${lab}”: settled with the engine’s chance, drawn independently.`);return;}
     const W2=GOALS(g.sport)?16:230,tab=new Uint8Array(W2*W2);
     for(let h=0;h<W2;h++)for(let a=0;a<W2;a++)tab[h*W2+a]=SB.evalMarket(g,key,h,a)?1:0;
-    out.push({t:'tab',w:W2,tab,gi:gidx(g)});legRef.push({j,how:'sim'});});
+    put(j,'sim',{t:'tab',w:W2,tab,gi:gidx(g)});mg(g,lab,0);});
   for(const [gid,keys] of condKeys){const g=SB.gameById(gid),Wc=11,tab=new Float32Array(Wc*Wc);
     for(let h=0;h<Wc;h++)for(let a=0;a<Wc;a++){const cs=h<=4&&a<=4?`CS${h}-${a}`:h>a?'CSOH':h===a?'CSOD':'CSOA';const pc=SB.p1(g,cs);tab[h*Wc+a]=pc>0?Math.min(1,SB.probOf(g,[...keys,cs])/pc):0;}
     out.push({t:'cond',w:Wc,tab,gi:gidx(g),group:keys});}
+  // on an NBA / NFL / CFB game the engine multiplies custom lines (e.g. Slip Check's) in as unrelated (index.html probOf)
+  for(const k in mgc){const o=mgc[k];if(o.c&&o.L.length>1)notes.push(`Same game (${o.L.map(x=>'“'+x+'”').join(', ')}): the engine counts ${o.c>1?'these lines':'one of them'} as unrelated to the game’s other legs; the sim settles them all on the same simulated game.`);}
   return {games,legs:out,notes:[...new Set(notes)],legRef};}
 function startParlay(){if(RUN.active)return;const legs=parLegs();if(!legs.length)return;
-  const m=buildParlayMsg(legs),eng=SB.parlayProb(legs);
+  const m=buildParlayMsg(legs),eng=engOf(legs);if(!m.legs.length)return; // every leg unpriced: nothing to simulate
   Object.assign(RUN,{active:true,kind:'parlay',gid:null,done:0,rate:0,cps:[],err:null,cancelled:false,phase:'Starting',stage:0,stages:1});DBG.maxGap=0;gapMon();rerender();
   const sig=JSON.stringify(legs.map(l=>l.gid+'|'+l.key));
   runner.start({cmd:'parlay',games:m.games,legs:m.legs,N:NSIM,seed:SB.hashStr(sig)},{
     progress(v){if(v.phase==='calib')RUN.phase='Calibrating to the engine';else{RUN.phase='Simulating';RUN.done=v.done;if(v.cps)RUN.cps.push(...v.cps);RUN.rate=v.ms>0?v.done/(v.ms/1000):0;}schedPaint();},
     done(res){res.bases.forEach((b,i)=>{const g=SB.gameById(m.games[i].gid);if(g&&b)BASE.set(tsig(g),b);});
-      const per=legs.map((l,j)=>{const ref=m.legRef[j];let k=-1;if(ref.how!=='cond'){let c=0;for(let q=0;q<j;q++)if(m.legRef[q].how!=='cond')c++;k=c;}return {...legInfo(l),how:ref.how,sim:k>=0?res.legHit[k]/res.N:null};});
+      const per=legs.map((l,j)=>{const ref=m.legRef[j];return {...legInfo(l),how:ref.how,sim:ref.k>=0?res.legHit[ref.k]/res.N:null};});
       PAR={sig,N:res.N,hit:res.hits/res.N,eng:eng.p,indep:eng.indep,per,notes:m.notes,cps:RUN.cps.slice(),ms:res.ms};RUN.active=false;rerender();},
     error(e){RUN.active=false;RUN.err='The parlay simulation failed: '+e;rerender();}});}
 function parBoxHTML(){const busy=RUN.active&&RUN.kind==='parlay';if(!busy)return '';
@@ -1064,30 +1088,45 @@ const sameLegs=(a,b)=>JSON.stringify((a||[]).map(l=>l.gid+'|'+l.key))===JSON.str
 /* My Parlays as tap-to-select chips: pick any saved parlay and simulate it here */
 function pickHTML(legs){const sv=SB.savedParlays||[];if(!sv.length)return '';
   return `<div class="sm-sl" style="border:0;padding:0 0 8px"><label>My parlays · tap one to simulate it</label><div class="seg" role="group" aria-label="My parlays" style="flex-wrap:wrap">${sv.map((s,i)=>{const on=sameLegs(s.legs,legs);return `<button data-a="pload" data-i="${i}" class="${on?'on':''}" aria-pressed="${on}">${(s.legs||[]).length} legs · ${pc1(+s.p||0)}</button>`;}).join('')}</div></div>`;}
-/* add this parlay to My Parlays once it has been simulated (the saved hit chance is the simulated one) */
+/* add this parlay to My Parlays once it has been simulated (the saved hit chance is the simulated one); not when that chance
+   leaves out unpriced legs or the legs can't all win */
 function saveRowHTML(legs,sig){if(!legs.length)return '';const inMine=(SB.savedParlays||[]).some(s=>sameLegs(s.legs,legs)),R=PAR&&PAR.sig===sig?PAR:null;
-  return `<div class="sm-runrow" style="margin-top:6px"><button class="btn ghost" data-a="psave" ${inMine||!R?'disabled':''}>${inMine?'✓ In My Parlays':R?'＋ Add to My Parlays':'Run the simulation to add it'}</button></div>`;}
+  const no=inMine?'✓ In My Parlays':!R?'Run the simulation to add it':R.per.some(x=>x.how==='none')?'Some legs have no price':parAgree(R).zero?'These legs can’t all win':'';
+  return `<div class="sm-runrow" style="margin-top:6px"><button class="btn ghost" data-a="psave" ${no?'disabled':''}>${no||'＋ Add to My Parlays'}</button></div>`;}
+const SRCNAME={slipcheck:'Slip Check',mine:'My Parlays',lottos:'Lottos',polymarket:'Polymarket',soccerparlays:'Soccer parlays'};
+const FLAG={cond:'engine conditional',engine:'engine chance',saved:'saved chance',none:'no price'};
 function parlayHTML(){const legs=parLegs(),sig=JSON.stringify(legs.map(l=>l.gid+'|'+l.key)),busy=RUN.active&&RUN.kind==='parlay',R=PAR&&PAR.sig===sig?PAR:null;
-  const fromParams=S.plegs&&S.plegs.length;
+  const fromParams=S.plegs&&S.plegs.length,inf=legs.map(legInfo),nNone=inf.filter(i=>i.src==='none').length;
   let o=`<div class="panel"><div class="tt">Parlay simulator</div><div class="note" style="margin:2px 0 8px">Plays every game in the parlay 100,000 times. Each game is simulated once per run, so legs from the same game move together (a home win and over 2.5 often come together).</div>`;
   o+=pickHTML(legs);
-  if(fromParams)o+=`<div class="lineup">Simulating ${S.ptitle?`<b>${esc(S.ptitle)}</b>`:'the parlay you opened here'}. <a data-a="useslip" style="color:var(--blue);cursor:pointer;font-weight:700">Use my slip instead</a></div>`;
+  if(fromParams){o+=`<div class="lineup">Simulating ${S.ptitle?`<b>${esc(S.ptitle)}</b>`:'the parlay you opened here'}. <a data-a="useslip" style="color:var(--blue);cursor:pointer;font-weight:700">Use my slip instead</a></div>`;
+    // handed over from another page: show its own chance, and say which of its legs didn't come along
+    const ps=S.psrc,nm=ps&&SRCNAME[ps.from]||'The page you came from',dr=ps?ps.dropped:[],nd=ps?Math.max(dr.length,ps.n-legs.length):0;
+    if(ps&&(ps.p!=null||nd))o+=`<div class="note">${ps.p!=null?`${nm} priced it at <b>${pcS(ps.p)}</b>. `:''}${nd?`<b>${nd} of its legs ${nd>1?'aren’t':'isn’t'} here</b>${dr.length?' ('+esc(dr.join(', '))+')':''}: the simulator couldn’t take ${nd>1?'them':'it'}, so the figures below are for the ${legs.length} leg${legs.length>1?'s':''} listed, not that whole slip.`:''}</div>`;}
   if(!legs.length)return o+`<div class="empty" style="margin-top:8px">Your slip is empty. Add legs from any game, or from the market table in the game simulator (tap +).<br><button class="btn" data-a="mode" data-m="game" style="margin-top:12px">Open the game simulator</button></div></div>`;
-  o+=legs.map((l,j)=>{const {g,lab,p}=legInfo(l);const pr=R&&R.per[j]; // R.sig === this slip, so R.per follows the same leg order
-    return `<div class="sm-pl"><div class="t"><b>${esc(lab)}</b><span>${g?esc(gameLine(g))+' · '+esc(g.comp):''}${pr&&pr.how==='cond'?'<span class="sm-flag">engine conditional</span>':pr&&pr.how==='engine'?'<span class="sm-flag">engine chance</span>':''}</span></div><div class="p">${pr&&pr.sim!=null?pc1(pr.sim):pc1(p)}<small>${pr&&pr.sim!=null?'engine '+pc1(p):'engine'}</small></div></div>`;}).join('');
-  o+=`<div class="sm-runrow" style="margin-top:10px"><button class="btn" data-a="prun" ${RUN.active?'disabled':''}>▶ Simulate parlay · 100,000×</button><button class="btn ghost" data-a="cancel" ${busy?'':'hidden'}>Cancel</button></div><div id="smParBox">${parBoxHTML()}</div>`;
+  o+=legs.map((l,j)=>{const {g,lab,p,src}=inf[j],pr=R&&R.per[j],how=pr?pr.how:src==='engine'?'':src; // R.sig === this slip, so R.per follows the same leg order
+    const sm=src==='engine'?'engine':src==='saved'?'saved':'no price';
+    return `<div class="sm-pl"><div class="t"><b>${esc(lab)}</b><span>${g?esc(gameLine(g))+' · '+esc(g.comp):''}${FLAG[how]?`<span class="sm-flag">${FLAG[how]}</span>`:''}</span></div><div class="p">${pr&&pr.sim!=null?pc1(pr.sim):src==='none'?'—':pc1(p)}<small>${pr&&pr.sim!=null?sm+' '+pc1(p):sm}</small></div></div>`;}).join('');
+  o+=`<div class="sm-runrow" style="margin-top:10px"><button class="btn" data-a="prun" ${RUN.active||nNone===legs.length?'disabled':''}>▶ Simulate parlay · 100,000×</button><button class="btn ghost" data-a="cancel" ${busy?'':'hidden'}>Cancel</button></div><div id="smParBox">${parBoxHTML()}</div>`;
+  if(nNone===legs.length)o+=`<div class="note">None of these legs has a chance the simulator can use, so there is nothing to simulate.</div>`;
   o+=saveRowHTML(legs,sig);
   if(RUN.err&&RUN.kind==='parlay'&&!busy)o+=`<div class="note" style="color:var(--no)">${esc(RUN.err)}</div>`;
-  if(R){const v=parAgree(R),e=v.e;
-    o+=`<div class="sm-kpis" style="margin-top:12px"><div><b>${pcS(R.hit)}</b><span>sim hit rate ±${(e*100).toFixed(e<.0005?2:1)}</span></div><div><b>${pcS(R.eng)}</b><span>engine (parlayProb)</span></div><div><b>${v.rel==null?'—':(v.rel>=0?'+':'−')+Math.round(Math.abs(v.rel)*100)+'%'}</b><span>sim vs engine</span></div></div>
+  if(R){const v=parAgree(R),e=v.e,fx=p=>p>0?esc(SB.fmtOdds(p)):pcS(p),nn=R.per.filter(x=>x.how==='none').length;
+    if(nn)o+=`<div class="lineup" style="margin-top:12px">${nn} leg${nn>1?'s have':' has'} no price and ${nn>1?'are':'is'} left out: these figures are for the other ${R.per.length-nn} legs, not the whole parlay.</div>`;
+    // no hits: a ± of 0 would claim certainty, so say how many runs found none instead
+    o+=`<div class="sm-kpis" style="margin-top:12px"><div><b>${pcS(R.hit)}</b><span>sim hit rate ${R.hit>0?'±'+(e*100).toFixed(e<.0005?2:1):'· 0 of '+fmtN(R.N)}</span></div><div><b>${pcS(R.eng)}</b><span>engine${R.per.some(x=>x.how==='saved')?' + saved chances':' (parlayProb)'}</span></div><div><b>${v.rel==null||!R.hit?'—':(v.rel>=0?'+':'−')+Math.round(Math.abs(v.rel)*100)+'%'}</b><span>sim vs engine</span></div></div>
     <div class="sm-kpis"><div><b>${R.hit>0?SB.fmtOdds(R.hit):'—'}</b><span>fair price (sim)</span></div><div><b>${R.eng>0?SB.fmtOdds(R.eng):'—'}</b><span>fair price (engine)</span></div><div><b>${R.indep>0?SB.fmtOdds(R.indep):'—'}</b><span>if legs were unrelated</span></div></div>
-    <div class="note" id="smAgree">${v.ok?`<span class="sm-ok">consistent</span> The play-level sim and the engine’s correlation-aware price are within ${v.rel==null?'sampling noise':Math.max(1,Math.round(Math.abs(v.rel)*100))+'%'} of each other here.`:`<span class="sm-flag">differs</span> The two models differ by ${v.rel==null?'a lot':Math.round(Math.abs(v.rel)*100)+'%'} on this parlay (sim ${R.hit>0?esc(SB.fmtOdds(R.hit)):'—'} vs engine ${R.eng>0?esc(SB.fmtOdds(R.eng)):'—'}), so its price depends on the model: treat it with extra care.`} Neither is a guarantee. Multiplying the legs as if unrelated would give ${pcS(R.indep)}.</div>`;
+    <div class="note" id="smAgree">${v.zero?`<span class="sm-flag">can’t win</span> Both models agree: ${R.per.some(x=>x.how!=='none'&&!(x.p>0))?'a leg here has no chance on its own':'these legs can’t all win together'}, so the engine gives the parlay no chance and none of the ${fmtN(R.N)} simulated runs hit.`
+      :v.ok?`<span class="sm-ok">consistent</span> ${R.hit?`The play-level sim and the engine’s correlation-aware price are within ${v.rel==null?'sampling noise':Math.max(1,Math.round(Math.abs(v.rel)*100))+'%'} of each other here.`:`None of the ${fmtN(R.N)} runs hit. The engine’s ${pcS(R.eng)} is too small for that many runs to show reliably, so the two agree.`}`
+      :`<span class="sm-flag">differs</span> The two models differ by ${v.rel==null?'a lot':Math.round(Math.abs(v.rel)*100)+'%'} on this parlay (sim ${fx(R.hit)} vs engine ${fx(R.eng)}), so its price depends on the model: treat it with extra care.`}${v.zero?'':' Neither is a guarantee.'} Multiplying the legs as if unrelated would give ${pcS(R.indep)}.</div>`;
     if(R.notes.length)o+=`<div class="note">${R.notes.map(esc).join('<br>')}</div>`;
     if(R.cps&&R.cps.length>1)o+=parConv(R);}
   return o+'</div>'+bankHTML(R);}
 /* sim vs engine on a parlay: relative tolerance (8% of the price) or 2.5 standard errors, whichever is wider. An absolute
-   floor would call almost any long parlay "consistent". */
+   floor would call almost any long parlay "consistent". No hits in N runs only says the chance is under about 3/N (95%), so
+   an engine chance below that agrees with it; zero = both at 0 (the legs can't all win). */
 function parAgree(R){const e=ci95(R.hit,R.N),d=R.hit-R.eng,rel=R.eng>1e-9?d/R.eng:null;
+  if(!R.hit)return {e,rel,ok:R.eng<=3/R.N,zero:R.eng<=1e-12};
   return {e,rel,ok:R.eng>1e-9&&Math.abs(d)<=Math.max(2.5*e/1.96,.08*R.eng)};}
 function parConv(R){const W=340,H=120,pl=36,pr=8,pt=8,pb=18,iw=W-pl-pr,ih=H-pt-pb,pts=R.cps.filter(c=>c[0]>=1000);let lo=1,hi=0;
   for(const c of pts){const p=c[1]/c[0],e=ci95(p,c[0]);lo=Math.min(lo,p-e,R.eng);hi=Math.max(hi,p+e,R.eng);}lo=Math.max(0,lo-.01);hi=Math.min(1,hi+.01);
@@ -1138,7 +1177,11 @@ function saveUI(){store.set('sim.mode',S.mode);if(S.gid)store.set('sim.gid',S.gi
 function render(main,params){
   if(params!==lastParams){lastParams=params;const p=params||{};
     if(p.gid&&SB.gameById(p.gid)){if(p.gid!==S.gid){S.wi={};}S.gid=p.gid;if(!p.legs&&!p.mode)S.mode='game';}
-    if(Array.isArray(p.legs)&&p.legs.length){S.plegs=p.legs;S.ptitle=p.title||null;S.mode='parlay';}
+    // p = the sender's own chance for the parlay; dropped (labels) / n (its leg count) = legs it couldn't hand over
+    if(Array.isArray(p.legs)&&p.legs.length){S.plegs=p.legs;S.ptitle=p.title||null;S.mode='parlay';const pp=p.p==null||p.p===''?NaN:+p.p;
+      S.psrc={from:p.from||null,p:pp>=0&&pp<=1?pp:null,dropped:Array.isArray(p.dropped)?p.dropped.map(String):[],n:+p.n>0?+p.n:0};
+      // the slip's own book price / stake (never our fair price) prefill the bankroll sim
+      if(p.price&&SB.parseOdds(String(p.price)))S.bank.price=String(p.price);if(+p.stake>0)S.bank.stake=+p.stake;}
     if(p.mode&&MODES.some(m=>m[0]===p.mode))S.mode=p.mode;saveUI();}
   if(!MODES.some(m=>m[0]===S.mode))S.mode='game';
   injectCSS();
@@ -1163,7 +1206,7 @@ function wire(root){if(!root)return;
       case 'cancel':cancelRun();break;
       case 'view':viewRun();break;
       case 'lstep':{const g=curGame();if(!g)break;const L=liveState(g),k=b.dataset.k;L[k]=Math.max(0,Math.min(9,L[k]+(+b.dataset.d||0)));paintLive();break;}
-      case 'hedge':SB.goTab('odds');break;
+      case 'hedge':{SB.goTab('odds');const h=document.getElementById('o-hedge'),pn=h&&h.closest('.panel');if(pn)pn.scrollIntoView({block:'start'});break;} // the hedge calculator is far down Odds Tools
       case 'add':{const gid=b.dataset.gid,key=b.dataset.key,was=SB.inSlip(gid,key),r=SB.toggleLeg(gid,key);
         if(!r&&!was)SB.toast('This leg can’t be added right now.');else if(r)SB.toast('Added to your parlay slip');syncAdds();break;}
       case 'wireset':S.wi={};rerender();break;
@@ -1172,8 +1215,8 @@ function wire(root){if(!root)return;
       case 'wspeed':W.speed=+b.dataset.s||1;paintWatch();if(W.playing)watchLoop();break;
       case 'wskip':if(!W.ev)break;W.pos=W.ev.steps.length-1;W.playing=false;stopTimer();paintWatch();break;
       case 'prun':startParlay();break;
-      case 'useslip':S.plegs=null;S.ptitle=null;rerender();break;
-      case 'pload':{const s=(SB.savedParlays||[])[+b.dataset.i];if(s&&s.legs&&s.legs.length){S.plegs=s.legs.map(l=>({gid:l.gid,key:l.key,label:l.label,sport:l.sport}));S.ptitle=`${s.legs.length}-leg saved parlay`;S.mode='parlay';saveUI();rerender();}break;}
+      case 'useslip':S.plegs=null;S.ptitle=null;S.psrc=null;rerender();break;
+      case 'pload':{const s=(SB.savedParlays||[])[+b.dataset.i];if(s&&s.legs&&s.legs.length){S.plegs=s.legs.map(legCopy);S.ptitle=`${s.legs.length}-leg saved parlay`;S.psrc=null;S.mode='parlay';saveUI();rerender();}break;}
       case 'psave':{const legs=parLegs(),sig=JSON.stringify(legs.map(l=>l.gid+'|'+l.key)),R=PAR&&PAR.sig===sig?PAR:null;if(!legs.length||!R)break;SB.saveParlay({legs:legs.map(x=>({...x})),p:R.hit,src:'simulator'});SB.toast('Added to My Parlays');rerender();break;}
       case 'bsrc':S.bank.src=b.dataset.s;rerender();break;
       case 'brun':startBank();break;}});

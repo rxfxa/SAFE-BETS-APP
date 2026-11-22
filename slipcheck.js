@@ -138,6 +138,7 @@ function bestByName(items, nameOf, pick) { // the item whose name fits the pick 
   for (const it of items) { const s = nameFit(nameOf(it), t); if (s > bs) { bs = s; best = it; } }
   return best;
 }
+const nbaLeg = leg => ({ ...leg, sport: leg.sport || 'nba' });  // points / rebounds / assists are NBA only: a soccer club can share the team code (SAS)
 function findPlayer(name, stat, leg) {
   const t = nameKey(name); if (!t) return null;
   const all = (SB.DATA && SB.DATA.players) || [], top = bestByName(all, p => p.name, name); if (!top) return null;
@@ -145,7 +146,7 @@ function findPlayer(name, stat, leg) {
   // one record per game for season-average players (a team on a back-to-back has two): take the record for the slip's game;
   // a season-average record for another game is not this leg (the rotation / game-match path below handles it)
   if (leg && S.length && (S.length > 1 || S[0].est)) {
-    const g = findGame(leg, S[0].team), m = g && S.find(p => p.gid === g.id);
+    const g = findGame(nbaLeg(leg), S[0].team), m = g && S.find(p => p.gid === g.id);
     return m || S.find(p => !p.est) || null;
   }
   return S[0] || P[0] || null;
@@ -190,7 +191,21 @@ function pmSeenText(x) { return x.stale && x.seen ? `as of ${new Date(x.seen).to
 function startedWhy(g, key) {
   const m = /^SC:ml:([HA])$/.exec(key || ''), pm = m ? pmPriceFor(g, m[1]) : null;
   if (pm) return `Started. Last Polymarket price for this team: ${Math.round(pm.price * 100)}¢ (${pmSeenText(pm)}). No live price here, so it can't be scored yet.`;
-  return 'Game already started: no pre-game price, and no Polymarket price saved for it';
+  return m ? 'Game already started: no pre-game price, and no Polymarket price saved for it' : 'Game already started, so there is no pre-game price for this leg';
+}
+// a finished game: the leg is already settled, so it gets no pre-game chance; the score says how it went when we can read the line
+function doneWhy(g, key) {
+  const s = g.score, f = /^SC:/.test(key || '') ? scCore(key) : null, v = f ? f(s.home - s.away, s.home + s.away, s.home, s.away) : undefined;
+  return `Game already finished (${g.away.abbr} ${s.away}, ${g.home.abbr} ${s.home})${v === 1 ? ': this leg won' : v === 0 ? ': this leg lost' : v === null ? ': this leg pushed' : ''}. A settled leg isn't priced.`;
+}
+const closedWhy = (g, key) => (SB.isFinal(g) ? doneWhy(g, key) : startedWhy(g, key));
+function findDone(leg) { // a game that finished more than 30 hours ago (off the board), only when the leg names both teams
+  const text = N(`${leg.event} ${leg.pick} ${leg.sel || ''}`), now = Date.now(); let best = null, bs = 0;
+  for (const g of (SB.DATA && SB.DATA.games) || []) {
+    if (!SB.isFinal(g) || !(SB.startMs(g) > now - 8 * 86400e3)) continue;
+    const h = teamScore(g.home, text), a = teamScore(g.away, text); if (h && a && h + a > bs) { bs = h + a; best = g; }
+  }
+  return bs >= 2.5 ? best : null;
 }
 function findGame(leg, teamHint) {
   const text = N(`${leg.event} ${leg.pick} ${leg.sel || ''}`), sport = SPORT_ALIAS[N(leg.sport)] || null;
@@ -206,7 +221,7 @@ function findGame(leg, teamHint) {
 }
 function sideOf(g, text) { const t = N(text); const h = teamScore(g.home, t), a = teamScore(g.away, t); return h > a ? 'H' : a > h ? 'A' : null; }
 function bookLeg(out, g, leg, mk, side, line, dec, pOverride) { // a leg priced from the odds on the slip, or from the player model
-  out.g = g; out.bookOnly = true;
+  out.g = g; out.bookOnly = pOverride == null;  // only a leg priced from the slip's odds is "book only"
   const sideTxt = side === 'O' ? 'over' : side === 'U' ? 'under' : '';
   const who = STAT[mk] || mk === 'player_other' || BOOK_PROP.has(mk) ? playerName(leg) : str(leg.pick);
   out.label = [who, sideTxt, line != null ? String(line) : '', mk === 'player_other' ? 'prop' : marketName(mk)].filter(Boolean).join(' ');
@@ -236,25 +251,28 @@ function matchLeg(leg) {
     if (mk !== 'anytime_td') ({ side, line } = plusLine(leg, side, line));
     const stat = STAT[mk];
     const pr = stat ? findPlayer(leg.pick, stat, leg) : null;
-    if (pr && pr.stat === stat && line != null && side) {
+    // props.json can keep a player's line for a game that has left the feed: that line isn't this leg
+    if (pr && pr.stat === stat && line != null && side && SB.gameById(pr.gid)) {
       const g = SB.gameById(pr.gid);
       out.g = g; out.key = side === 'O' ? `P:${pr.id}:${Math.floor(line) + 1}` : `U:${pr.id}:${line}`;
     } else if (stat === 'pts' && side === 'O' && line != null) {
-      const rp = findRotation(leg.pick); const g = rp ? findGame(leg, rp.team) : null;
+      const rp = findRotation(leg.pick); const g = rp ? findGame(nbaLeg(leg), rp.team) : null;
       if (rp && g && (g.home.abbr === rp.team || g.away.abbr === rp.team)) { out.g = g; out.key = `L:${rp.team}-${rp.slug}:${Math.floor(line) + 1}`; }
       else out.why = rp ? 'Player found, but his game is not on the board' : 'Player not in our data';
-    } else out.why = mk === 'player_other' ? 'We only price points, rebounds and assists' : !side ? 'Pick over or under' : line == null ? 'Add the line' : 'Player not in our props';
+    } else out.why = mk === 'player_other' ? 'We only price points, rebounds and assists' : !side ? 'Pick over or under' : line == null ? 'Add the line'
+      : pr && pr.stat === stat ? 'His last posted line is for a game no longer in our feed' : 'Player not in our props';
     if (!out.key) {
-      const g = out.g || findGame(leg), dec = bookDec(leg.odds);
+      const g = out.g || findGame(leg) || findDone(leg), dec = bookDec(leg.odds);
+      if (g && SB.started(g)) { out.g = g; out.status = 'game'; out.why = closedWhy(g); return out; }  // live or settled: no pre-game price
       const pmv = g ? playerProb(leg, g, side, line) : null;
-      if (g && pmv != null) return bookLeg(out, g, leg, mk, side, line, dec, pmv);  // no odds needed: our player model prices it
+      if (g && pmv != null) return Object.assign(bookLeg(out, g, leg, mk, side, line, dec, pmv), { model: true });  // no odds needed: our player model prices it
       if (g && dec) return bookLeg(out, g, leg, mk, side, line, dec);  // no model: the book's price on the slip prices it
       out.g = g; out.status = g ? 'game' : 'none';
       if (g && !dec && (BOOK_PROP.has(mk) || mk === 'player_other')) out.why = 'No model for this prop. Type the book\'s odds (e.g. +150) to price it.';
       return out;
     }
   } else {
-    const g = findGame(leg); out.g = g;
+    const g = findGame(leg) || findDone(leg); out.g = g;
     if (!g) { out.why = findPM(leg) ? 'On Polymarket, but not in our games feed yet. Try again after the feed refreshes.' : 'Game not found in our games feed or on Polymarket'; return out; }
     const pick = `${leg.pick} ${leg.sel || ''}`, s = sideOf(g, pick);
     if (mk === 'moneyline') { if (/\b(draw|tie)\b/i.test(pick) && g.sport === 'soccer') out.key = 'SC:ml:D'; else if (s) out.key = `SC:ml:${s}`; else out.why = 'Which team?'; }
@@ -266,9 +284,11 @@ function matchLeg(leg) {
     else if (mk === 'correct_score' && g.sport === 'soccer') { const m = /(\d+)\s*[-:]\s*(\d+)/.exec(pick); if (m) { let [h, a] = [+m[1], +m[2]]; if (s === 'A') [h, a] = [a, h]; out.key = `SC:cs:${h}-${a}`; } else out.why = 'Add the score, e.g. 2-1'; }
     else if (mk === 'double_chance' && g.sport === 'soccer') { const dr = /\b(draw|x)\b/i.test(pick); out.key = dr && s === 'H' ? 'SC:dc:1X' : dr && s === 'A' ? 'SC:dc:X2' : 'SC:dc:12'; }
     else out.why = 'This bet type is not priced yet';
-    if (!out.key) { out.status = 'game'; return out; }
+    if (!out.key) {  // a line, side, team or score left out: the leg can't be graded as typed, so it is never priced from its odds
+      out.status = 'game'; if (SB.started(g)) out.why = closedWhy(g); else out.need = /^(Which team|Add the|Pick over)/.test(out.why); return out; }
   }
-  out.p = out.g ? SB.p1(out.g, out.key) : 0;
+  if (SB.started(out.g)) { out.status = 'game'; out.why = closedWhy(out.g, out.key); return out; }  // live or settled: no pre-game price
+  out.p = SB.p1(out.g, out.key);
   out.label = SB.legLabel({ gid: out.g.id, key: out.key });
   if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key) && mk === 'moneyline' && pmPriceFor(out.g, sideOf(out.g, `${leg.pick} ${leg.sel || ''}`))) {
     const sd = sideOf(out.g, `${leg.pick} ${leg.sel || ''}`), pm = pmPriceFor(out.g, sd);
@@ -276,7 +296,7 @@ function matchLeg(leg) {
     r0.why = pm.stale ? `Priced by Polymarket (${pmSeenText(pm)}); the feed hasn't priced this game yet.` : 'Priced by Polymarket; the feed hasn\'t priced this game yet.';
     return r0;
   }
-  if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key)) { out.status = 'game'; out.why = SB.started(out.g) ? startedWhy(out.g, out.key) : 'No price for this game yet'; return out; }
+  if (!SB.priced(out.g) && !/^[PUL]:/.test(out.key)) { out.status = 'game'; out.why = 'No price for this game yet'; return out; }
   if (!(out.p > 0)) { out.status = 'game'; out.why = /^L:/.test(out.key) ? 'Player is listed out or not in the rotation' : 'Could not price this line'; return out; }
   out.status = 'matched';
   return out;
@@ -300,32 +320,36 @@ function jointFor(rows) { // model chance that all matched legs hit, with same-g
   const byG = new Map(); for (const r of rows) { if (!byG.has(r.g.id)) byG.set(r.g.id, []); byG.get(r.g.id).push(r); }
   let p = 1; const groups = [];
   for (const [gid, rs] of byG) {
-    const g = rs[0].g, indep = rs.reduce((s, r) => s * r.p, 1); let gp = indep;
-    if (rs.length > 1) {
-      if (GOALS.has(g.sport) && !rs.some(r => /^B:/.test(r.key))) { try { gp = SB.probOf(g, rs.map(r => r.key)); } catch (e) { gp = indep; } }
-      else if (MARGIN.has(g.sport)) { const sc = rs.filter(r => r.key.startsWith('SC:')), other = rs.filter(r => !r.key.startsWith('SC:'));
+    const g = rs[0].g, indep = rs.reduce((s, r) => s * r.p, 1); let gp = indep, linked = 0;  // linked = legs priced together from the game model
+    if (rs.length > 1) {  // a leg priced from the slip's odds has no game model behind it, so it is never read off the game
+      if (GOALS.has(g.sport) && !rs.some(r => /^B:/.test(r.key) || r.bookOnly)) { try { gp = SB.probOf(g, rs.map(r => r.key)); linked = rs.length; } catch (e) { gp = indep; } }
+      else if (MARGIN.has(g.sport)) { const sc = rs.filter(r => r.key.startsWith('SC:') && !r.bookOnly), other = rs.filter(r => !sc.includes(r));
         if (sc.length > 1) { const S = SB.simGame(g), F = sc.map(r => scCore(r.key)); let win = 0, tot = 0;
           for (let i = 0; i < S.N; i++) { let ok = true, push = false; for (const f of F) { const v = f(S.mg[i], S.tt[i]); if (v === null) { push = true; break; } if (v === 0) { ok = false; break; } } if (push) continue; tot++; if (ok) win++; }
-          gp = (tot ? win / tot : 0) * other.reduce((s, r) => s * r.p, 1); } }
+          gp = (tot ? win / tot : 0) * other.reduce((s, r) => s * r.p, 1); linked = sc.length; } }
     }
-    p *= gp; groups.push({ g, rows: rs, p: gp, indep });
+    p *= gp; groups.push({ g, rows: rs, p: gp, indep, free: rs.length > 1 ? rs.length - linked : 0 });
   }
   return { p, groups };
 }
 function analyze(slip) {
+  slip = JSON.parse(JSON.stringify(slip));  // the slip as submitted: a data refresh re-runs this copy, never edits typed since
   // a priced leg keeps only a note about where its price came from, never an old "not priced" message
   const rows = slip.legs.map((L, i) => { const m = matchLeg(L); return { ...m, why: m.status === 'matched' && !/^Priced by Polymarket/.test(m.why || '') ? '' : m.why, i, src: L, dec: bookDec(L.odds), text: legText(L) }; });
   // Fallback, so no leg is left blank: a leg with no stats and no odds gets the chance left over from the slip's own parlay price
   // after the legs we could price (parlay chance ÷ the priced legs, spread evenly over the rest). Labelled as a fallback.
-  { const anyG = rows.find(r => r.g), stub = r => r.g || { id: `fallback-${r.i}`, sport: 'other', comp: '', start: anyG ? anyG.g.start : new Date().toISOString(), home: { abbr: '—', name: '' }, away: { abbr: '—', name: '' } };
-    for (const r of rows) if (r.status !== 'matched' && bookDec(r.src.odds)) {  // its own odds on the slip
+  // Held back from both: a leg on a game that has started or finished (live or settled) and one missing its line, side or team.
+  { const stub = r => r.g || { id: `fallback-${r.i}`, sport: 'other', comp: '', start: '', home: { abbr: '—', name: '' }, away: { abbr: '—', name: '' } };
+    const held = r => r.status !== 'matched' && !!(r.need || (r.g && SB.started(r.g))), H = rows.filter(held);
+    for (const r of rows) if (r.status !== 'matched' && !held(r) && bookDec(r.src.odds)) {  // its own odds on the slip
       r.status = 'matched'; r.p = Math.min(0.999, 1 / bookDec(r.src.odds)); r.bookOnly = true; r.ownOdds = true; r.label = r.label || r.text; r.key = r.key || `X:odds:${r.i}`; r.g = stub(r);
-      r.why = 'Priced from its own odds on the slip: no stats for this leg';
+      r.why = `Priced from its own odds on the slip: ${r.why ? r.why.charAt(0).toLowerCase() + r.why.slice(1) : 'no stats for this leg'}`;  // and why we had no price
     }
-    const tot = bookDec(slip.totalOdds), rest = rows.filter(r => r.status !== 'matched');
+    const tot = bookDec(slip.totalOdds), rest = rows.filter(r => r.status !== 'matched' && !held(r));
     if (tot && rest.length) {
-      const known = rows.filter(r => r.status === 'matched').reduce((x, r) => x * r.p, 1);
-      const pf = Math.min(0.95, Math.max(0.02, Math.pow((1 / tot) / Math.max(known, 1e-9), 1 / rest.length)));
+      // a held leg's own odds come out of the slip price; a held leg with no odds takes an even share of what's left, like the rest
+      const known = rows.filter(r => r.status === 'matched').reduce((x, r) => x * r.p, 1) * H.reduce((x, r) => x * (r.dec ? 1 / r.dec : 1), 1);
+      const pf = Math.min(0.95, Math.max(0.02, Math.pow((1 / tot) / Math.max(known, 1e-9), 1 / (rest.length + H.filter(r => !r.dec).length))));
       for (const r of rest) {
         r.status = 'matched'; r.p = pf; r.bookOnly = true; r.fallback = true; r.label = r.label || r.text; r.key = r.key || `X:fallback:${r.i}`; r.g = stub(r);
         r.why = `Fallback: worked out from the slip's ${str(slip.totalOdds)} after the legs we could price, because there are no stats or odds for this leg`;
@@ -350,8 +374,8 @@ function analyze(slip) {
   else { verdict = 'Overpriced'; tone = 'lo'; }
   const long = M.length && J.p < 0.1;
   const weakest = M.length ? M.reduce((b, r) => (r.p < b.p ? r : b), M[0]) : null;
-  const corr = J.groups.filter(G => G.rows.length > 1).map(G => ({ g: G.g, ratio: G.indep > 0 ? G.p / G.indep : 1, n: G.rows.length }));
-  return { rows, M, U, p: J.p, indep, groups: J.groups, bookTot, decCmp, full, ev, verdict, tone, long, weakest, corr, stake: slip.stake > 0 ? slip.stake : null };
+  const corr = J.groups.filter(G => G.rows.length > 1).map(G => ({ g: G.g, ratio: G.indep > 0 ? G.p / G.indep : 1, n: G.rows.length, free: G.free }));
+  return { rows, M, U, p: J.p, indep, groups: J.groups, bookTot, decCmp, full, ev, verdict, tone, long, weakest, corr, stake: slip.stake > 0 ? slip.stake : null, slip };
 }
 const legText = L => [L.pick, L.side, L.line != null && L.line !== '' ? L.line : '', marketName(L.market) !== 'Other' && !STAT[L.market] ? '' : '', L.event ? `(${L.event})` : ''].filter(Boolean).join(' ').trim() || 'Leg';
 const marketName = id => (MARKETS.find(m => m[0] === id) || [, 'Other'])[1];
@@ -386,7 +410,7 @@ function reasons(A) {
   if (A.rows.length >= 4) not.push(`${A.rows.length} legs: every one has to hit`);
   if (A.ev != null && A.ev < 0) not.push(`The price is short of fair: the book implies ${pctS(1 / A.decCmp)}, the model says ${pctS(A.p)}`);
   if (A.ev != null && A.ev >= 0.05) can.push(`The payout beats the fair price (${signPct(A.ev)} expected value)`);
-  for (const r of A.U) not.push(`Not priced: ${r.text}${r.why ? ` (${r.why.toLowerCase()})` : ''}`);
+  for (const r of A.U) not.push(`Not priced: ${r.text}${r.why ? ` (${r.why.charAt(0).toLowerCase() + r.why.slice(1)})` : ''}`);
   return { can: [...new Set(can)].slice(0, 6), not: [...new Set(not)].slice(0, 7) };
 }
 
@@ -433,7 +457,7 @@ async function readSlip() {
   try {
     const r = await sampleFn.json(PROMPT, { images: [st.img], signal: st.ctl.signal });
     if (!r || typeof r !== 'object' || r.error) { st.phase = st.slip ? 'read' : 'idle'; st.err = 'That image doesn\'t look like a bet slip. Try a clearer screenshot, or enter the legs by hand.'; }
-    else { st.slip = cleanSlip(r); saveDraft(); st.A = analyze(st.slip); st.take = ''; st.takeState = 'idle'; st.phase = 'read'; }
+    else { st.slip = cleanSlip(r); saveDraft(); st.A = analyze(st.slip); st.simRes = null; st.take = ''; st.takeState = 'idle'; st.phase = 'read'; }
   } catch (e) {
     st.phase = st.slip ? 'read' : 'idle';
     const c = e && e.code; if (c === 'not_granted' || c === 'sampling_disabled' || c === 'images_unavailable') aiState = 'off';
@@ -444,7 +468,7 @@ async function readSlip() {
 async function claudeTake() {
   if (!sampleFn || !st.A || !st.A.M.length || st.takeState === 'busy') return;
   const A = st.A, facts = {
-    book: st.slip.book || null, legs: A.rows.map(r => ({ leg: r.status === 'matched' ? r.label : r.text, modelHitChance: r.status === 'matched' ? +r.p.toFixed(3) : null,
+    book: A.slip.book || null, legs: A.rows.map(r => ({ leg: r.status === 'matched' ? r.label : r.text, modelHitChance: r.status === 'matched' ? +r.p.toFixed(3) : null,
       bookOdds: r.src.odds || null, edgeVsFair: r.edge == null ? null : +r.edge.toFixed(3), injuries: r.inj || null, priced: r.status === 'matched' })),
     parlayModelHitChance: +A.p.toFixed(4), fairOdds: SB.fmtOdds(A.p), bookPays: A.decCmp ? SB.fmtPrice(A.decCmp) : null,
     expectedValuePerDollar: A.ev == null ? null : +A.ev.toFixed(3), verdict: A.verdict, weakestLeg: A.weakest ? A.weakest.label : null };
@@ -468,10 +492,18 @@ function track() {
     return { gid: real ? g.id : `x-${now}-${i}`, key: xKey(r.text), label: r.label || r.text, custom: true, ...(r.status === 'matched' ? { p1: r.p } : {}), ...(real ? base : {}), bookOdds: r.src.odds || null };
   });
   const dec = A.bookTot || null;
-  const ok = SB.saveParlay ? SB.saveParlay({ legs, p: A.M.length ? A.p : null, odds: dec ? SB.dec2am(dec) : null, dec, stake: A.stake, book: st.slip.book || null, src: 'slipcheck', partial: !A.full }) : false;
-  SB.toast(ok ? `Tracking in My Parlays${st.slip.book ? ' · ' + esc(st.slip.book) : ''}` : 'Couldn\'t save this bet');
+  const ok = SB.saveParlay ? SB.saveParlay({ legs, p: A.M.length ? A.p : null, odds: dec ? SB.dec2am(dec) : null, dec, stake: A.stake, book: A.slip.book || null, src: 'slipcheck', partial: !A.full }) : false;
+  SB.toast(ok ? `Tracking in My Parlays${A.slip.book ? ' · ' + esc(A.slip.book) : ''}` : 'Couldn\'t save this bet');
 }
-function builderLegs() { return st.A ? st.A.M.filter(r => !/^(B|X):/.test(r.key) && !SB.started(r.g)).map(r => ({ gid: r.g.id, key: r.key })) : []; }  // only legs the builder can price
+function builderLegs() { return st.A ? st.A.M.filter(r => !/^(B|X):/.test(r.key) && !r.bookOnly && !SB.started(r.g)).map(r => ({ gid: r.g.id, key: r.key })) : []; }  // only legs the builder can price
+const amer = d => { const a = SB.dec2am(d); return a > 0 ? '+' + a : String(a); };  // signed American odds: any odds format reads them the same way
+// the builder's price boxes have no API, so the slip's prices are typed into them: the total only when every leg made it across
+function carryPrices(L) {
+  const A = st.A, put = (el, v) => { if (el && v) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); } };
+  const tot = bookDec(A.slip.totalOdds); if (tot && L.length === A.rows.length) put(document.getElementById('bookOdds'), amer(tot));
+  for (const r of A.M) { const d = bookDec(r.src.odds); if (d) put([...document.querySelectorAll('[data-lpx]')].find(x => x.dataset.lpx === `${r.g.id}|${r.key}`), amer(d)); }
+  if (A.stake) put(document.getElementById('stakeTop'), String(A.stake));
+}
 
 // ---------------- markup ----------------
 function uploadPanel() {
@@ -554,35 +586,46 @@ function simModelGame(g, N) {
   return SB.simGame({ ...g, prob: { home: hq.m, away: aq.m }, total: tot && tot.line > 0 ? tot.line : undefined }, N);
 }
 // Each run plays the game once: a leg with a game model (moneyline, spread, total in the margin sports) is read from that run,
-// so legs from the same game move together. A player leg with a model is simulated from his average, the opponent's defence and that
-// run's game total. Other legs (book prices, soccer, NHL) are drawn at their own chance each run. Unpriced legs aren't in the run.
+// so legs from the same game move together. Soccer and NHL legs read one score per run from the model's exact score grid.
+// A player leg priced by the player model is simulated from his average, the opponent's defence and that run's game total.
+// Other legs (priced from the slip's odds, the fallback, Polymarket, NBA props) are drawn at their own chance each run.
+// A leg priced from the slip's odds is never read off a game model, so its rate matches the chance shown in the table.
+// Unpriced legs aren't in the run.
 function simulateSlip(A, N = SIM_RUNS) {
   const legs = (A.M || []).filter(r => r.g);
   if (!legs.length) return null;
-  const games = new Map(), gameOf = r => (MARGIN_SPORTS.has(r.g.sport) ? games.get(r.g.id) || null : null);
-  const pms = legs.map(r => (MARGIN_SPORTS.has(r.g.sport) && !/^SC:/.test(r.key) ? playerModel(r) : null));
+  const games = new Map(), gameOf = r => (MARGIN_SPORTS.has(r.g.sport) ? games.get(r.g.id) || null : null), grids = new Map();
+  const pms = legs.map(r => (MARGIN_SPORTS.has(r.g.sport) && r.model ? playerModel(r) : null));
   for (let k = 0; k < legs.length; k++) {
-    const r = legs[k], gk = r.gameKey || r.key, isGame = MARGIN_SPORTS.has(r.g.sport) && /^SC:(ml|sp|tot):/.test(gk);
+    const r = legs[k], gk = r.gameKey || r.key, isGame = MARGIN_SPORTS.has(r.g.sport) && /^SC:(ml|sp|tot):/.test(gk) && !r.bookOnly;
+    if (GOALS.has(r.g.sport) && /^SC:/.test(r.key) && !r.bookOnly && !grids.has(r.g.id)) {  // cumulative score grid, sampled per run
+      const O = SB.priced(r.g) ? SB.outcomes(r.g) : null; let c = null;
+      if (O) { c = new Float64Array(O.n); let s = 0; for (let j = 0; j < O.n; j++) c[j] = s += O.p[j]; }
+      grids.set(r.g.id, c ? { O, c, at: 0 } : null);
+    }
     if (!(isGame || pms[k])) continue;
     if (!games.has(r.g.id)) { const S = simModelGame(r.g, N); games.set(r.g.id, S ? { S, legs: [], fns: [] } : null); }
     const G = games.get(r.g.id);
     if (G && isGame) { G.legs.push(r); G.fns.push(scCore(gk)); }
   }
   const meta = legs.map((r, k) => {
-    const G = gameOf(r);
+    const G = gameOf(r), Gr = GOALS.has(r.g.sport) && /^SC:/.test(r.key) && !r.bookOnly ? grids.get(r.g.id) : null;
+    if (Gr) return { type: 'grid', G: Gr, f: scCore(r.key) };
     if (G && G.legs.includes(r)) return { type: 'game', S: G.S, f: G.fns[G.legs.indexOf(r)] };
     if (G && pms[k]) return { type: 'player', S: G.S, pm: pms[k], avgT: G.S.tt.reduce((x, y) => x + y, 0) / N };
     if (pms[k]) return { type: 'player', S: null, pm: pms[k], avgT: 1 };  // the game has no model: no game-total swings
     return null;
   });
-  const rnd = SB.rng(0x51ab + legs.length * 7919), legHits = new Array(legs.length).fill(0);
+  const rnd = SB.rng(0x51ab + legs.length * 7919), legHits = new Array(legs.length).fill(0), G2 = [...grids.values()].filter(Boolean);
   const gauss = () => Math.sqrt(-2 * Math.log(rnd() || 1e-12)) * Math.cos(2 * Math.PI * rnd());
   let hits = 0;
   for (let i = 0; i < N; i++) {
+    for (const Gr of G2) { const u = rnd() * Gr.c[Gr.c.length - 1]; let lo = 0, hi = Gr.c.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (Gr.c[m] < u) lo = m + 1; else hi = m; } Gr.at = lo; }
     let ok = true;
     for (let k = 0; k < legs.length; k++) {
       const mt = meta[k]; let pass;
-      if (mt && mt.type === 'game') { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
+      if (mt && mt.type === 'grid') { const O = mt.G.O, h = O.h[mt.G.at], a = O.a[mt.G.at], v = mt.f(h - a, h + a, h, a); pass = v === null || v === 1; }
+      else if (mt && mt.type === 'game') { const v = mt.f(mt.S.mg[i], mt.S.tt[i]); pass = v === null || v === 1; }
       else if (mt && mt.type === 'player') {
         const pm = mt.pm; let scale = mt.S ? mt.S.tt[i] / mt.avgT : 1;   // this run's game total relative to the average game
         if (mt.S) {  // blowouts: the leading side's starters sit late; the trailing side throws more and runs less
@@ -599,28 +642,39 @@ function simulateSlip(A, N = SIM_RUNS) {
     }
     if (ok) hits++;
   }
-  const rate = hits / N, simmed = [...games.values()].filter(Boolean).length;
-  return { N, hits, rate, ci: 1.96 * Math.sqrt(rate * (1 - rate) / N), sig: A.rows.map(r => r.text).join('|'),
+  const rate = hits / N, simmed = [...games.values()].filter(Boolean).length + G2.length;
+  return { N, hits, rate, ci: 1.96 * Math.sqrt(rate * (1 - rate) / N), sig: sigOf(A),
     joint: A.p, book: A.decCmp ? 1 / A.decCmp : null, gamesSimmed: simmed, unpriced: (A.U || []).length,
+    players: meta.filter(mt => mt && mt.type === 'player').length,
+    pushes: meta.some((mt, k) => mt && (mt.type === 'game' || mt.type === 'grid') && /^SC:(sp|tot):[A-Z]:[+-]?\d+$/.test(legs[k].gameKey || legs[k].key)),
     legs: legs.map((r, k) => {
       const mt = meta[k];
-      const how = !mt ? 'drawn at its own chance (no model)' : mt.type === 'game' ? 'game simulation'
+      const how = !mt ? (r.fallback ? 'drawn at its fallback chance (from the slip\'s total price)' : r.bookOnly ? 'drawn at its own chance (the odds on your slip)'
+          : /^Priced by Polymarket/.test(r.why || '') ? 'drawn at its Polymarket price' : 'drawn at its model chance, on its own')
+        : mt.type === 'game' ? 'game simulation' : mt.type === 'grid' ? 'game simulation (score grid)'
         : `${!mt.S ? 'no game model yet · ' : ''}${mt.pm.inj ? `listed ${mt.pm.inj.toUpperCase()} · ` : ''}${mt.pm.name}: average ${mt.pm.mean.toFixed(1)}${mt.pm.td ? ' TDs' : ' yds'} vs ${mt.pm.opp} (${Math.round(mt.pm.dfac * 100)}% of league average defence)`;
       return { label: r.label, rate: legHits[k] / N, how };
     }) };
 }
+// what a simulation result was run on: the legs as typed, their odds, keys and chances, and the book price. Anything else = stale.
+const sigOf = A => JSON.stringify([A.rows.map(r => [r.text, r.src && r.src.market, r.src && r.src.odds, r.key, +(+r.p || 0).toFixed(6)]), A.decCmp]);
 function simBlock(A) {
-  const sig = A.rows.map(r => r.text).join('|'), R = st.simRes && st.simRes.sig === sig ? st.simRes : null;
+  const R = st.simRes && st.simRes.sig === sigOf(A) ? st.simRes : null;
   const busy = st.simBusy, ready = A.M.length > 0;
   const btn = `<button class="btn" data-sc-simrun ${busy || !ready ? 'disabled' : ''}>${busy ? 'Simulating 500,000 runs…' : R ? 'Run 500,000 again' : 'Simulate 500,000 runs'}</button>`;
-  let body = ready ? '' : '<div class="why">Add priced legs first: the simulation needs at least one leg we can price.</div>';
+  let body = ready ? (st.simRes && !busy ? '<div class="why">The slip changed since the last run, so that result no longer applies. Run it again for this slip.</div>' : '') : '<div class="why">Add priced legs first: the simulation needs at least one leg we can price.</div>';
+  // the simulation and the estimate model some legs differently; when they disagree by more than the run's own range, say why
+  const gap = R ? R.rate - R.joint : 0, off = R && Math.abs(gap) > 2 * R.ci + 0.002;
+  const whyOff = R ? [R.players && 'it moves player yards and touchdowns with each run\'s score and game total, while the estimate prices each player leg on its own and counts it as unrelated to the game',
+    R.pushes && 'it counts a push on a whole-number line as the leg dropping off, while the estimate leaves pushes out'].filter(Boolean).join('; also, ') : '';
   if (R) body = `<div class="kpis"><div class="kpi"><b class="mono">${pctS(R.rate, 2)}</b><span>sim hit rate</span></div>
       <div class="kpi"><b class="mono">±${(R.ci * 100).toFixed(2)}</b><span>95% range, points</span></div>
       <div class="kpi"><b class="mono">${pctS(R.joint)}</b><span>our analytic estimate</span></div>
       <div class="kpi"><b class="mono">${R.book != null ? pctS(R.book) : '—'}</b><span>book price implies</span></div></div>
     <div class="kvs"><div class="kv kpos"><span>Hit: all legs landed</span><b>${R.hits.toLocaleString()} of ${R.N.toLocaleString()} runs</b></div><div class="kv kneg"><span>Missed: at least one leg lost</span><b>${(R.N - R.hits).toLocaleString()} of ${R.N.toLocaleString()} runs</b></div></div>
     <div class="sc-tbl">${R.legs.map(l => `<div class="sc-tr"><span><b>${esc(l.label)}</b><small>${esc(l.how)}</small></span><span class="mono">${pctS(l.rate, 1)}</span></div>`).join('')}</div>
-    <div class="note">${R.gamesSimmed} game${R.gamesSimmed === 1 ? '' : 's'} simulated ${R.N.toLocaleString()} times each.${R.unpriced ? ` ${R.unpriced} leg${R.unpriced === 1 ? '' : 's'} we couldn't price ${R.unpriced === 1 ? 'is' : 'are'} not in this run.` : ''} This is how often the slip lands in the simulation, not a guarantee.</div>`;
+    ${off ? `<div class="note">The simulation lands ${gap > 0 ? 'above' : 'below'} our estimate of ${pctS(R.joint)}${whyOff ? `: ${esc(whyOff)}` : ''}. The verdict uses the estimate${R.book != null ? `; at the simulated rate the expected value would be ${signPct(R.rate / R.book - 1)}` : ''}.</div>` : ''}
+    <div class="note">${R.gamesSimmed ? `${R.gamesSimmed} game${R.gamesSimmed === 1 ? '' : 's'} simulated ${R.N.toLocaleString()} times each.` : `${R.N.toLocaleString()} runs. No leg here is read from a game simulation, so each is drawn at its own chance.`}${R.unpriced ? ` ${R.unpriced} leg${R.unpriced === 1 ? '' : 's'} we couldn't price ${R.unpriced === 1 ? 'is' : 'are'} not in this run.` : ''} This is how often the slip lands in the simulation, not a guarantee.</div>`;
   return `<div class="pc sc-sim"><div class="pchead"><span class="pctitle">Simulate the slip</span>${btn}</div>${body}</div>`;
 }
 // ---------------- recommended changes: lower a weak leg, remove it, or swap in a more likely player ----------------
@@ -640,18 +694,22 @@ function replacementFor(r, onSlip) {
   }
   return best;
 }
+// Every "slip ≈" is our estimate for the changed slip: the other legs priced together exactly as above (same-game links kept),
+// times the new leg on its own (a player leg is counted as unrelated, as in the estimate). Never mixed with the simulation's rate,
+// whose legs are modelled differently, so a removed leg can't give more than the legs that are left.
 function recommendations(A) {
-  const sig = A.rows.map(r => r.text).join('|'), base = st.simRes && st.simRes.sig === sig ? st.simRes.rate : A.p;
+  const base = A.p;
   const onSlip = new Set(A.M.map(r => { const h = psPlayer(str(r.src && r.src.pick)); return h ? h[0] : null; }).filter(Boolean));
   const out = [];
   for (const r of A.M.slice().sort((a, b) => a.p - b.p)) {
     if (r.p >= 0.6) continue;  // a leg at 60%+ is left alone
-    const rec = { label: r.label, p: r.p, opts: [] }, pm = /^B:/.test(r.key) && r.g ? playerModel(r) : null;
-    if (pm && !pm.td && pm.over) { const N = safeLine(pm); if (N >= 1 && N - 0.5 < pm.line) { const pn = overChance(N, pm); rec.opts.push({ kind: 'lower', text: `Lower to ${N}+`, p: pn, slip: Math.min(1, base * pn / r.p) }); } }
+    const rest = A.M.length > 1 ? jointFor(A.M.filter(x => x !== r)).p : 1;
+    const rec = { label: r.label, p: r.p, opts: [] }, pm = /^B:/.test(r.key) && r.g && r.model ? playerModel(r) : null;
+    if (pm && !pm.td && pm.over) { const N = safeLine(pm); if (N >= 1 && N - 0.5 < pm.line) { const pn = overChance(N, pm); rec.opts.push({ kind: 'lower', text: `Lower to ${N}+`, p: pn, slip: Math.min(1, rest * pn) }); } }
     const rep = replacementFor(r, onSlip);
-    if (rep) rec.opts.push({ kind: 'replace', text: `Replace with ${rep.text}`, p: rep.p, slip: Math.min(1, base * rep.p / r.p) });
-    rec.opts.push({ kind: 'remove', text: 'Remove this leg', p: null, slip: Math.min(1, base / r.p) });
-    out.push(rec);
+    if (rep) rec.opts.push({ kind: 'replace', text: `Replace with ${rep.text}`, p: rep.p, slip: Math.min(1, rest * rep.p) });
+    if (A.M.length > 1) rec.opts.push({ kind: 'remove', text: 'Remove this leg', p: null, slip: Math.min(1, rest) });
+    if (rec.opts.length) out.push(rec);
   }
   return { base, items: out };
 }
@@ -659,30 +717,44 @@ function recHTML(A) {
   const R = recommendations(A); if (!R.items.length) return '';
   return `<h2>Recommended changes <small>weakest legs first</small></h2><div class="pc sc-rec">${R.items.map(it => `<div class="sc-tr"><span><b>${esc(it.label)}</b><small>now ${pctS(it.p, 0)} to hit</small></span></div>
     ${it.opts.map(o => `<div class="kv ${o.kind === 'remove' ? '' : 'kpos'}"><span>${esc(o.text)}${o.p != null ? ` · ${pctS(o.p, 0)} to hit` : ''}</span><b>slip ≈ ${pctS(o.slip, 1)}</b></div>`).join('')}`).join('')}
-    <div class="note">Slip chances are estimates from ${st.simRes ? 'the last simulation' : 'our model'} (now ${pctS(R.base, 2)}), changing one leg at a time. Lowering or removing a leg also lowers the payout: the book reprices the slip.</div></div>`;
+    <div class="note">Slip chances are our model's estimate (now ${pctS(R.base, 2)}), changing one leg at a time, so they line up with the compare table, not the simulation. Lowering or removing a leg also lowers the payout: the book reprices the slip.</div></div>`;
+}
+const isStub = g => !g || /^fallback-/.test(g.id);  // a leg matched to no game: no teams, no start time, no injuries
+const gameTxt = g => (isStub(g) ? 'Game not on our board' : `${g.away.abbr} @ ${g.home.abbr}`);
+const legNote = r => (r.fallback || r.ownOdds ? r.why : r.model ? 'Priced from our player model: his average against this defence, not the odds'
+  : /^Priced by Polymarket/.test(r.why || '') ? r.why : r.bookOnly ? 'Priced from the odds on your slip: no model for this prop yet' : '');
+function corrNote(A, c) { // same-game legs: say how they were priced together, and when some were only assumed unrelated
+  const G = A.groups.find(x => x.g === c.g), head = `${c.g.away.abbr} @ ${c.g.home.abbr}: ${c.n} legs from the same game`;
+  const sim = G.rows.some(r => r.model) && MARGIN.has(c.g.sport) && (c.g.prob || pmGameFor(c.g)) ? ' The 500,000-run simulation links player legs to each run\'s score, so it can land higher or lower.' : '';
+  const how = c.ratio > 1.02 ? 'they tend to hit together' : c.ratio < 0.98 ? 'they work against each other' : 'close to unrelated';
+  if (c.free === c.n) return `${head}. We have no joint model for these legs, so they are counted as unrelated: ${pctS(G.p)} together is the plain product, not a measured link.${sim}`;
+  if (c.free) return `${head}. ${c.n - c.free} are priced together from the game model (${how}); ${c.free} ${c.free === 1 ? 'is' : 'are'} counted as unrelated, with no joint model. ${pctS(G.p)} together vs ${pctS(G.indep)} if all were unrelated.${sim}`;
+  return `${head}, ${how} (${pctS(G.p)} together vs ${pctS(G.indep)} if unrelated).`;
 }
 function results() {
   const A = st.A; if (!A) return '';
   const R = reasons(A), cls = { hi: 'h-hi', mid: 'h-mid', lo: 'h-lo' }[A.tone];
   const kpi = (v, l) => `<div class="kpi"><b class="mono">${v}</b><span>${l}</span></div>`;
+  const R0 = st.simRes && st.simRes.sig === sigOf(A) ? st.simRes : null, simOff = R0 && Math.abs(R0.rate - R0.joint) > 2 * R0.ci + 0.002;
   const evStake = A.ev != null && A.stake ? `<div class="note">On your ${money(A.stake)} stake that's about ${money(A.ev * A.stake)} expected over the long run${A.ev < 0 ? ' (a loss)' : ''}.</div>` : '';
   const verdict = `<div class="pc sc-verdict"><div class="pchead"><span class="pctitle">Our verdict</span><span class="hit ${cls}">${esc(A.verdict)}${A.long && A.verdict !== 'Long shot' ? ' · long shot' : ''}</span></div>
     ${A.M.length ? `<div class="gauge" style="--p:${Math.max(0, Math.min(1, A.p)).toFixed(3)}" aria-hidden="true"><i></i></div>` : ''}
     <p class="sc-op">${esc(opinion(A))}</p>
     ${A.M.length ? `<div class="kpis">${kpi(pctS(A.p), 'Model hit chance')}${kpi(A.decCmp ? pctS(1 / A.decCmp) : '—', 'Book implies')}${kpi(esc(SB.fmtOdds(A.p)), 'Fair odds')}${kpi(A.decCmp ? esc(SB.fmtPrice(A.decCmp)) : '—', 'Book pays')}${kpi(A.ev == null ? '—' : signPct(A.ev), 'Expected value')}</div>${evStake}` : ''}
+    ${simOff ? `<div class="note">The 500,000-run simulation lands at ${pctS(R0.rate, 2)}${R0.book != null ? ` (expected value ${signPct(R0.rate / R0.book - 1)})` : ''}, not ${pctS(A.p)}: it models some legs differently. The simulation panel says how. This verdict uses the estimate.</div>` : ''}
     ${sampleFn && aiState === 'ready' && A.M.length ? `<div class="sc-take"><button class="btn ghost" data-sc-take ${st.takeState === 'busy' ? 'disabled' : ''}>${st.takeState === 'busy' ? 'Thinking…' : st.take ? 'Ask Claude again' : 'Claude\'s take'}</button>${st.takeState === 'busy' ? '<button class="sc-link" data-sc-take-stop>Stop</button>' : ''}
       <p id="scTake" class="sc-op sc-ai" aria-live="polite">${esc(st.take)}</p></div>` : ''}
   </div>`;
   const cmp = `<h2>1 · Compare <small>book price vs our fair price</small></h2><div class="pc sc-cmp"><div class="sc-tbl" role="table">
     <div class="sc-tr sc-th" role="row"><span role="columnheader">Leg</span><span role="columnheader">Book</span><span role="columnheader">Model</span><span role="columnheader">Fair</span><span role="columnheader">Edge</span></div>
     ${A.rows.map(r => r.status === 'matched'
-      ? `<div class="sc-tr" role="row"><span role="cell"><b>${esc(r.label)}</b><small>${r.g ? esc(`${r.g.away.abbr} @ ${r.g.home.abbr}`) : ''}</small></span><span role="cell" class="mono">${r.dec ? esc(SB.fmtPrice(r.dec)) : '—'}</span><span role="cell" class="mono">${pctS(r.p, 0)}</span><span role="cell" class="mono">${esc(SB.fmtOdds(r.p))}</span><span role="cell" class="mono ${r.edge == null ? '' : r.edge >= 0.03 ? 'sc-pos' : r.edge <= -0.03 ? 'sc-neg' : ''}">${r.edge == null ? '—' : signPct(r.edge)}</span></div>`
+      ? `<div class="sc-tr" role="row"><span role="cell"><b>${esc(r.label)}</b><small>${esc(gameTxt(r.g))}</small></span><span role="cell" class="mono">${r.dec ? esc(SB.fmtPrice(r.dec)) : '—'}</span><span role="cell" class="mono">${pctS(r.p, 0)}</span><span role="cell" class="mono">${esc(SB.fmtOdds(r.p))}</span><span role="cell" class="mono ${r.edge == null ? '' : r.edge >= 0.03 ? 'sc-pos' : r.edge <= -0.03 ? 'sc-neg' : ''}">${r.edge == null ? '—' : signPct(r.edge)}</span></div>`
       : `<div class="sc-tr sc-un" role="row"><span role="cell"><b>${esc(r.text)}</b><small>${esc(r.why || 'Not on our board')}</small></span><span role="cell" class="mono">${r.dec ? esc(SB.fmtPrice(r.dec)) : '—'}</span><span role="cell">—</span><span role="cell">—</span><span role="cell">—</span></div>`).join('')}
     <div class="sc-tr sc-tf" role="row"><span role="cell"><b>Parlay${A.full ? '' : ` (${A.M.length} priced legs)`}</b></span><span role="cell" class="mono">${A.decCmp ? esc(SB.fmtPrice(A.decCmp)) : '—'}</span><span role="cell" class="mono">${A.M.length ? pctS(A.p) : '—'}</span><span role="cell" class="mono">${A.M.length ? esc(SB.fmtOdds(A.p)) : '—'}</span><span role="cell" class="mono ${A.ev == null ? '' : A.ev >= 0.03 ? 'sc-pos' : A.ev <= -0.03 ? 'sc-neg' : ''}">${A.ev == null ? '—' : signPct(A.ev)}</span></div>
   </div><div class="note">Edge = how much better (+) or worse (−) the book's price is than our fair price. ${A.M.length ? `Bet only at <b class="mono">${esc(SB.fmtOdds(A.p))}</b> or better (${esc(SB.fmtPrice(1.05 / A.p))} = a 5% edge).` : ''}</div></div>`;
   const legsA = `<h2>2 · The legs <small>hit chance, links and injuries</small></h2><div class="pc sc-legs">${A.M.map((r, i) => `<div class="leg"><span class="legdot ${r === A.weakest && A.M.length > 1 ? 'base' : ''}">${i + 1}</span><div class="legtxt"><b>${esc(r.label)}${r === A.weakest && A.M.length > 1 ? ' <span class="badge b-live">WEAKEST</span>' : ''}</b>
-      <span>${esc(`${r.g.away.abbr} @ ${r.g.home.abbr}`)} · ${esc(SB.when(r.g))}</span>${r.inj ? `<em class="sc-inj">🚑 ${esc(r.inj)}</em>` : ''}${r.bookOnly ? '<em class="sc-inj">Priced from the odds on your slip: no model for this prop yet</em>' : ''}</div><span class="legp mono">${pctS(r.p, 0)}<small>${esc(SB.fmtOdds(r.p))}</small></span></div>`).join('') || '<div class="why">No priced legs yet.</div>'}
-    ${A.corr.map(c => `<div class="note">${esc(`${c.g.away.abbr} @ ${c.g.home.abbr}`)}: ${c.n} legs from the same game, ${c.ratio > 1.02 ? 'they tend to hit together' : c.ratio < 0.98 ? 'they work against each other' : 'close to unrelated'} (${pctS(A.groups.find(G => G.g === c.g).p)} together vs ${pctS(A.groups.find(G => G.g === c.g).indep)} if unrelated).</div>`).join('')}</div>`;
+      <span>${esc(isStub(r.g) ? gameTxt(r.g) : `${gameTxt(r.g)} · ${SB.when(r.g)}`)}</span>${r.inj ? `<em class="sc-inj">🚑 ${esc(r.inj)}</em>` : ''}${legNote(r) ? `<em class="sc-inj">${esc(legNote(r))}</em>` : ''}</div><span class="legp mono">${pctS(r.p, 0)}<small>${esc(SB.fmtOdds(r.p))}</small></span></div>`).join('') || '<div class="why">No priced legs yet.</div>'}
+    ${A.corr.map(c => `<div class="note">${esc(corrNote(A, c))}</div>`).join('')}</div>`;
   const why = `<h2>3 · Why it will or won't hit</h2><div class="sc-why"><div class="pc"><div class="pctitle sc-wt sc-pos">Why it can hit</div><ul>${R.can.map(x => `<li>${esc(x)}</li>`).join('') || '<li>Nothing stands out in its favour.</li>'}</ul></div>
     <div class="pc"><div class="pctitle sc-wt sc-neg">Why it might not</div><ul>${R.not.map(x => `<li>${esc(x)}</li>`).join('') || '<li>No clear weak spot.</li>'}</ul></div></div>`;
   const bl = builderLegs();
@@ -690,13 +762,13 @@ function results() {
     <button class="btn" data-sc-track>Track this bet</button>
     <button class="btn ghost" data-sc-build ${bl.length ? '' : 'disabled'}>Open in builder</button>
     ${document.querySelector('#tabs [data-t="sim"]') && bl.length ? '<button class="btn ghost" data-sc-sim>Open in game simulator</button>' : ''}</div>
-    <div class="note">Track saves the whole slip to My Parlays with ${st.slip.book ? esc(st.slip.book) + "'s" : 'the book\'s'} odds and your stake. Legs we price grade themselves when games finish; the others get ✓ / ✗ buttons. My Parlays is saved on this device.</div></div>`;
+    <div class="note">Track saves the whole slip to My Parlays with ${A.slip.book ? esc(A.slip.book) + "'s" : 'the book\'s'} odds and your stake. Legs we price grade themselves when games finish; the others get ✓ / ✗ buttons. My Parlays is saved on this device.</div></div>`;
   return cmp + simBlock(A) + recHTML(A) + verdict + legsA + injuryWorry(A) + why + act;
 }
 // ---------------- injury worry: who is out or doubtful in the games on this slip ----------------
 function injuryWorry(A) {
   const L = window.__lottos, INJ = L && L.INJ;
-  const games = [...new Set((A.groups || []).map(G => G.g).filter(Boolean))];
+  const games = [...new Set((A.groups || []).map(G => G.g).filter(g => !isStub(g)))];  // a leg with no game has no teams to check
   if (!games.length) return '';
   const hrs = INJ && INJ.updated ? (Date.now() - Date.parse(INJ.updated)) / 3600e3 : null;
   const fresh = !INJ ? 'The injury file did not load, so there is no injury check.'
@@ -743,22 +815,31 @@ document.addEventListener('click', e => {
   if (d.scRead != null) { readSlip(); return; }
   if (d.scStop != null) { if (st.ctl) st.ctl.abort(); return; }
   if (d.scTakeStop != null) { if (st.takeCtl) st.takeCtl.abort(); return; }
-  if (d.scManual != null) { st.slip = { book: '', betType: 'parlay', stake: null, totalOdds: '', payout: null, legs: [blankLeg()], notes: '', byAI: false }; st.A = null; st.take = ''; st.err = ''; st.phase = 'read'; saveDraft(); rerender();
+  if (d.scManual != null) { st.slip = { book: '', betType: 'parlay', stake: null, totalOdds: '', payout: null, legs: [blankLeg()], notes: '', byAI: false }; st.A = null; st.simRes = null; st.take = ''; st.err = ''; st.phase = 'read'; saveDraft(); rerender();
     setTimeout(() => { const el = document.getElementById('sc-ev-0'); if (el) el.focus(); }, 0); return; }
   if (d.scAdd != null) { st.slip.legs.push(blankLeg()); saveDraft(); rerender(); const n = st.slip.legs.length - 1; setTimeout(() => { const el = document.getElementById('sc-ev-' + n); if (el) el.focus(); }, 0); return; }
-  if (d.scDel != null) { st.slip.legs.splice(+d.scDel, 1); if (!st.slip.legs.length) st.slip.legs.push(blankLeg()); st.A = st.A ? analyze(st.slip) : null; saveDraft(); rerender(); return; }
+  if (d.scDel != null) {
+    const L = st.slip.legs[+d.scDel], was = str(st.slip.totalOdds);
+    st.slip.legs.splice(+d.scDel, 1); if (!st.slip.legs.length) st.slip.legs.push(blankLeg());
+    // the total odds and payout were the book's price with that leg in: kept, they'd make the removed leg read as a big edge
+    if (L && (str(L.pick) || str(L.event)) && (was || st.slip.payout)) { st.slip.totalOdds = ''; st.slip.payout = null;
+      SB.toast(was ? `Total odds ${esc(was)} cleared: that was the price with the removed leg. Type the book's new price.` : 'Payout cleared: it was for the slip with the removed leg.'); }
+    st.A = st.A ? analyze(st.slip) : null; saveDraft(); rerender(); return; }
   if (d.scGo != null) { st.A = analyze(st.slip); st.take = ''; st.takeState = 'idle'; rerender(); setTimeout(() => { const v = document.querySelector('#main .sc-verdict'); if (v) v.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 0); return; }
   if (d.scTrack != null) { track(); return; }
-  if (d.scSimrun != null) { if (st.simBusy) return; st.simBusy = true; rerender(); setTimeout(() => { const A = analyze(st.slip); st.simRes = simulateSlip(A); st.simBusy = false; rerender(); }, 30); return; }
-  if (d.scBuild != null) { const L = builderLegs(); if (!L.length) return; (SB.replaceSlip || SB.setSlip)(L, L[0].gid + '|' + L[0].key); SB.openSlip(); return; }
-  if (d.scSim != null) { const L = builderLegs(); if (L.length) SB.goTab('sim', { legs: L, title: `${st.slip.book || 'Slip'} check`, from: 'slipcheck', p: st.A.p }); return; }
+  // the simulation runs on the slip as last analyzed (st.A), never on edits not yet submitted with Compare and analyze
+  if (d.scSimrun != null) { if (st.simBusy || !st.A) return; st.simBusy = true; rerender(); setTimeout(() => { st.simRes = st.A ? simulateSlip(st.A) : null; st.simBusy = false; rerender(); }, 30); return; }
+  if (d.scBuild != null) { const L = builderLegs(); if (!L.length) return; (SB.replaceSlip || SB.setSlip)(L, L[0].gid + '|' + L[0].key); SB.openSlip(); carryPrices(L); return; }
+  if (d.scSim != null) { const L = builderLegs(), A = st.A, tot = A && L.length === A.rows.length ? bookDec(A.slip.totalOdds) : null;  // the total only fits the whole slip
+    const sent = new Set(L.map(x => `${x.gid}|${x.key}`)), dropped = A ? A.rows.filter(r => !(r.g && sent.has(`${r.g.id}|${r.key}`))).map(r => r.label || r.text) : [];
+    if (L.length) SB.goTab('sim', { legs: L, title: `${A.slip.book || 'Slip'} check`, from: 'slipcheck', p: A.p, n: A.rows.length, dropped, price: tot ? amer(tot) : '', stake: A.stake || null }); return; }
   if (d.scTake != null) { claudeTake(); return; }
 });
 document.addEventListener('dragover', e => { const z = e.target.closest && e.target.closest('.sc-drop'); if (z) { e.preventDefault(); z.classList.add('over'); } });
 document.addEventListener('dragleave', e => { const z = e.target.closest && e.target.closest('.sc-drop'); if (z) z.classList.remove('over'); });
 document.addEventListener('drop', e => { const z = e.target.closest && e.target.closest('.sc-drop'); if (!z) return; e.preventDefault(); z.classList.remove('over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setImage(f); });
 document.addEventListener('paste', e => { if (activeTab() !== 'slipcheck') return; const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(x => x.kind === 'file' && /^image\//.test(x.type)); if (it) { e.preventDefault(); setImage(it.getAsFile()); } });
-SB.on('data', () => { if (st.A && st.slip) { st.A = analyze(st.slip); rerender(); } });
+SB.on('data', () => { if (st.A && st.A.slip) { st.A = analyze(st.A.slip); rerender(); } });  // fresh prices for the submitted slip, not the editor's draft
 
 // ---------------- styles (tokens only) ----------------
 const css = document.createElement('style');
@@ -812,5 +893,5 @@ document.head.appendChild(css);
 const TAB = { key: 'slipcheck', label: '📸 Slip Check', after: 'mine', render };
 SB.registerTab(TAB);
 SB.on('data', () => setTimeout(() => { if (!document.querySelector('#tabs [data-t="slipcheck"]')) SB.registerTab(TAB); }, 0));
-window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, playerProb, recommendations, setPlayerStats: d => { PS = d; }, PROMPT, get state() { return st; }, get ai() { return aiState; } };
+window.__slipcheck = { analyze, matchLeg, cleanSlip, bookDec, scProb, scCore, opinion, reasons, injuryWorry, simulateSlip, playerProb, recommendations, sigOf, results, setPlayerStats: d => { PS = d; }, PROMPT, get state() { return st; }, get ai() { return aiState; } };
 })();

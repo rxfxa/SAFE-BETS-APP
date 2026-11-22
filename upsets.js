@@ -7,6 +7,8 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const P = x => (x == null ? '—' : Math.round(x * 100) + '%');
   const C = x => (x == null ? '—' : Math.round(x * 100) + '¢');
+  // a long parlay's chance is well under 1%: show two significant figures rather than rounding it to "0%"
+  const PP = x => (x == null ? '—' : x >= .095 ? P(x) : x >= .01 ? (x * 100).toFixed(1) + '%' : x >= 1e-4 ? (x * 100).toPrecision(2) + '%' : '<0.01%');
   const SPORTS = [['all', 'All sports'], ['nba', 'NBA'], ['nfl', 'NFL'], ['nhl', 'NHL'], ['ncaaf', 'College FB'], ['soccer', 'Soccer']];
   const ST = { sports: ['all'], legs: 5, hours: 48, seed: 1, stake: '10', mixed: true };
   const board = () => (window.__polymarket && __polymarket.PM && __polymarket.PM.games) || [];
@@ -20,10 +22,10 @@
       if (!ST.sports.includes('all') && !ST.sports.includes(pg.sport)) continue;
       const ml = pg.ml || {}; if (!ml.home || !ml.away || ml.home.m == null || ml.away.m == null) continue;
       const mk = (kind, label, q, extra) => ({ kind, label, sport: pg.sport, comp: pg.comp, game: pg.slug, url: pg.url, start: pg.start, mid: q.m, ask: q.a, ...extra });
-      // underdog to win: the side priced between 15% and 50%, bought at no more than 55¢
+      // underdog to win: priced below its opponent (in 3-way soccer a 47% side can be the favourite), 15-50%, bought at ≤55¢
       for (const side of ['home', 'away']) {
         const q = ml[side], other = ml[side === 'home' ? 'away' : 'home'];
-        if (q.m >= .15 && q.m <= .5 && q.a != null && q.a <= .55) {
+        if (q.m >= .15 && q.m <= .5 && q.m < other.m && q.a != null && q.a <= .55) {
           const team = side === 'home' ? pg.home.name : pg.away.name, vs = side === 'home' ? pg.away.name : pg.home.name;
           out.push(mk('upset', `${team} to beat ${vs}`, q, { away: side === 'away', fav: other.m }));
         }
@@ -64,9 +66,9 @@
   function parlayCard(legs) {
     const prob = legs.reduce((s, l) => s * l.mid, 1), dec = legs.reduce((s, l) => s * (l.ask > 0 ? 1 / l.ask : 1), 1), st = stakeNum();
     const sports = [...new Set(legs.map(l => l.sport))];
-    return `<div class="pc"><div class="pchead"><span class="pctitle">${legs.length}-leg upset parlay</span><span class="hit h-lo">${P(prob)} market chance</span></div>
+    return `<div class="pc"><div class="pchead"><span class="pctitle">${legs.length}-leg upset parlay</span><span class="hit h-lo">${PP(prob)} market chance</span></div>
       <div class="why">${sports.length} sport${sports.length === 1 ? '' : 's'} · one leg per game · market prices only, no model</div>
-      <div style="margin:8px 0">${legs.map((l, i) => `<div class="leg"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : 'underdog'} at ${C(l.ask)} · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span></div><span class="legp mono">${P(l.mid)}</span></div>`).join('')}</div>
+      <div style="margin:8px 0">${legs.map((l, i) => `<div class="leg"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : 'underdog'} · ${C(l.ask)} to buy · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span></div><span class="legp mono">${P(l.mid)}</span></div>`).join('')}</div>
       <div class="kpis"><div class="kpi"><b class="mono">${dec ? '×' + dec.toFixed(1) : '—'}</b><span>pays at Polymarket prices</span></div><div class="kpi"><b class="mono">${st && dec ? '$' + (st * dec).toFixed(2) : '—'}</b><span>returns on $${st}</span></div></div>
       <div class="note">Crazy on purpose: most of these lose. Model estimates are not in this tab yet.</div></div>`;
   }
@@ -79,7 +81,7 @@
     }
     const cands = candidates(), legs = cands.length ? build(cands) : [];
     main.innerHTML = `<h2>💥 Upset Parlays <small>underdogs and draws, today's board</small></h2>
-      <div class="note">Who has a long unbeaten run or sits near the bottom of a table isn't in our feeds yet, so the picks come from Polymarket's prices: underdogs priced 15–50% and soccer draws against a 55%+ favourite. Away underdogs rank first.</div>
+      <div class="note">Who has a long unbeaten run or sits near the bottom of a table isn't in our feeds yet, so the picks come from Polymarket's prices: underdogs (priced below their opponent, 15–50%) and soccer draws against a 55%+ favourite. Each leg's % is the market's chance (the midpoint); the payout uses the price to buy. Away underdogs rank first.</div>
       <div class="pc" style="margin-bottom:10px">
         <div class="spnav" role="group" aria-label="Sports">${SPORTS.map(([k, l]) => `<button class="chip ${ST.sports.includes(k) ? 'on' : ''}" data-up-sport="${k}" aria-pressed="${ST.sports.includes(k)}">${esc(l)}</button>`).join('')}</div>
         <label class="fl" style="margin-top:10px"><span>Legs: <b class="mono">${ST.legs}</b></span><input type="range" id="upLegs" min="2" max="10" step="1" value="${ST.legs}" aria-label="Number of legs"></label>

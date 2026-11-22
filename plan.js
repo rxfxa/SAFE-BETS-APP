@@ -1,4 +1,4 @@
-/* plan.js — "📅 Weekly Plan": a $20/week ($80/month) plan of Polymarket slips across every sport, built to hit-rate targets,
+/* plan.js — "📅 Weekly Plan": a $20/week (about $87/month) plan of Polymarket slips across every sport, built to hit-rate targets,
    with decision buttons, a 500,000-run simulator, slip tracking, the end-of-week report and the user's Polymarket account.
 
    TIERS (whole-slip hit rate): SAFE 60-89% · COIN FLIP 45-55% · LOTTO 1-40%. BIG SLIPS (payout at Polymarket prices):
@@ -102,8 +102,8 @@ function tagsFor(pl, over, env, side, LT, mean, line) {
 
 // ---------------- candidates (every sport) ----------------
 function candidates(opts) {
-  const P = window.__polymarket, PM = P && P.PM; if (!PM) return { games: [], C: [], missing: 0 };
-  const { winH, sport, type, lean } = opts, now = Date.now(), LT = leagueTeamTotal(PM), C = [], games = []; let missing = 0;
+  const P = window.__polymarket, PM = P && P.PM; if (!PM) return { games: [], C: [], missing: 0, noRoster: [] };
+  const { winH, sport, type, lean } = opts, now = Date.now(), LT = leagueTeamTotal(PM), C = [], games = [], noRoster = new Set(); let missing = 0;
   for (const pg of PM.games) {
     if (sport !== 'all' && pg.sport !== sport) continue;
     const t = Date.parse(pg.start); if (!(t > now && t - now <= winH * 3600e3)) continue;
@@ -130,6 +130,7 @@ function candidates(opts) {
     // NBA player props
     if (type !== 'lines' && pg.sport === 'nba' && g && (pg.props || []).length) {
       const R = { home: roster(G.home.abbr), away: roster(G.away.abbr) };
+      for (const sd of ['home', 'away']) if (!R[sd].length) noRoster.add(G[sd].abbr);  // a team with no season averages: say which
       for (const pr of pg.props) {
         const st = STATS[pr.stat]; if (!st) continue;
         const k = nameKey(pr.player); let side = 'home', pl = R.home.find(x => x.key === k); if (!pl) { side = 'away'; pl = R.away.find(x => x.key === k); }
@@ -150,7 +151,7 @@ function candidates(opts) {
     }
     if (G.n) games.push(G);
   }
-  return { games, C, missing };
+  return { games, C, missing, noRoster: [...noRoster] };
 }
 function lineTags(r, G, mo) {
   const t = [];
@@ -162,30 +163,46 @@ function lineTags(r, G, mo) {
 }
 const legId = c => (c.kind === 'prop' ? `${c.pg.slug}|${c.pl.key}|${c.stat}|${c.line}|${c.over ? 'o' : 'u'}` : `${c.pg.slug}|${c.key || c.label}`);
 const mktOf = c => (c.kind === 'prop' ? `p:${c.pl.key}` : `m:${c.mkt}`);
+// one game's legs keep the slip rules: at most 3, one per market or player, and a player from each team if any props
+const okGame = ls => { const pr = ls.filter(c => c.kind === 'prop'); return ls.length <= 3 && new Set(ls.map(mktOf)).size === ls.length && (!pr.length || new Set(pr.map(c => c.side)).size === 2); };
+// First legs of a slip. After ✖ (keep = {ids, slug}) the legs the user kept stay, and the dropped slot takes the best-fitting
+// leg that keeps the rules: from any game while the dropped leg's game holds up without it (e.g. not a lone team's props),
+// else from that game; a game whose rules still break is let go. Then one pack per other game (props: a player from each team,
+// +1; lines only: up to 3 distinct markets), and last a third leg for a 2-leg game if the slip is still short.
+function startLegs(byG, cost, N, keep) {
+  const by = (a, b) => cost(a) - cost(b), ids = new Set(keep ? keep.ids : []), legs = [];
+  for (const cs of byG.values()) for (const c of cs) if (ids.has(legId(c))) legs.push(c);
+  const inG = s => legs.filter(c => c.pg.slug === s);
+  if (keep && keep.slug && legs.length < N) {
+    const from = okGame(inG(keep.slug)) ? [...byG.values()].flat() : byG.get(keep.slug) || [];
+    const nx = from.filter(c => !legs.includes(c) && okGame(inG(c.pg.slug).concat(c))).sort(by)[0]; if (nx) legs.push(nx);
+  }
+  for (const s of new Set(legs.map(c => c.pg.slug))) { const g = inG(s); if (!okGame(g)) for (const c of g) legs.splice(legs.indexOf(c), 1); }
+  const pinned = new Set(legs.filter(c => ids.has(legId(c)))), usedG = new Set(legs.map(c => c.pg.slug)), packs = [];
+  for (const [slug, cs] of byG) {
+    if (usedG.has(slug)) continue;
+    const props = cs.filter(c => c.kind === 'prop').sort(by), lines = cs.filter(c => c.kind === 'line').sort(by);
+    const H = props.find(c => c.side === 'home'), A = props.find(c => c.side === 'away'); let pl = [];
+    if (H && A) { pl = [H, A]; const third = cs.slice().sort(by).find(c => c !== H && c !== A && mktOf(c) !== mktOf(H) && mktOf(c) !== mktOf(A)); if (third) pl.push(third); }
+    else { const used = new Set(); for (const c of lines) { if (used.has(mktOf(c))) continue; used.add(mktOf(c)); pl.push(c); if (pl.length === 3) break; } if (pl.length < 2) continue; }
+    packs.push({ slug, legs: pl, fit: pl.reduce((s, c) => s + cost(c), 0) / pl.length });
+  }
+  packs.sort((a, b) => a.fit - b.fit);
+  const use = []; let rem = N - legs.length;
+  for (const pk of packs) { if (rem <= 0) break; let k = Math.min(pk.legs.length, rem); if (k < 2) break; if (rem - k === 1) { if (k === 3) k = 2; else continue; } use.push({ pk, k }); rem -= k; }
+  if (rem === 1) { const u = use.find(x => x.k === 3); if (u) { u.k = 2; rem = 2; for (const pk of packs) { if (use.some(x => x.pk === pk)) continue; use.push({ pk, k: 2 }); rem = 0; break; } } }
+  legs.push(...use.flatMap(x => x.pk.legs.slice(0, x.k)));
+  while (legs.length < N) { const nx = [...byG.values()].flat().filter(c => !legs.includes(c) && inG(c.pg.slug).length === 2 && okGame(inG(c.pg.slug).concat(c))).sort(by)[0]; if (!nx) break; legs.push(nx); }
+  return { legs, pinned };
+}
 
 // ---------------- builder: hit-rate targets ----------------
-function buildTarget(C, tier, N, exclude) {
+function buildTarget(C, tier, N, exclude, keep) {
   const [lo, hi] = tier.range, tgt = tier.target, q = Math.pow(tgt, 1 / N);
   const pool = C.filter(c => !(exclude && exclude.has(legId(c))) && c.ps > 0.05 && c.ps < 0.985);
   const byG = new Map(); for (const c of pool) { if (!byG.has(c.pg.slug)) byG.set(c.pg.slug, []); byG.get(c.pg.slug).push(c); }
-  const near = (a, b) => Math.abs(Math.log(a.ps / q)) - Math.abs(Math.log(b.ps / q));
-  // one pack per game: props → a player from each team (+1); lines only → up to 3 distinct markets
-  const packs = [];
-  for (const [slug, cs] of byG) {
-    const props = cs.filter(c => c.kind === 'prop').sort(near), lines = cs.filter(c => c.kind === 'line').sort(near);
-    const H = props.find(c => c.side === 'home'), A = props.find(c => c.side === 'away');
-    let legs = [];
-    if (H && A) { legs = [H, A]; const third = cs.slice().sort(near).find(c => c !== H && c !== A && mktOf(c) !== mktOf(H) && mktOf(c) !== mktOf(A)); if (third) legs.push(third); }
-    else { const used = new Set(); for (const c of lines) { if (used.has(mktOf(c))) continue; used.add(mktOf(c)); legs.push(c); if (legs.length === 3) break; } if (legs.length < 2) continue; }
-    const fit = legs.reduce((s, c) => s + Math.abs(Math.log(c.ps / q)), 0) / legs.length;
-    packs.push({ slug, legs, fit });
-  }
-  packs.sort((a, b) => a.fit - b.fit);
-  const use = []; let rem = N;
-  for (const pk of packs) { if (rem <= 0) break; let k = Math.min(pk.legs.length, rem); if (k < 2) break; if (rem - k === 1) { if (k === 3) k = 2; else continue; } use.push({ pk, k }); rem -= k; }
-  if (rem === 1) { const u = use.find(x => x.k === 3); if (u) { u.k = 2; rem = 2; for (const pk of packs) { if (use.some(x => x.pk === pk)) continue; use.push({ pk, k: 2 }); rem = 0; break; } } }
-  const legs = use.flatMap(x => x.pk.legs.slice(0, x.k));
-  // swap legs (same game, same rules) until the product sits in the range, closest to the target
+  const { legs, pinned } = startLegs(byG, c => Math.abs(Math.log(c.ps / q)), N, keep);
+  // swap legs (same game, same rules; never one the user kept) until the product sits in the range, closest to the target
   const prod = () => legs.reduce((s, c) => s * c.ps, 1);
   const okSwap = (old, nw) => {
     if (legs.includes(nw) || nw.pg.slug !== old.pg.slug) return false;
@@ -199,6 +216,7 @@ function buildTarget(C, tier, N, exclude) {
     const P = prod(); if (P >= lo && P <= hi && Math.abs(Math.log(P / tgt)) < 0.35) break;
     const up = P < tgt; let best = null;
     for (const old of legs) {
+      if (pinned.has(old)) continue;
       for (const nw of byG.get(old.pg.slug) || []) {
         if (up ? nw.ps <= old.ps : nw.ps >= old.ps) continue;
         if (!okSwap(old, nw)) continue;
@@ -214,36 +232,28 @@ function buildTarget(C, tier, N, exclude) {
 }
 
 // legs in the same game move together, so the slip hits more often than the product says: build, simulate, re-aim once
-function buildBest(C, t, N, ex, seed) {
-  let S = buildTarget(C, t, N, ex); S.quick = S.legs.length ? simulate(S.legs, QUICK, seed).hit : 0;
+function buildBest(C, t, N, ex, seed, keep) {
+  let S = buildTarget(C, t, N, ex, keep); S.quick = S.legs.length ? simulate(S.legs, QUICK, seed).hit : 0;
   if (S.legs.length === N && S.quick > 0 && (S.quick < t.range[0] || S.quick > t.range[1])) {
     const f = S.est / S.quick, t2 = { ...t, target: t.target * f, range: [t.range[0] * f, t.range[1] * f] };
-    const S2 = buildTarget(C, t2, N, ex); S2.quick = S2.legs.length ? simulate(S2.legs, QUICK, seed).hit : 0;
+    const S2 = buildTarget(C, t2, N, ex, keep); S2.quick = S2.legs.length ? simulate(S2.legs, QUICK, seed).hit : 0;
     if (S2.legs.length === N && Math.abs(Math.log(S2.quick / t.target)) < Math.abs(Math.log(S.quick / t.target))) S = S2;
   }
-  S.need = Math.pow(t.target, 1 / N); S.strong = C.filter(c => c.ps >= S.need - 0.01).length;
+  // legs that strong the builder could actually use: in its pool (not in another slip, under 98.5¢), one per market per game,
+  // at most 3 a game, and props only where both teams have one
+  S.need = Math.pow(t.target, 1 / N); const per = new Map();
+  for (const c of C) if (!(ex && ex.has(legId(c))) && c.ps >= S.need - 0.01 && c.ps < 0.985) (per.get(c.pg.slug) || per.set(c.pg.slug, []).get(c.pg.slug)).push(c);
+  S.strong = [...per.values()].reduce((s, cs) => { const both = new Set(cs.filter(c => c.kind === 'prop').map(c => c.side)).size === 2; return s + Math.min(3, new Set((both ? cs : cs.filter(c => c.kind === 'line')).map(mktOf)).size); }, 0);
   return S;
 }
 
 // payout-targeted builder: product of buy prices ≤ 1/minPay, then trade legs for the highest chance to hit that keeps the pay
-function buildPayout(C, tier, N, exclude) {
+function buildPayout(C, tier, N, exclude, keep) {
   const M = tier.minPay, L = Math.log(M), qa = Math.pow(1 / M, 1 / N);
   const pool = C.filter(c => !(exclude && exclude.has(legId(c))) && c.ask >= 0.2 && c.ps >= 0.25);
   const byG = new Map(); for (const c of pool) { if (!byG.has(c.pg.slug)) byG.set(c.pg.slug, []); byG.get(c.pg.slug).push(c); }
   const score = c => Math.abs(Math.log(c.ask / qa)) - 0.8 * Math.log(c.ps / c.ask); // near the target price, value first
-  const by = (a, b) => score(a) - score(b), packs = [];
-  for (const [slug, cs] of byG) {
-    const props = cs.filter(c => c.kind === 'prop').sort(by), lines = cs.filter(c => c.kind === 'line').sort(by);
-    const H = props.find(c => c.side === 'home'), A = props.find(c => c.side === 'away'); let legs = [];
-    if (H && A) { legs = [H, A]; const third = cs.slice().sort(by).find(c => c !== H && c !== A && mktOf(c) !== mktOf(H) && mktOf(c) !== mktOf(A)); if (third) legs.push(third); }
-    else { const used = new Set(); for (const c of lines) { if (used.has(mktOf(c))) continue; used.add(mktOf(c)); legs.push(c); if (legs.length === 3) break; } if (legs.length < 2) continue; }
-    packs.push({ slug, legs, fit: legs.reduce((s, c) => s + score(c), 0) / legs.length });
-  }
-  packs.sort((a, b) => a.fit - b.fit);
-  const use = []; let rem = N;
-  for (const pk of packs) { if (rem <= 0) break; let k = Math.min(pk.legs.length, rem); if (k < 2) break; if (rem - k === 1) { if (k === 3) k = 2; else continue; } use.push({ pk, k }); rem -= k; }
-  if (rem === 1) { const u = use.find(x => x.k === 3); if (u) { u.k = 2; rem = 2; for (const pk of packs) { if (use.some(x => x.pk === pk)) continue; use.push({ pk, k: 2 }); rem = 0; break; } } }
-  const legs = use.flatMap(x => x.pk.legs.slice(0, x.k));
+  const { legs, pinned } = startLegs(byG, score, N, keep);
   const lpay = () => -legs.reduce((s, c) => s + Math.log(c.ask), 0), lp = () => legs.reduce((s, c) => s + Math.log(c.ps), 0);
   const okSwap = (old, nw) => {
     if (legs.includes(nw) || nw.pg.slug !== old.pg.slug) return false;
@@ -255,7 +265,7 @@ function buildPayout(C, tier, N, exclude) {
   for (let it = 0; it < 6 * N && legs.length; it++) {
     const cur = lpay(), short = cur < L; let best = null;
     for (const old of legs) for (const nw of byG.get(old.pg.slug) || []) {
-      if (!okSwap(old, nw)) continue;
+      if (pinned.has(old) || !okSwap(old, nw)) continue;
       const dPay = Math.log(old.ask) - Math.log(nw.ask), dP = Math.log(nw.ps) - Math.log(old.ps);
       if (short) { if (dPay <= 1e-9) continue; const r = dP / dPay; if (!best || r > best.r) best = { old, nw, r }; } // cheapest pay gain
       else { if (cur + dPay < L || dP <= 1e-9) continue; if (!best || dP > best.r) best = { old, nw, r: dP }; } // more chance, pay kept
@@ -265,10 +275,11 @@ function buildPayout(C, tier, N, exclude) {
   }
   return { legs, short: Math.max(0, N - legs.length), games: new Set(legs.map(c => c.pg.slug)).size, est: Math.exp(lp()), pay: Math.exp(lpay()), payOk: lpay() >= L - 1e-9 };
 }
-function buildBig(C, t, exclude, seed) {
+function buildBig(C, t, exclude, seed, keep) {
   let best = null;
   for (let N = t.legs; N <= t.legs + 9; N += 3) {
-    const S = buildPayout(C, t, N, exclude); if (S.legs.length !== N) continue;
+    if (keep && keep.n && N !== keep.n) continue;  // after ✖ the slip keeps its size
+    const S = buildPayout(C, t, N, exclude, keep); if (S.legs.length !== N) continue;
     S.quick = simulate(S.legs, QUICK, seed + N).hit; S.target = N;
     const better = !best || (S.payOk && !best.payOk) || (S.payOk === best.payOk && (S.payOk ? S.quick > best.quick : S.pay > best.pay));
     if (better) best = S;
@@ -328,7 +339,7 @@ async function simulateChunked(legs, S, onProgress) {
 // ---------------- state + storage ----------------
 const ST = { win: store.get('plan.win', '24h'), budget: +store.get('plan.budget', 20) || 20, split: store.get('plan.split', 'balanced'),
   legs: store.get('plan.legs', { safe: 9, coin: 12, lotto: 18 }), sport: store.get('plan.sport', 'all'), type: store.get('plan.type', 'mix'), lean: store.get('plan.lean', 'both'),
-  excl: {}, sims: {}, built: null, week: null, builtKey: '', tickets: {} };
+  excl: {}, keep: {}, sims: {}, built: null, week: null, builtKey: '', tickets: {} };
 let SLIPS = store.get('plan.slips', []); if (!Array.isArray(SLIPS)) SLIPS = [];
 let db = null, dbMode = 'local', dbSlips = null, pmDoc = null, pmAddr = store.get('plan.pmAddr', ''), pmLive = null, pmBusy = false, pmErr = '';
 try { const c = store.get('plan.pmLive', null); if (c && c.addr === pmAddr) pmLive = c.doc; } catch (e) {}
@@ -424,6 +435,7 @@ setInterval(() => { if (pmAddr && !pmBusy) syncPm(); }, 5 * 60e3);
 // ---------------- markup ----------------
 const splitOf = () => (SPLITS.find(s => s[0] === ST.split) || SPLITS[0])[2];
 const stakes = () => { const sp = splitOf(); return TIERS.map((t, i) => Math.round(ST.budget * sp[i] / 7 * 100) / 100); };
+const MONTH = 52 / 12;  // weeks in an average month
 const stakeOf = id => { const i = TIERS.findIndex(t => t.id === id); return i >= 0 ? stakes()[i] : 1; };
 // ---------------- bet-script ticket ----------------
 // A short code the user's own computer reads (tools/place_slip.py): which Polymarket outcome each leg buys (Gamma market id +
@@ -453,7 +465,7 @@ function slipCard(t, S, stake) {
   let n = 0;
   return `<div class="pc pl-card" data-tier="${t.id}"><div class="pchead"><span class="pctitle">${esc(t.name)} · ${S.legs.length} legs${S.short ? ` <span class="badge b-est">${S.short} SHORT</span>` : ''}</span><span class="hit ${p >= 0.55 ? 'h-hi' : p >= 0.3 ? 'h-mid' : 'h-lo'}">${pctS(p)} to hit</span></div>
     <div class="gauge" style="--p:${Math.max(0, Math.min(1, p)).toFixed(3)}" aria-hidden="true"><i></i></div>
-    ${isPay ? `<div class="why" style="margin-top:6px">${esc(t.blurb)} Pays <b class="mono">×${(nums.dec || 0).toFixed(1)}</b> at Polymarket prices: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'payout target met' : 'closest we can get right now'}</b>${S.legs.length > t.legs ? ` (${S.legs.length - t.legs} legs added for a better chance to hit)` : ''}. To break even at that payout it needs to hit ${pctS(1 / Math.max(1, nums.dec || 1), 1)} of the time; the market's prices say ${pctS(nums.pm, 1)}, our model says ${pctS(p, 1)}.</div>` : `<div class="why" style="margin-top:6px">${esc(t.blurb)} Target ${Math.round(t.range[0] * 100)}-${Math.round(t.range[1] * 100)}%: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'on target' : 'closest we can get right now'}</b>.${!inR && p < t.range[0] ? ` Each of ${S.legs.length} legs would need about ${pctS(S.need, 0)}, and Polymarket has ${S.strong} legs that strong for these filters.` : ''}</div>`}
+    ${isPay ? `<div class="why" style="margin-top:6px">${esc(t.blurb)} Pays <b class="mono">×${(nums.dec || 0).toFixed(1)}</b> at Polymarket prices: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'payout target met' : 'closest we can get right now'}</b>${S.legs.length > t.legs ? ` (${S.legs.length - t.legs} legs added for a better chance to hit)` : ''}. To break even at that payout it needs to hit ${pctS(1 / Math.max(1, nums.dec || 1), 1)} of the time; the market's prices say ${pctS(nums.pm, 1)}, our model says ${pctS(p, 1)}.</div>` : `<div class="why" style="margin-top:6px">${esc(t.blurb)} Target ${Math.round(t.range[0] * 100)}-${Math.round(t.range[1] * 100)}%: <b class="${inR ? 'pl-pos' : 'pl-amb'}">${inR ? 'on target' : 'closest we can get right now'}</b>.${!inR && p < t.range[0] ? ` Each of ${S.legs.length} legs would need about ${pctS(S.need, 0)}, ${S.strong < S.legs.length ? `and only ${S.strong} legs that strong fit the slip rules for these filters` : `and ${S.strong} legs that strong fit the slip rules, but the builder couldn't combine ${S.legs.length} of them in range`} (legs at 98.5% or more pay almost nothing and are left out).` : ''}</div>`}
     <div class="kpis pl-k">${[[pctS(p), sim ? '500k sims' : 'quick estimate'], [pctS(nums.pm), 'market says'], [nums.dec ? '×' + nums.dec.toFixed(2) : '—', 'pays at Polymarket prices'], [money(stake), 'stake'], [nums.dec ? money(stake * nums.dec) : '—', 'returns if it hits']].map(([v, l]) => `<div class="kpi"><b class="mono">${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>
     <div class="pl-dec">${[['🔁 New mix', 'reroll'], ['↺ Start over', 'reset'], ['📋 Copy legs', 'copy'], ['🖥 Send to my bet script', 'ticket']].map(([l, a]) => `<button class="pl-chipbtn" data-pl-act="${a}|${t.id}">${l}</button>`).join('')}</div>
     ${ST.tickets[t.id] && ST.tickets[t.id].key === S.legs.map(legId).join(',') ? `<div class="pl-ticket"><div class="note"><b>Copied.</b> On your computer run <code>python3 place_slip.py</code>: it reads this code from your clipboard, checks every leg's live price and asks before it bets. If the copy didn't work, select the code below and copy it.</div><textarea readonly rows="2" aria-label="Bet script code" spellcheck="false">${esc(ST.tickets[t.id].code)}</textarea></div>` : ''}
@@ -479,7 +491,7 @@ function weekSim() {
   const r = rng(0x5EED), W = SIMS, res = new Float64Array(W); let up = 0, sum = 0; const wins = tiers.map(() => new Float64Array(8));
   for (let w = 0; w < W; w++) { let pl = 0; tiers.forEach((T, j) => { let k = 0; for (let d = 0; d < 7; d++) { if (r.u() < T.p) { k++; pl += T.stake * (T.dec - 1); } else pl -= T.stake; } wins[j][k]++; }); res[w] = pl; sum += pl; if (pl > 0) up++; }
   const s = Float64Array.from(res).sort(), q = f => s[Math.min(W - 1, Math.floor(f * W))];
-  return { tiers: tiers.map((T, j) => ({ ...T, wins: Array.from(wins[j], x => x / W) })), mean: sum / W, up: up / W, p5: q(0.05), p95: q(0.95), month: 4 * sum / W };
+  return { tiers: tiers.map((T, j) => ({ ...T, wins: Array.from(wins[j], x => x / W) })), mean: sum / W, up: up / W, p5: q(0.05), p95: q(0.95), month: MONTH * sum / W };
 }
 function reportBlock() {
   const PMV = pmLive || pmSnapshot();
@@ -536,21 +548,21 @@ function trackedList() {
       <div class="pl-btns"><button class="btn ghost" data-pl-res="${esc(s.id)}|won">Won</button><button class="btn ghost" data-pl-res="${esc(s.id)}|lost">Lost</button><button class="btn ghost" data-pl-res="${esc(s.id)}|void">Void</button></div></div>`; }).join('')}</div>`;
 }
 function render(main) {
-  const winH = ST.win === '3d' ? 72 : 30, { games, C, missing } = candidates({ winH, sport: ST.sport, type: ST.type, lean: ST.lean }), st = stakes();
+  const winH = ST.win === '3d' ? 72 : 30, { games, C, missing, noRoster } = candidates({ winH, sport: ST.sport, type: ST.type, lean: ST.lean }), st = stakes();
   const built = {}, taken = new Set();
-  for (const t of TIERS) { const N = ST.legs[t.id] || t.legs; const ex = new Set([...taken, ...(ST.excl[t.id] || [])]); const S = buildBest(C, t, N, ex, 0x1234 + N); S.target = N; S.legs.forEach(c => taken.add(legId(c))); built[t.id] = S; }
-  for (const t of BIG) built[t.id] = buildBig(C, t, new Set(ST.excl[t.id] || []), 0x4321);
+  for (const t of TIERS) { const N = ST.legs[t.id] || t.legs, K = ST.keep[t.id]; const ex = new Set([...taken, ...(ST.excl[t.id] || []), ...(K ? K.avoid : [])]); const S = buildBest(C, t, N, ex, 0x1234 + N, K); S.target = N; S.legs.forEach(c => taken.add(legId(c))); built[t.id] = S; }
+  for (const t of BIG) built[t.id] = buildBig(C, t, new Set(ST.excl[t.id] || []), 0x4321, ST.keep[t.id]);
   const key = JSON.stringify(Object.values(built).map(S => S.legs.map(legId)));
   if (ST.builtKey !== key) { const old = ST.built || {}; for (const id of Object.keys(ST.sims)) { if (!old[id] || JSON.stringify(old[id].legs.map(legId)) !== JSON.stringify((built[id] || { legs: [] }).legs.map(legId))) delete ST.sims[id]; } ST.week = null; }
   ST.builtKey = key; ST.built = built;
   const PM = window.__polymarket && window.__polymarket.PM;
   const chip = (attr, k, l, on) => `<button class="chip ${on ? 'on' : ''}" data-${attr}="${k}" aria-pressed="${on}">${esc(l)}</button>`;
-  let h = `<h2>Weekly Plan <small>$${ST.budget}/week · $${ST.budget * 4}/month · Polymarket, every sport</small></h2>
+  let h = `<h2>Weekly Plan <small>$${ST.budget}/week · about $${Math.round(ST.budget * MONTH)}/month · Polymarket, every sport</small></h2>
     <div class="note pl-lead">Three slips a day built to hit-rate targets (SAFE 60-89%, COIN FLIP 45-55%, LOTTO 1-40%), plus big slips that pay ×10, ×50 and ×100 or more. Every leg is a Polymarket market: player props priced by a game-script model (injuries, matchup, blowouts), and game lines priced by the app's own engine.</div>
     <div class="pc pl-set">
-      <div class="pl-row"><label for="plBudget">Weekly budget</label><span class="pl-money">$<input id="plBudget" type="number" min="3" step="1" inputmode="decimal" value="${ST.budget}"></span><span class="note">= $${(ST.budget * 4).toFixed(0)} a month</span></div>
+      <div class="pl-row"><label for="plBudget">Weekly budget</label><span class="pl-money">$<input id="plBudget" type="number" min="3" step="1" inputmode="decimal" value="${ST.budget}"></span><span class="note">= about $${Math.round(ST.budget * MONTH)} a month</span></div>
       <div class="spnav">${SPLITS.map(s => chip('pl-split', s[0], s[1], ST.split === s[0])).join('')}</div>
-      <div class="pl-stakes">${TIERS.map((t, i) => `<div><b>${t.name}</b><span class="mono">${money(st[i])}</span><small>a day · ${money(st[i] * 7)} a week</small></div>`).join('')}</div>
+      <div class="pl-stakes">${TIERS.map((t, i) => `<div><b>${t.name}</b><span class="mono">${money(st[i])}</span><small>a day · ${money(ST.budget * splitOf()[i])} a week</small></div>`).join('')}</div>
       <div class="pl-dlabel">Sport</div><div class="spnav">${SPORTS.map(s => chip('pl-sport', s[0], s[1], ST.sport === s[0])).join('')}</div>
       <div class="pl-dlabel">Legs from</div><div class="spnav">${TYPES.map(s => chip('pl-type', s[0], s[1], ST.type === s[0])).join('')}</div>
       <div class="pl-dlabel">Lean</div><div class="spnav">${LEANS.map(s => chip('pl-lean', s[0], s[1], ST.lean === s[0])).join('')}</div>
@@ -561,7 +573,7 @@ function render(main) {
   else if (!C.length) h += `<div class="pc"><div class="why">No Polymarket legs for these filters in the latest snapshot (${esc(new Date(PM.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}). NBA player props post on game day; try "All sports" or "Next 3 days".</div></div>`;
   else {
     const bySport = {}; for (const G of games) bySport[G.pg.sport] = (bySport[G.pg.sport] || 0) + 1;
-    h += `<div class="note">${games.length} games (${Object.entries(bySport).map(([k, v]) => `${v} ${({ nba: 'NBA', nfl: 'NFL', nhl: 'NHL', ncaaf: 'college FB', soccer: 'soccer' })[k] || k}`).join(', ')}) · ${C.length} Polymarket legs priced${missing ? ` · ${missing} prop lines skipped (player not in our data)` : ''} · snapshot ${esc(new Date(PM.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}. Prices move: check each one before you buy.</div>`;
+    h += `<div class="note">${games.length} games (${Object.entries(bySport).map(([k, v]) => `${v} ${({ nba: 'NBA', nfl: 'NFL', nhl: 'NHL', ncaaf: 'college FB', soccer: 'soccer' })[k] || k}`).join(', ')}) · ${C.length} Polymarket legs priced${missing ? ` · ${missing} prop lines skipped (player not in our data${noRoster.length ? `; no season averages for ${esc(noRoster.join(', '))}, so their players get no props` : ''})` : ''} · snapshot ${esc(new Date(PM.updated).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}. Prices move: check each one before you buy.</div>`;
     h += `<div class="grid pl-grid">${TIERS.map((t, i) => slipCard(t, built[t.id], st[i])).join('')}</div>`;
     h += `<h2>Big slips <small>pays ×10+ · ×50+ · ×100+ at Polymarket prices</small></h2><div class="grid pl-grid">${BIG.map(t => slipCard(t, built[t.id], 1)).join('')}</div>`;
     const W = ST.week;
@@ -581,9 +593,9 @@ function render(main) {
 document.addEventListener('change', e => {
   const t = e.target; if (!t.closest || !t.closest('#main')) return;
   if (t.id === 'plBudget') { const v = Math.max(3, Math.round(+t.value || 20)); ST.budget = v; store.set('plan.budget', v); ST.week = null; SB.render(); return; }
-  if (t.dataset && t.dataset.plLegs) { ST.legs = { ...ST.legs, [t.dataset.plLegs]: +t.value }; store.set('plan.legs', ST.legs); SB.render(); }
+  if (t.dataset && t.dataset.plLegs) { ST.legs = { ...ST.legs, [t.dataset.plLegs]: +t.value }; store.set('plan.legs', ST.legs); delete ST.keep[t.dataset.plLegs]; SB.render(); }
 });
-const setOpt = (k, v) => { ST[k] = v; store.set('plan.' + k, v); ST.excl = {}; SB.render(); };
+const setOpt = (k, v) => { ST[k] = v; store.set('plan.' + k, v); ST.excl = {}; ST.keep = {}; SB.render(); };
 document.addEventListener('click', async e => {
   const t = e.target.closest && e.target.closest('[data-pl-split],[data-pl-win],[data-pl-sport],[data-pl-type],[data-pl-lean],[data-pl-sim],[data-pl-track],[data-pl-week],[data-pl-res],[data-pl-leg],[data-pl-drop],[data-pl-act],[data-pl-pmsave]');
   if (!t || !t.closest('#main')) return;
@@ -593,10 +605,15 @@ document.addEventListener('click', async e => {
   if (d.plSport) return setOpt('sport', d.plSport);
   if (d.plType) return setOpt('type', d.plType);
   if (d.plLean) return setOpt('lean', d.plLean);
-  if (d.plDrop) { const i = d.plDrop.indexOf('|'), tier = d.plDrop.slice(0, i), id = d.plDrop.slice(i + 1); ST.excl[tier] = (ST.excl[tier] || []).concat(id); SB.render(); return; }
+  if (d.plDrop) { const i = d.plDrop.indexOf('|'), tier = d.plDrop.slice(0, i), id = d.plDrop.slice(i + 1), S = ST.built && ST.built[tier], c = S && S.legs.find(x => legId(x) === id);
+    ST.excl[tier] = (ST.excl[tier] || []).concat(id);
+    // swap out only this leg: the rest of the slip stays, and the refill doesn't take a leg from another main slip
+    if (c) ST.keep[tier] = { ids: S.legs.map(legId).filter(x => x !== id), slug: c.pg.slug, n: S.legs.length,
+      avoid: TIERS.some(x => x.id === tier) ? TIERS.filter(x => x.id !== tier).flatMap(x => (ST.built[x.id] ? ST.built[x.id].legs.map(legId) : [])) : [] };
+    SB.render(); return; }
   if (d.plAct) { const [a, tier] = d.plAct.split('|'), S = ST.built && ST.built[tier];
-    if (a === 'reroll' && S) { ST.excl[tier] = (ST.excl[tier] || []).concat(S.legs.map(legId)); SB.render(); }
-    else if (a === 'reset') { ST.excl[tier] = []; SB.render(); }
+    if (a === 'reroll' && S) { ST.excl[tier] = (ST.excl[tier] || []).concat(S.legs.map(legId)); delete ST.keep[tier]; SB.render(); }
+    else if (a === 'reset') { ST.excl[tier] = []; delete ST.keep[tier]; SB.render(); }
     else if (a === 'ticket' && S && S.legs.length) {
       if (!ticketReady(S)) { SB.toast('Some legs are from an older price snapshot. Refresh the app and try again.'); return; }
       const code = encTicket(ticketOf(ALL_TIERS.find(x => x.id === tier) || TIERS[0], S)); ST.tickets[tier] = { key: S.legs.map(legId).join(','), code };

@@ -255,9 +255,11 @@ function firstBasketSection() {
 
 // ---------------- markup ----------------
 const CACHE = {};
+// last name with its suffix ("Jaren Jackson Jr." -> "Jackson Jr."), not just the suffix
+const surname = n => { const w = String(n).trim().split(/\s+/); return w.length > 2 && /^(jr|sr|ii|iii|iv|v)\.?$/i.test(w[w.length - 1]) ? w.slice(-2).join(' ') : w[w.length - 1]; };
 function because(m, p) {
   if (!m.missing.length || p.boost < 0.05) return p.star ? 'Lead scorer, no boost' : 'No boost: normal role';
-  const names = m.missing.slice(0, 2).map(x => `${x.name.split(' ').slice(-1)[0]} (${(x.inj && x.inj.status) || 'out'})`);
+  const names = m.missing.slice(0, 2).map(x => `${surname(x.name)} (${(x.inj && x.inj.status) || 'out'})`);
   return `With ${names.join(', ')}${m.missing.length > 2 ? ` +${m.missing.length - 2}` : ''} missing`;
 }
 function legRow(L, i) {
@@ -427,6 +429,6 @@ SB.registerTab(TAB_L); SB.registerTab(TAB_I);
 SB.on('data', () => { load(); setTimeout(() => { if (!document.querySelector('#tabs [data-t="lottos"]')) SB.registerTab(TAB_L); if (!document.querySelector('#tabs [data-t="injuries"]')) SB.registerTab(TAB_I); }, 0); });
 
 // test/debug hook
-window.__lottos = { fbSide, fbBoard, fbKey, get FB() { return FB; }, W, R, CAP_PCT, CAP_PTS, MIN_GP, MIN_MPG, LEG_MIN, LEG_MAX, TIERS, legP, teamModel, linesFor, candidates, buildTier, parseKey, legKey,
+window.__lottos = { fbSide, fbBoard, fbKey, get FB() { return FB; }, W, R, CAP_PCT, CAP_PTS, MIN_GP, MIN_MPG, LEG_MIN, LEG_MAX, TIERS, legP, teamModel, linesFor, candidates, buildTier, parseKey, legKey, surname,
   get INJ() { return INJ; }, get ROLES() { return ROLES; }, get LOAD() { return LOAD; }, load };
 })();

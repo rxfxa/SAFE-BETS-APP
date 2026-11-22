@@ -142,16 +142,16 @@ function histo(sim) {
 
 // ---------------- markup ----------------
 const legRow = (r, i) => `<div class="leg"><span class="legdot ${i === 0 ? 'base' : ''}">${i + 1}</span><div class="legtxt"><b>${esc(r.label)}</b>
-  <span>${esc(r.pg.away.name)} @ ${esc(r.pg.home.name)} · ${esc(fmtTime(r.pg.start))}</span><em class="pm-why">Polymarket ${cents(r.q.a)} to buy · model ${r.p != null ? pctS(r.p, 0) : 'n/a'}${r.ev != null ? ` · ${signPct(r.ev)} EV` : ''}</em></div>
-  <span class="legp mono">${r.p != null ? pctS(r.p, 0) : cents(r.q.m)}<small>${r.p != null ? esc(SB.fmtOdds(r.p)) : 'market'}</small></span></div>`;
+  <span>${esc(r.pg.away.name)} @ ${esc(r.pg.home.name)} · ${esc(fmtTime(r.pg.start))}</span><em class="pm-why">Market ${pctS(r.q.m, 1)} · ${cents(r.q.a)} to buy · model ${r.p != null ? pctS(r.p, 0) : 'n/a'}${r.ev != null ? ` · ${signPct(r.ev)} EV` : ''}</em></div>
+  <span class="legp mono">${r.p != null ? pctS(r.p, 0) : pctS(r.q.m, 1)}<small>${r.p != null ? esc(SB.fmtOdds(r.p)) : 'market'}</small></span></div>`;
 function parlayCard(P) {
-  const can = P.legs.every(r => r.key);
+  const can = P.legs.every(r => r.key), pa = P.legs.every(r => r.q.a > 0) ? P.legs.reduce((s, r) => s * r.q.a, 1) : null;  // cost of buying every leg
   return `<div class="pc pm-card"><div class="pchead"><span class="pctitle">${esc(P.title)} <span class="badge pm-tag">POLYMARKET</span></span><span class="hit ${P.p == null ? 'h-mid' : P.p >= .55 ? 'h-hi' : P.p >= .3 ? 'h-mid' : 'h-lo'}">${pctS(P.p ?? P.pm)} to hit</span></div>
    ${P.blurb ? `<div class="why" style="margin-top:4px">${esc(P.blurb)}</div>` : ''}
    <div style="margin-top:4px">${P.legs.map(legRow).join('')}</div>
    <div class="pm-two"><div><span>Market says</span><b class="mono">${pctS(P.pm)}</b><small>${esc(SB.fmtOdds(P.pm))}</small></div><div><span>Model says</span><b class="mono">${P.p != null ? pctS(P.p) : '—'}</b><small>${P.p != null ? 'fair ' + esc(SB.fmtOdds(P.p)) : 'not priced'}</small></div></div>
    ${can ? `<div class="pm-btns"><button class="btn" data-pm-build="${esc(P.id)}">Open in builder</button>${document.querySelector('#tabs [data-t="sim"]') ? `<button class="btn ghost" data-pm-sim="${esc(P.id)}">Simulate 100k</button>` : ''}</div>` : ''}
-   <div class="note">Polymarket prices each game on its own; the market's parlay chance is the product of its prices. Use it as a sharp reference for a sportsbook parlay, or buy the legs one by one.</div></div>`;
+   <div class="note">Polymarket prices each game on its own; the market's parlay chance is the product of each leg's market % (the midpoint between its buy and sell price).${pa ? ` Buying the legs at the prices shown costs more: ×${(1 / pa).toFixed(2)} payout, so it has to hit ${pctS(pa, 1)} of the time to break even.` : ''} Use it as a sharp reference for a sportsbook parlay, or buy the legs one by one.</div></div>`;
 }
 function valueList(rows) {
   const V = rows.filter(isValue).sort((a, b) => b.ev - a.ev).slice(0, 15);

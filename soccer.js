@@ -498,7 +498,8 @@ function renderTab(main, params) {
   const games = all ? up : up.filter(g => leagueOf(g.comp).id === st.lg);
   const pg = games.filter(inWindow);
   if (!games.length) {
-    html += `<div class="empty sp-empty" style="margin-top:14px"><b>${esc(L.name)}</b><br>No fixtures in the feed yet; they appear automatically when the hourly refresh adds them.</div>`;
+    const n = pmCount(L.id);
+    html += `<div class="empty sp-empty" style="margin-top:14px"><b>${esc(L.name)}</b><br>No ${esc(L.name)} fixtures in the app's game feed right now, so there is nothing to price here.${n ? ` Polymarket lists ${n} ${esc(L.name)} game${n === 1 ? '' : 's'} in the next 8 days: <button type="button" class="linkbtn" data-gotab="polymarket">see them in the Polymarket tab</button>.` : ''}</div>`;
   } else if (all && st.sec === 'best') {
     html += `<h2>Best parlay of each type <small>${pg.length} matches · next 7 days</small></h2><div class="note" style="margin:-4px 2px 10px">The top pick from each section, built across every league in the feed. Tap a section above for all tiers and the match boards.</div><div class="grid">`;
     for (const S of SECS) {
@@ -519,9 +520,15 @@ function renderTab(main, params) {
       html += `<div class="grid">${gs.map(g => `<div class="mk spboard">${matchHead(g)}${boardBody(S.id, g)}</div>`).join('')}</div>`;
     }
   }
-  html += `<div class="note" style="margin-top:14px">All soccer markets settle on 90 minutes plus stoppage time; extra time and penalty shootouts don't count (shootout goals never count for scorers). Percentages are model estimates from each match's win chances (exact score grid; scorers from season goal shares), not guarantees. Fair odds have no bookmaker margin: only bet when your book pays more. Leagues: ${esc(LEAGUES.map(x => x.name).join(', '))}${LL.more.length ? ', plus ' + esc(LL.more.map(x => x.name).join(', ')) : ''}.</div>`;
+  html += `<div class="note" style="margin-top:14px">All soccer markets settle on 90 minutes plus stoppage time; extra time and penalty shootouts don't count (shootout goals never count for scorers). Percentages are model estimates from each match's win chances (exact score grid; scorers from season goal shares), not guarantees. Fair odds have no bookmaker margin: only bet when your book pays more. Leagues in the feed now: ${esc(LL.top.filter(x => x.n).map(x => x.name).join(', ') || 'none')}${LL.more.length ? ', plus ' + esc(LL.more.map(x => x.name).join(', ')) : ''}.${LL.top.some(x => !x.n) ? ` No fixtures in the feed for ${esc(LL.top.filter(x => !x.n).map(x => x.name).join(', '))}.` : ''}</div>`;
   main.innerHTML = html;
   lastMs = performance.now() - t0;
+}
+// Polymarket can list a league the game feed doesn't carry (Europa League, Eredivisie, Primeira Liga today): count its games in
+// the next 8 days (the Polymarket tab's longest window) so an empty league says where they are instead of promising a refresh
+function pmCount(id) {
+  const pm = window.__polymarket && window.__polymarket.PM, now = nowMs();
+  return ((pm && pm.games) || []).filter(pg => pg.sport === 'soccer' && leagueOf(pg.comp).id === id && Date.parse(pg.start) > now && Date.parse(pg.start) - now <= 8 * DAY).length;
 }
 function groupBy(arr, f) { const m = new Map(); for (const x of arr) { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); } return [...m]; }
 

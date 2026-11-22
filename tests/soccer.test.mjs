@@ -90,7 +90,7 @@ try {
     worstSwitch = Math.max(worstSwitch, t);
     if (!c.n) {
       const txt = await page.evaluate(() => (document.querySelector('#main .sp-empty') || {}).textContent || '');
-      check(`${c.text}: honest empty state`, /No fixtures in the feed yet; they appear automatically when the hourly refresh adds them/.test(txt));
+      check(`${c.text}: honest empty state (no promise that a refresh adds it)`, /No .+ fixtures in the app's game feed right now, so there is nothing to price here/.test(txt) && !/appear automatically/.test(txt), txt);
       continue;
     }
     for (const s of SECTIONS) {

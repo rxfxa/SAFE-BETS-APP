@@ -31,7 +31,7 @@ try {
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__slipcheck, null, { timeout: 60000 });
   const r = await page.evaluate(() => {
-    const g = SB.DATA.games.find(x => x.sport === 'nfl' && SB.started ? true : true);
+    const g = SB.DATA.games.find(x => x.sport === 'nfl' && !SB.started(x));  // a game still to come: started or finished games are never priced
     const base = { event: `${g.away.name} @ ${g.home.name}`, sport: 'nfl', sel: '' };
     const withOdds = __slipcheck.matchLeg({ ...base, pick: g.home.name.split(' ').pop(), market: 'passing_yards', side: 'over', line: '250.5', odds: '-115' });
     const noOdds = __slipcheck.matchLeg({ ...base, pick: g.home.name.split(' ').pop(), market: 'passing_yards', side: 'over', line: '250.5', odds: '' });

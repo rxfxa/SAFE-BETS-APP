@@ -276,7 +276,7 @@ function jointFor(rows) { // model chance that all matched legs hit, with same-g
   return { p, groups };
 }
 function analyze(slip) {
-  const rows = slip.legs.map((L, i) => { const m = matchLeg(L); return { ...m, i, src: L, dec: bookDec(L.odds), text: legText(L) }; });
+  const rows = slip.legs.map((L, i) => { const m = matchLeg(L); return { ...m, why: m.status === 'matched' && !m.bookOnly ? '' : m.why, i, src: L, dec: bookDec(L.odds), text: legText(L) }; });
   for (const r of rows) { r.inj = r.status !== 'none' ? injuryNote(r) : ''; r.edge = r.status === 'matched' && r.dec ? r.p * r.dec - 1 : null; }
   const M = rows.filter(r => r.status === 'matched'), U = rows.filter(r => r.status !== 'matched');
   const J = M.length ? jointFor(M) : { p: 0, groups: [] };
@@ -544,10 +544,11 @@ function simBlock(A) {
   const busy = st.simBusy, ready = A.M.length > 0;
   const btn = `<button class="btn" data-sc-simrun ${busy || !ready ? 'disabled' : ''}>${busy ? 'Simulating 500,000 runs…' : R ? 'Run 500,000 again' : 'Simulate 500,000 runs'}</button>`;
   let body = ready ? '' : '<div class="why">Add priced legs first: the simulation needs at least one leg we can price.</div>';
-  if (R) body = `<div class="kpis"><div class="kpi"><b class="mono">${pctS(R.rate, 2)}</b><span>all legs hit in ${R.hits.toLocaleString()} of ${R.N.toLocaleString()} runs</span></div>
+  if (R) body = `<div class="kpis"><div class="kpi"><b class="mono">${pctS(R.rate, 2)}</b><span>sim hit rate</span></div>
       <div class="kpi"><b class="mono">±${(R.ci * 100).toFixed(2)}</b><span>95% range, points</span></div>
       <div class="kpi"><b class="mono">${pctS(R.joint)}</b><span>our analytic estimate</span></div>
       <div class="kpi"><b class="mono">${R.book != null ? pctS(R.book) : '—'}</b><span>book price implies</span></div></div>
+    <div class="kvs"><div class="kv kpos"><span>Hit: all legs landed</span><b>${R.hits.toLocaleString()} of ${R.N.toLocaleString()} runs</b></div><div class="kv kneg"><span>Missed: at least one leg lost</span><b>${(R.N - R.hits).toLocaleString()} of ${R.N.toLocaleString()} runs</b></div></div>
     <div class="sc-tbl">${R.legs.map(l => `<div class="sc-tr"><span><b>${esc(l.label)}</b><small>${esc(l.how)}</small></span><span class="mono">${pctS(l.rate, 1)}</span></div>`).join('')}</div>
     <div class="note">${R.gamesSimmed} game${R.gamesSimmed === 1 ? '' : 's'} simulated ${R.N.toLocaleString()} times each.${R.unpriced ? ` ${R.unpriced} leg${R.unpriced === 1 ? '' : 's'} we couldn't price ${R.unpriced === 1 ? 'is' : 'are'} not in this run.` : ''} This is how often the slip lands in the simulation, not a guarantee.</div>`;
   return `<div class="pc sc-sim"><div class="pchead"><span class="pctitle">Simulate the slip</span>${btn}</div>${body}</div>`;

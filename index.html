@@ -1078,12 +1078,12 @@ const sportIco=sp=>TAB_ICON[sp]?`<svg class="spi" viewBox="0 0 24 24" aria-hidde
 // opt: {n, sports, minP, target, propsOnly, perPlayer, perGame, seed}
 function ticketPool(o,hours){
   const pool=[];const lim=now()+hours*3600e3;
-  for(const pl of (DATA.players||[])){const g=gameById(pl.gid);if(!g||!openG(g)||startMs(g)>lim||!o.sports.includes(g.sport)||pl.status!=='active')continue;
+  for(const pl of (DATA.players||[])){const g=gameById(pl.gid);if(!g||!openG(g)||startMs(g)>lim||!o.sports.includes(g.sport)||pl.status!=='active'||(o.gids&&!o.gids.includes(g.id)))continue;
     const legs=playerLegs(pl).filter(x=>x.p>=o.minP);if(!legs.length)continue;
     // floor mode: safest line that still clears minP is the highest number with p>=minP; yield mode: line closest to target
     const L=o.target?legs.reduce((b,x)=>Math.abs(x.p-o.target)<Math.abs(b.p-o.target)?x:b):legs.sort((a,b)=>a.p-b.p)[0];
     pool.push({gid:g.id,key:L.key,label:L.label,p:L.p,sport:g.sport,who:pl.name,team:pl.team,stat:pl.stat,kind:'player',boost:pl.boost});}
-  if(!o.propsOnly)for(const g of DATA.games){if(!priced(g)||startMs(g)>lim||!o.sports.includes(g.sport))continue;
+  if(!o.propsOnly)for(const g of DATA.games){if(!priced(g)||startMs(g)>lim||!o.sports.includes(g.sport)||(o.gids&&!o.gids.includes(g.id)))continue;
     const best={};for(const m of marketsFor(g)){if(m.nopool)continue;const p=p1(g,m.key);if(p<o.minP||p>.95)continue;const sc=o.target?-Math.abs(p-o.target):-p;
       if(!best[m.group]||sc>best[m.group].sc)best[m.group]={gid:g.id,key:m.key,label:m.label,p,sport:g.sport,kind:'game',sc};}
     Object.values(best).forEach(x=>pool.push(x));}
@@ -1099,7 +1099,9 @@ function buildTicket(o){
   while(legs.length<o.n&&guard++<500){let added=false;
     for(const sp of order){if(legs.length>=o.n)break;const list=bySport[sp];
       const i=list.findIndex(x=>(perGame[x.gid]||0)<o.perGame&&(perWho[x.who]||0)<o.perPlayer&&!(x.kind==='player'&&legs.some(y=>y.kind==='player'&&y.gid===x.gid&&y.team===x.team&&y.stat===x.stat)));
-      if(i<0)continue;const x=list.splice(i,1)[0];if(parlayProb([...legs,x]).p<=0)continue;
+      if(i<0)continue;const x=list.splice(i,1)[0];const before=legs.length?parlayProb(legs).p:1,after=parlayProb([...legs,x]).p;if(after<=0||(legs.length&&after>=before*.995))continue;  // contradicts the slip, or adds nothing (BAR win already covers "no draw")
+      for(let j=legs.length-1;j>=0;j--){const y=legs[j];if(y.gid!==x.gid||y.kind==='player')continue;const rest=[...legs.slice(0,j),...legs.slice(j+1),x];
+        if(parlayProb(rest).p<=after*1.005){legs.splice(j,1);perGame[y.gid]--;}}  // the new leg already covers this one
       legs.push(x);perGame[x.gid]=(perGame[x.gid]||0)+1;if(x.who)perWho[x.who]=(perWho[x.who]||0)+1;added=true;}
     if(!added)break;}
   const pr=parlayProb(legs);return {legs,p:pr.p,hours,n:o.n};
@@ -1127,8 +1129,35 @@ function renderFantasy(){
   const HY=[5,10,15].map(n=>buildTicket({n,sports:fz.sports,minP:.6,target:.7,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed}));
   html+=`<h2>High-yield tickets <small>${fz.sports.length===5?'mixed sports':fz.sports.map(s=>(allS.find(a=>a[0]===s)||[,s])[1]).join(' + ')} · bigger payouts</small></h2><div class="grid">${HY.map((T,i)=>ticketCard('hy'+[5,10,15][i],`High yield · ${[5,10,15][i]} legs`,T,'Legs around 70% each. Long shots by design, with a real payout if it lands.')).join('')}</div>
    <div class="note">Every extra leg cuts the chance of hitting. Treat 10 and 15 leggers as small-stake lottery tickets.</div>`;
+  html+=sgpHTML(allS)+megaHTML();
   $('main').innerHTML=html;wireFz();
 }
+// same game parlay: every leg from one game, same scroller and style as the fantasy parlay
+function sgpGames(){const lim=now()+7*864e5;
+  return DATA.games.filter(g=>openG(g)&&startMs(g)<=lim&&fz.sports.includes(g.sport)&&(priced(g)||(DATA.players||[]).some(p=>p.gid===g.id))).sort((a,b)=>startMs(a)-startMs(b));}
+function sgpTicket(g,n,minP,seed,relax){let T;for(const m of relax?[minP,.7,.6,.55].filter(x=>x<=minP):[minP]){T=buildTicket({n,sports:[g.sport],gids:[g.id],minP:m,propsOnly:false,perPlayer:1,perGame:n,seed});T.minP=m;if(T.legs.length>=n)break;}return T;}
+function sgpHTML(allS){
+  const games=sgpGames();if(!games.length)return `<h2>Same game parlay</h2><div class="pc"><div class="why">No open games for these sports right now.</div></div>`;
+  const n=fz.sgpN||4,minP=fz.safe==='safer'?.8:.7;let g=games.find(x=>x.id===fz.sgpG),T=g&&sgpTicket(g,n,minP,fzSeed,true);
+  if(!g){for(const x of games.slice(0,24)){const t=sgpTicket(x,n,minP,fzSeed,true);if(!T||t.legs.length>T.legs.length){g=x;T=t;}if(t.legs.length>=n)break;}}
+  const most=T.legs.length;
+  return `<h2>Same game parlay <small>every leg from one game · 2 to 10 legs</small></h2>
+   <div class="fbox"><div class="ctrl"><div><div class="big mono" id="sgpN">${n}</div><div style="font-size:13px;color:var(--dim);font-weight:700">LEGS</div></div><input type="range" id="sgpR" min="2" max="10" value="${n}" aria-label="Same game parlay legs"></div>
+   <div class="sec" style="margin-top:14px">Game</div><div style="display:flex;gap:7px;flex-wrap:wrap">${games.slice(0,24).map(x=>`<button class="chip ${x.id===g.id?'on':''}" data-sgpg="${esc(x.id)}">${sportIco(x.sport)}${esc(x.away.abbr)} @ ${esc(x.home.abbr)}</button>`).join('')}</div></div>`+
+   (most<n?`<div class="pc"><div class="pchead"><span class="pctitle">${esc(g.away.abbr)} @ ${esc(g.home.abbr)}</span></div><div class="why">This game has ${most} leg${most===1?'':'s'} at this safety level. Lower the legs or pick another game.</div></div>`
+     :ticketCard('sgp',`${n}-leg same game parlay · ${esc(g.away.abbr)} @ ${esc(g.home.abbr)}`,T,`${esc(when(g))}.${T.minP<minP?` <b>This game is short of ${Math.round(minP*100)}% legs, so some legs here are down to ${Math.round(T.minP*100)}%.</b>`:''} Legs in the same game move together (a blowout helps some legs and hurts others), so the game lines are priced jointly from the simulation.`))+
+   `<button class="btn full ghost" id="sgpNew" style="margin-bottom:6px">🔀 New same game mix</button>`;
+}
+// 20 legs: the 3 safest legs from each of the best games (2 from the last), every leg ~85% or more
+function megaTicket(){
+  const cands=[];for(const g of sgpGames()){const T=sgpTicket(g,3,.85,0);if(T.legs.length>=2)cands.push({g,T});}
+  cands.sort((a,b)=>b.T.legs.length-a.T.legs.length||b.T.p-a.T.p);
+  const legs=[];const games=[];for(const c of cands){if(legs.length>=20)break;const take=c.T.legs.slice(0,20-legs.length);legs.push(...take);games.push(c.g);}
+  return {legs,p:parlayProb(legs).p,n:20,games};}
+function megaHTML(){const M=megaTicket();
+  return `<h2>20-leg safest combo <small>3 legs from each game · ~85%+ legs</small></h2>`+
+   ticketCard('mega20','20 legs · '+M.games.length+' games',M,`The 3 likeliest legs from each of ${M.games.length} games. Each leg is about 85-95% on its own, but 20 of them together still miss most of the time. Use a small stake.`);}
+
 function forSure(){
   const games=[...new Set((DATA.players||[]).map(p=>p.gid))].map(gameById).filter(g=>g&&g.sport==='nba'&&openG(g)).sort((a,b)=>startMs(a)-startMs(b));
   const out=[];
@@ -1199,6 +1228,9 @@ function wireFz(){
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{const k=b.dataset.fs;if(k==='all'){fz.sports=['nba','nhl','soccer','nfl','ncaaf'];}else if(fz.sports.length===5){fz.sports=[k];}else{fz.sports=fz.sports.includes(k)?fz.sports.filter(x=>x!==k):[...fz.sports,k];if(!fz.sports.length)fz.sports=[k];}fzSeed=0;store.set('fz',fz);renderFantasy();});
   if($('fzSafe'))$('fzSafe').onclick=e=>{const b=e.target.closest('button');if(!b)return;fz.safe=b.dataset.v;store.set('fz',fz);renderFantasy();};
   if($('fzNew'))$('fzNew').onclick=()=>{fzSeed++;renderFantasy();};
+  const sr=$('sgpR');if(sr){sr.oninput=e=>{$('sgpN').textContent=e.target.value;};sr.onchange=e=>{fz.sgpN=+e.target.value;store.set('fz',fz);renderFantasy();};}
+  document.querySelectorAll('[data-sgpg]').forEach(b=>b.onclick=()=>{fz.sgpG=b.dataset.sgpg;store.set('fz',fz);renderFantasy();});
+  if($('sgpNew'))$('sgpNew').onclick=()=>{fzSeed++;renderFantasy();};
 }
 
 // ---------------- game sheet ----------------

@@ -24,7 +24,8 @@ const { esc } = SB;
 const MARGIN = new Set(['nba', 'nfl', 'ncaaf']), GOALS = new Set(['soccer', 'nhl']);
 const MARKETS = [['moneyline', 'Winner / moneyline'], ['spread', 'Spread'], ['total', 'Total (over/under)'], ['player_points', 'Player points'],
   ['player_rebounds', 'Player rebounds'], ['player_assists', 'Player assists'], ['btts', 'Both teams to score'], ['correct_score', 'Correct score'],
-  ['double_chance', 'Double chance'], ['draw', 'Draw'], ['player_other', 'Other player prop'], ['other', 'Other']];
+  ['double_chance', 'Double chance'], ['draw', 'Draw'], ['passing_yards', 'Passing yards'], ['rushing_yards', 'Rushing yards'], ['receiving_yards', 'Receiving yards'], ['receptions', 'Receptions'], ['anytime_td', 'Anytime touchdown'], ['player_other', 'Other player prop'], ['other', 'Other']];
+const BOOK_PROP = new Set(['passing_yards', 'rushing_yards', 'receiving_yards', 'receptions', 'anytime_td']);  // priced from the odds typed on the slip when we have no model
 const MARKET_IDS = MARKETS.map(m => m[0]);
 const STAT = { player_points: 'pts', player_rebounds: 'reb', player_assists: 'ast' };
 const GENERIC = new Set(['city', 'united', 'state', 'club', 'real', 'sporting', 'athletic', 'saint', 'team', 'the', 'fc', 'sc', 'cf', 'ac', 'de', 'la']);
@@ -170,12 +171,21 @@ function findGame(leg, teamHint) {
   return bs >= 2 ? best : null;
 }
 function sideOf(g, text) { const t = N(text); const h = teamScore(g.home, t), a = teamScore(g.away, t); return h > a ? 'H' : a > h ? 'A' : null; }
+function bookLeg(out, g, leg, mk, side, line, dec) { // a leg priced from the odds on the slip
+  out.g = g; out.bookOnly = true;
+  const sideTxt = side === 'O' ? 'over' : side === 'U' ? 'under' : '';
+  out.label = [str(leg.pick), sideTxt, line != null ? String(line) : '', marketName(mk)].filter(Boolean).join(' ');
+  out.key = `B:${mk}:${side || '-'}:${line != null ? line : '-'}:${N(str(leg.pick)).replace(/\s+/g, '-')}`;
+  out.p = Math.min(0.999, 1 / dec);
+  out.status = 'matched';
+  return out;
+}
 function matchLeg(leg) {
   const out = { status: 'none', g: null, key: null, label: '', p: 0, why: '' };
   const mk = MARKET_IDS.includes(leg.market) ? leg.market : 'other', side = /^under$/i.test(leg.side) ? 'U' : /^over$/i.test(leg.side) ? 'O' : null;
   const line = num(leg.line);
   // player props
-  if (STAT[mk] || mk === 'player_other') {
+  if (STAT[mk] || mk === 'player_other' || BOOK_PROP.has(mk)) {
     const stat = STAT[mk];
     const pr = stat ? findPlayer(leg.pick, stat) : null;
     if (pr && pr.stat === stat && line != null && side) {
@@ -186,7 +196,13 @@ function matchLeg(leg) {
       if (rp && g && (g.home.abbr === rp.team || g.away.abbr === rp.team)) { out.g = g; out.key = `L:${rp.team}-${rp.slug}:${Math.floor(line) + 1}`; }
       else out.why = rp ? 'Player found, but his game is not on the board' : 'Player not in our data';
     } else out.why = mk === 'player_other' ? 'We only price points, rebounds and assists' : !side ? 'Pick over or under' : line == null ? 'Add the line' : 'Player not in our props';
-    if (!out.key) { out.g = out.g || findGame(leg); out.status = out.g ? 'game' : 'none'; return out; }
+    if (!out.key) {
+      const g = out.g || findGame(leg), dec = bookDec(leg.odds);
+      if (g && dec) return bookLeg(out, g, leg, mk, side, line, dec);  // no model: the book's price on the slip prices it
+      out.g = g; out.status = g ? 'game' : 'none';
+      if (g && !dec && (BOOK_PROP.has(mk) || mk === 'player_other')) out.why = 'No model for this prop. Type the book\'s odds (e.g. +150) to price it.';
+      return out;
+    }
   } else {
     const g = findGame(leg); out.g = g;
     if (!g) { out.why = findPM(leg) ? 'On Polymarket, but not in our games feed yet. Try again after the feed refreshes.' : 'Game not found in our games feed or on Polymarket'; return out; }
@@ -230,7 +246,7 @@ function jointFor(rows) { // model chance that all matched legs hit, with same-g
   for (const [gid, rs] of byG) {
     const g = rs[0].g, indep = rs.reduce((s, r) => s * r.p, 1); let gp = indep;
     if (rs.length > 1) {
-      if (GOALS.has(g.sport)) { try { gp = SB.probOf(g, rs.map(r => r.key)); } catch (e) { gp = indep; } }
+      if (GOALS.has(g.sport) && !rs.some(r => /^B:/.test(r.key))) { try { gp = SB.probOf(g, rs.map(r => r.key)); } catch (e) { gp = indep; } }
       else if (MARGIN.has(g.sport)) { const sc = rs.filter(r => r.key.startsWith('SC:')), other = rs.filter(r => !r.key.startsWith('SC:'));
         if (sc.length > 1) { const S = SB.simGame(g), F = sc.map(r => scCore(r.key)); let win = 0, tot = 0;
           for (let i = 0; i < S.N; i++) { let ok = true, push = false; for (const f of F) { const v = f(S.mg[i], S.tt[i]); if (v === null) { push = true; break; } if (v === 0) { ok = false; break; } } if (push) continue; tot++; if (ok) win++; }
@@ -327,7 +343,7 @@ const PROMPT = `This image is a screenshot of a sports bet slip from a sportsboo
 Read it exactly as shown. Do not guess values that are not visible.
 Reply with ONLY one JSON object:
 {"book": string|null, "betType": "parlay"|"single"|"sgp"|"teaser"|"other", "stake": number|null, "totalOdds": string|null (exactly as printed, e.g. "+650" or "7.50"), "payout": number|null (total return or to-win as printed),
- "legs": [{"sport": "nba"|"nfl"|"ncaaf"|"nhl"|"soccer"|"mlb"|"mma"|"other", "event": "Away Team @ Home Team or Team A vs Team B as printed", "market": "moneyline"|"spread"|"total"|"player_points"|"player_rebounds"|"player_assists"|"player_other"|"btts"|"correct_score"|"double_chance"|"draw"|"other", "selection": "the pick as printed", "team": string|null, "player": string|null, "side": "over"|"under"|null, "line": number|null, "odds": string|null (as printed), "confidence": number between 0 and 1}],
+ "legs": [{"sport": "nba"|"nfl"|"ncaaf"|"nhl"|"soccer"|"mlb"|"mma"|"other", "event": "Away Team @ Home Team or Team A vs Team B as printed", "market": "moneyline"|"spread"|"total"|"player_points"|"player_rebounds"|"player_assists"|"passing_yards"|"rushing_yards"|"receiving_yards"|"receptions"|"anytime_td"|"player_other"|"player_other"|"btts"|"correct_score"|"double_chance"|"draw"|"other", "selection": "the pick as printed", "team": string|null, "player": string|null, "side": "over"|"under"|null, "line": number|null, "odds": string|null (as printed), "confidence": number between 0 and 1}],
  "notes": "anything unclear, or empty"}
 It may be a Polymarket screenshot (one position, a combo/parlay, or the portfolio list). Then book = "Polymarket", every market (or combo leg) is a leg, selection = the outcome bought (Yes / No / a team), odds = the average price exactly as shown in cents (for example "63¢"), stake = the cost, payout = the "to win" or shares value if shown. A player market like "LeBron James: Points O/U 24.5" bought Yes is market player_points, side over, line 24.5; bought No is side under.
 If the image is not a bet slip, reply {"error": "not a bet slip"}.`;
@@ -446,7 +462,7 @@ function results() {
     <div class="sc-tr sc-tf" role="row"><span role="cell"><b>Parlay${A.full ? '' : ` (${A.M.length} priced legs)`}</b></span><span role="cell" class="mono">${A.decCmp ? esc(SB.fmtPrice(A.decCmp)) : '—'}</span><span role="cell" class="mono">${A.M.length ? pctS(A.p) : '—'}</span><span role="cell" class="mono">${A.M.length ? esc(SB.fmtOdds(A.p)) : '—'}</span><span role="cell" class="mono ${A.ev == null ? '' : A.ev >= 0.03 ? 'sc-pos' : A.ev <= -0.03 ? 'sc-neg' : ''}">${A.ev == null ? '—' : signPct(A.ev)}</span></div>
   </div><div class="note">Edge = how much better (+) or worse (−) the book's price is than our fair price. ${A.M.length ? `Bet only at <b class="mono">${esc(SB.fmtOdds(A.p))}</b> or better (${esc(SB.fmtPrice(1.05 / A.p))} = a 5% edge).` : ''}</div></div>`;
   const legsA = `<h2>2 · The legs <small>hit chance, links and injuries</small></h2><div class="pc sc-legs">${A.M.map((r, i) => `<div class="leg"><span class="legdot ${r === A.weakest && A.M.length > 1 ? 'base' : ''}">${i + 1}</span><div class="legtxt"><b>${esc(r.label)}${r === A.weakest && A.M.length > 1 ? ' <span class="badge b-live">WEAKEST</span>' : ''}</b>
-      <span>${esc(`${r.g.away.abbr} @ ${r.g.home.abbr}`)} · ${esc(SB.when(r.g))}</span>${r.inj ? `<em class="sc-inj">🚑 ${esc(r.inj)}</em>` : ''}</div><span class="legp mono">${pctS(r.p, 0)}<small>${esc(SB.fmtOdds(r.p))}</small></span></div>`).join('') || '<div class="why">No priced legs yet.</div>'}
+      <span>${esc(`${r.g.away.abbr} @ ${r.g.home.abbr}`)} · ${esc(SB.when(r.g))}</span>${r.inj ? `<em class="sc-inj">🚑 ${esc(r.inj)}</em>` : ''}${r.bookOnly ? '<em class="sc-inj">Priced from the odds on your slip: no model for this prop yet</em>' : ''}</div><span class="legp mono">${pctS(r.p, 0)}<small>${esc(SB.fmtOdds(r.p))}</small></span></div>`).join('') || '<div class="why">No priced legs yet.</div>'}
     ${A.corr.map(c => `<div class="note">${esc(`${c.g.away.abbr} @ ${c.g.home.abbr}`)}: ${c.n} legs from the same game, ${c.ratio > 1.02 ? 'they tend to hit together' : c.ratio < 0.98 ? 'they work against each other' : 'close to unrelated'} (${pctS(A.groups.find(G => G.g === c.g).p)} together vs ${pctS(A.groups.find(G => G.g === c.g).indep)} if unrelated).</div>`).join('')}</div>`;
   const why = `<h2>3 · Why it will or won't hit</h2><div class="sc-why"><div class="pc"><div class="pctitle sc-wt sc-pos">Why it can hit</div><ul>${R.can.map(x => `<li>${esc(x)}</li>`).join('') || '<li>Nothing stands out in its favour.</li>'}</ul></div>
     <div class="pc"><div class="pctitle sc-wt sc-neg">Why it might not</div><ul>${R.not.map(x => `<li>${esc(x)}</li>`).join('') || '<li>No clear weak spot.</li>'}</ul></div></div>`;

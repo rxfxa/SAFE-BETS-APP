@@ -28,7 +28,10 @@ ESPN = {'stade rennais': 'rennes', 'paris saint germain': 'paris saint germain',
         'brighton and hove albion': 'brighton hove albion', 'wolves': 'wolverhampton wanderers', 'bournemouth': 'afc bournemouth',
         'deportivo alaves': 'alaves', 'rcd mallorca': 'mallorca', 'rcd espanyol': 'espanyol', 'athletic bilbao': 'athletic club', 'cadiz': 'cadiz',
         'fc st pauli': 'st pauli', 'hamburger sv': 'hamburg', 'koln': 'koln', 'fc cologne': 'koln', '1 fc koln': 'koln', 'nec': 'nec nijmegen',
-        'psv': 'psv eindhoven', 'az': 'az alkmaar', 'paris fc': 'paris fc', 'le havre ac': 'le havre', 'ac ajaccio': 'ajaccio'}
+        'psv': 'psv eindhoven', 'az': 'az alkmaar', 'paris fc': 'paris fc', 'le havre ac': 'le havre', 'ac ajaccio': 'ajaccio',
+        # the feed's (data.json) names
+        'inter milano': 'internazionale', '1 fc cologne': 'koln', 'stade rennais fc': 'rennes', 'rc deportivo de a coruna': 'la coruna',
+        'deportivo la coruna': 'la coruna', 'deportivo de la coruna': 'la coruna', 'espanyol barcelona': 'espanyol', 'rcd espanyol barcelona': 'espanyol'}
 
 
 def nk(s):
@@ -42,18 +45,21 @@ def toks(s):
 
 def fd_match(name, fd_names, min_score=0.75):
     """The football-data name for this club, or None. Every word of the shorter name must match a word of the other
-    exactly, after the aliases above)."""
+    (exactly, after the aliases above). Deterministic: names are tried in sorted order, and a tie between two clubs
+    (e.g. 'Espanyol Barcelona' against both Espanol and Barcelona without its alias) gives None, never a coin flip."""
     a = toks(ESPN.get(nk(name), name))
-    best, bs = None, 0.0
-    for f in fd_names:
+    best, bs, tie = None, 0.0, False
+    for f in sorted(fd_names):
         b = toks(ALIAS.get(nk(f), f))
         if not a or not b:
             continue
         x, y = (a, b) if len(a) <= len(b) else (b, a)
         hit = sum(1 for t in x if t in y)
         sc = hit / len(x) - 0.01 * abs(len(a) - len(b))
-        if nk(name) == nk(ALIAS.get(nk(f), f)):
+        if nk(ESPN.get(nk(name), name)) == nk(ALIAS.get(nk(f), f)):
             sc = 2
         if sc > bs:
-            bs, best = sc, f
-    return best if bs >= min_score else None
+            bs, best, tie = sc, f, False
+        elif sc == bs and sc > 0:
+            tie = True
+    return best if bs >= min_score and not tie else None

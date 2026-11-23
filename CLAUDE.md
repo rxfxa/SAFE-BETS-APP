@@ -32,7 +32,8 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - close games with an edge (home side, opponent injuries).
 - **📅 Weekend Patterns (pattern.js), three views:**
   - **🔮 Next weekend:**
-    - crazy-weekend meter: the exact chance that 40%+ of the next round's big favourites (60%+) drop points, vs a typical round of the same leagues; finished games count as they ended;
+    - crazy-weekend meter: the exact chance that 40%+ of the round's big favourites (60%+) drop points, vs a typical round of the same leagues with the same number of big favourites;
+    - a round, once forecast, is kept until it ends: games that kick off keep their pre-match leg, finished ones count as they ended (the feed's finished games have no prices);
     - likeliest to slip (research estimate, reasons with what the research found about each);
     - unbeaten runs on the line;
     - parlays: 3-upset lotto, full chaos 5, unbeaten runs end, the steady weekend.
@@ -49,6 +50,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 
 ## Every parlay card
 - **Swap legs (⇄):** 3+ substitutes of about the same chance that don't clash with the card. No player twice, no two players on one team for one stat, and the card's own rules hold. Kept per card for the day, with undo.
+  When a crowded card leaves fewer than 3, the list adds the same player at another line or another exact score in the same game (ranked lower).
 - **🎲 500,000 runs:** game by game. Player legs are benched in simulated blowouts, and teammates share a team factor (correlation 0.2). Re-runs after a swap.
 - **▶ Watch live** opens the Simulator.
 - **★ Rec next to every leg** (and ⇄): the swap list puts one RECOMMENDED pick on top. Every option says why: value, how it fits the card (assists feed a teammate's points), close game or blowout risk, recent box scores, and lessons (kinds of legs that keep missing are flagged and ranked down).
@@ -101,7 +103,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 35 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 36 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -154,4 +156,11 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Points legs preferred over assists / rebounds (owner's call; NBA picks went from 3 to 7 points legs of 14).
   - Weekend Patterns rebuilt on real research: 6 seasons, 7 leagues, European fixtures, and a crazy-weekend forecast.
     - Honest result: nothing predicts a crazy weekend beyond the odds.
-    - Nov 28 round: 19% chance vs 18% typical; 12 big favourites.
+    - Nov 28 round: 19% chance vs 20% for a typical round of that size; 12 big favourites.
+    - An independent review (4 angles, adversarially verified) found 9 real problems, all fixed:
+      - the round shrank each weekend morning;
+      - the default view would crash once a forecast game finished;
+      - four feed club names didn't match, and Espanyol could randomly map to Barcelona (Bayern's run is 10, not 9);
+      - "typical" compared rounds of different sizes;
+      - smaller ones: the 'late' cause in a part-played season, rest days, price buttons on started games, duplicate cards.
+  - Swaps: crowded cards now always offer 3+ (today's exact-score cards and an SGP leg had 2).

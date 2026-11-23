@@ -35,6 +35,7 @@ args = sys.argv[1:]
 opt = lambda k, d: args[args.index(k) + 1] if k in args else d
 SRC = args[0] if args and not args[0].startswith('--') else '.work/fdhist'
 FEED, PAT, EURO, SIMS = opt('--feed', 'data.json'), opt('--pattern', 'pattern.json'), opt('--euro', 'tools/euro_games.json'), int(opt('--sims', 20000))
+MIN_GAMES = int(opt('--min', 1000))
 NOW = datetime.fromisoformat(opt('--now', datetime.now(timezone.utc).isoformat()).replace('Z', '+00:00'))
 NAMES = {'E0': 'Premier League', 'SP1': 'La Liga', 'I1': 'Serie A', 'D1': 'Bundesliga', 'F1': 'Ligue 1', 'N1': 'Eredivisie', 'P1': 'Primeira Liga'}
 LG = {v: k for k, v in NAMES.items()}
@@ -83,7 +84,7 @@ for f in sorted(glob.glob(os.path.join(SRC, '*_*.csv'))):
         s = sum(inv)
         games.append({'season': season, 'lg': lg, 'date': d, 'home': r['HomeTeam'], 'away': r['AwayTeam'], 'hg': hg, 'ag': ag, 'p': [x / s for x in inv], 'dec': o})
 games.sort(key=lambda g: (g['date'], g['lg']))
-if len(games) < 1000:
+if len(games) < MIN_GAMES:
     sys.exit(f'only {len(games)} games: download more seasons first')
 CUR = max(g['season'] for g in games)
 teams_by_lg = defaultdict(set)
@@ -122,10 +123,8 @@ def euro_gap(team, d):
 
 
 # ---------- per team, in order: rest, runs, game number in the season ----------
-state, count, total = {}, defaultdict(int), defaultdict(int)
-for g in games:
-    total[(g['season'], g['lg'], g['home'])] += 1
-    total[(g['season'], g['lg'], g['away'])] += 1
+state, count = {}, defaultdict(int)
+sched = lambda season, lg: 2 * (len(teams_by_lg[(season, lg)]) - 1)  # games in a full season: home and away against every other team
 EMPTY = {'last': None, 'unb': 0, 'win': 0, 'loss': 0, 'form': ''}
 
 
@@ -142,7 +141,7 @@ for g in games:
         count[k] += 1
         g[side + '_rest'] = (g['date'] - st['last']).days if st['last'] else None
         g[side + '_unb'], g[side + '_win'], g[side + '_loss'] = st['unb'], st['win'], st['loss']
-        g[side + '_n'], g[side + '_left'] = count[k], total[k] - count[k]
+        g[side + '_n'], g[side + '_left'] = count[k], sched(g['season'], g['lg']) - count[k]
         g[side + '_eb'], g[side + '_ea'] = euro_gap(g[side], g['date'])
     for side in ('home', 'away'):
         mine, theirs = (g['hg'], g['ag']) if side == 'home' else (g['ag'], g['hg'])
@@ -220,14 +219,19 @@ def logreg(X, y):
 y = np.array([1.0 if g['fail'] else 0.0 for g in big])
 lq = np.array([logit(1 - g['pf']) for g in big])
 XC = np.array([g['x'] for g in big])
-X = np.column_stack([np.ones(len(big)), lq, XC])
+# causes seen in fewer than 30 big-favourite games (or in nearly all of them) can't be estimated: left out of the regression
+est = [j for j in range(len(TESTS)) if 30 <= XC[:, j].sum() <= len(big) - 30]
+X = np.column_stack([np.ones(len(big)), lq] + [XC[:, j] for j in est])
 beta, se = logreg(X, y)
+col = {j: 2 + i for i, j in enumerate(est)}
 strata = []
 for j, (k, d, f) in enumerate(TESTS):
     s = fstat([g for g in big if g['x'][j]], k, d)
     if not s:
         continue
-    c, e = beta[2 + j], se[2 + j]
+    if j not in col:
+        continue
+    c, e = beta[col[j]], se[col[j]]
     s.update({'or': round(math.exp(c), 3), 'orLo': round(math.exp(c - 1.96 * e), 3), 'orHi': round(math.exp(c + 1.96 * e), 3), 'pReg': round(math.erfc(abs(c / e) / math.sqrt(2)), 5)})
     strata.append(s)
 # Holm (step-down, monotone): a cause holds only if it survives correction for testing them all
@@ -335,6 +339,12 @@ for k in FLAGS:
 
 # ---------- now: current runs (results files, then the feed's finished games) ----------
 try:
+    pat = json.load(open(PAT))
+except (OSError, ValueError):
+    pat = {}
+prevR = pat.get('research') or {}
+prevF = prevR.get('forecast') or {}
+try:
     feed = json.load(open(FEED))
 except (OSError, ValueError):
     feed = {'games': []}
@@ -354,30 +364,63 @@ for g in games:
     if g['season'] == CUR:
         last_csv[g['lg']] = max(last_csv[g['lg']] or g['date'], g['date'])
 fd_games = [g for g in feed.get('games', []) if g.get('sport') == 'soccer' and g.get('comp') in LG]
+sdate = lambda g: datetime.fromisoformat(g['start'].replace('Z', '+00:00'))
+unmatched = sorted({f"{g['comp']}: {g[s]['name']}" for g in fd_games for s in ('home', 'away') if not ft(g['comp'], g[s]['name'])})
 added = 0
 for g in sorted(fd_games, key=lambda g: g['start']):
     sc = g.get('score') or {}
     if g.get('status') != 'closed' or sc.get('home') is None or sc.get('away') is None:
         continue
-    lg, d = LG[g['comp']], datetime.fromisoformat(g['start'].replace('Z', '+00:00')).date()
-    h, a = ft(g['comp'], g['home']['name']), ft(g['comp'], g['away']['name'])
-    if not h or not a or (last_csv[lg] and d <= last_csv[lg]):
+    lg, d = LG[g['comp']], sdate(g).date()
+    if last_csv[lg] and d <= last_csv[lg]:
         continue
+    h, a = ft(g['comp'], g['home']['name']), ft(g['comp'], g['away']['name'])
     hg, ag = int(sc['home']), int(sc['away'])
-    play((CUR, lg, h), 'W' if hg > ag else 'D' if hg == ag else 'L', d)
-    play((CUR, lg, a), 'W' if ag > hg else 'D' if hg == ag else 'L', d)
+    if h:
+        play((CUR, lg, h), 'W' if hg > ag else 'D' if hg == ag else 'L', d)
+    if a:
+        play((CUR, lg, a), 'W' if ag > hg else 'D' if hg == ag else 'L', d)
     added += 1
+# every league fixture in the feed (any status), so rest counts a game still to be played before the forecast game
+fixt = defaultdict(list)
+for g in fd_games:
+    for s in ('home', 'away'):
+        t = ft(g['comp'], g[s]['name'])
+        if t:
+            fixt[(LG[g['comp']], t)].append(sdate(g).date())
+
+
+def last_before(lg, team, st, played):
+    c = [d for d in fixt.get((lg, team), []) if d < st] + ([played] if played else [])
+    return max(c) if c else None
+
+
+def dist_of(qs):
+    """exact chance of each number of fails (independent games)"""
+    d = np.array([1.0])
+    for q in qs:
+        d = np.concatenate([d * (1 - q), [0.0]]) + np.concatenate([[0.0], d * q])
+    return d
 cur = lambda lg, team: state.get((CUR, lg, team))
 
 # ---------- forecast: the next full round in the feed ----------
-up = [g for g in fd_games if g.get('status') != 'closed' and g.get('prob') and datetime.fromisoformat(g['start'].replace('Z', '+00:00')) > NOW]
+# The round is every Friday-Monday feed game of these leagues (finished ones too), chosen while any of its games is still to
+# finish. Games that have kicked off keep the legs (pre-match prices, reasons) of the last run before they started, and
+# count as they ended; only games still to start are re-priced. A started game with no earlier leg can't be priced.
 by_round = defaultdict(list)
-for g in up:
-    k = wkey(datetime.fromisoformat(g['start'].replace('Z', '+00:00')).date())
+for g in fd_games:
+    k = wkey(sdate(g).date())
     if k:
         by_round[k].append(g)
-rk = next((k for k in sorted(by_round) if len(by_round[k]) >= 8), None)
-fc, runsNow = None, []
+alive = lambda g: g.get('status') != 'closed' and sdate(g) > NOW - timedelta(hours=6)
+ahead = lambda k: sum(1 for g in by_round[k] if g.get('status') != 'closed' and sdate(g) > NOW)
+# stay on a round once it has been forecast (until it is over); otherwise the next round with 8+ games still to start
+rk = next((k for k in sorted(by_round) if len(by_round[k]) >= 8 and any(alive(g) for g in by_round[k])
+           and (prevF.get('round') == k.isoformat() or ahead(k) >= 8)), None)
+same = bool(rk and prevF.get('round') == rk.isoformat())
+carry = {l['gid']: l for l in (prevF.get('legs') or [])} if same else {}
+carryRuns = [r for r in (prevR.get('runsNow') or [])] if same else []
+fc, runsNow, missing = None, [], 0
 WHY = {'postBreak': 'first game after the international break', 'shortRest': 'short rest', 'euroBefore': 'played in Europe {eb} days before',
        'euroAfter': 'European game {ea} days after', 'dogEuroBefore': 'underdog played in Europe {deb} days before', 'christmas': 'Christmas fixtures',
        'early': 'start of season', 'late': 'end of season', 'favUnbeaten10': 'unbeaten in {funb}', 'favWin5': 'won {fwin} in a row',
@@ -386,7 +429,24 @@ WHY = {'postBreak': 'first game after the international break', 'shortRest': 'sh
 if rk:
     legs, lgs = [], set()
     for g in by_round[rk]:
-        P0 = g['prob']
+        if g.get('status') == 'closed' or sdate(g) <= NOW:  # kicked off: the pre-match leg from the last run, and its result
+            runsNow.extend(r for r in carryRuns if r['gid'] == g['id'])
+            L = carry.get(g['id'])
+            if not L:
+                missing += 1
+                continue
+            L, sc = dict(L), g.get('score') or {}
+            L.pop('result', None)
+            L['frozen'] = True
+            if g.get('status') == 'closed' and sc.get('home') is not None and sc.get('away') is not None:
+                r = 'home' if sc['home'] > sc['away'] else 'away' if sc['away'] > sc['home'] else 'draw'
+                L['result'] = 'won' if r == L['favSide'] else 'failed'
+            legs.append(L)
+            lgs.add(LG[g['comp']])
+            continue
+        P0 = g.get('prob')
+        if not P0:
+            continue
         tot = (P0.get('home') or 0) + (P0.get('draw') or 0) + (P0.get('away') or 0)
         if tot <= 0:
             continue
@@ -410,7 +470,8 @@ if rk:
         favT, dogT = g[fs], g[ds]
         fk, dk = ft(g['comp'], favT['name']), ft(g['comp'], dogT['name'])
         fst, dst = (cur(LG[g['comp']], fk) if fk else None), (cur(LG[g['comp']], dk) if dk else None)
-        rest = (st - fst['last']).days if fst and fst['last'] else None
+        lastG = last_before(LG[g['comp']], fk, st, fst['last'] if fst else None) if fk else None
+        rest = (st - lastG).days if lastG else None
         eb, ea = euro_gap(fk, st) if fk else (None, None)
         deb, _ = euro_gap(dk, st) if dk else (None, None)
         x = {'postBreak': (rest or 0) >= 12 and not inr(eb, 1, 11), 'shortRest': inr(rest, 1, 3), 'euroBefore': inr(eb, 1, 4), 'euroAfter': inr(ea, 1, 4),
@@ -427,40 +488,44 @@ if rk:
                      'priced': round(1 - pf, 4), 'model': round(model_q(pf, flags), 4), 'flags': flags, 'reasons': reasons,
                      'form': fst['form'] if fst else None, 'dogForm': dst['form'] if dst else None, 'matched': bool(fk and dk)})
     if legs:
-        Q = np.array([l['model'] for l in legs])
-        Q0 = np.array([l['priced'] for l in legs])
-        N = 100000
-        f, f0 = rng.random((N, len(Q))) < Q, rng.random((N, len(Q0))) < Q0
-        nf = f.sum(axis=1)
-        # a typical round of these leagues: rounds of the past seasons, at the model's chances
+        res = lambda l: None if 'result' not in l else (1.0 if l['result'] == 'failed' else 0.0)
+        Q = np.array([res(l) if res(l) is not None else l['model'] for l in legs])
+        Q0 = np.array([res(l) if res(l) is not None else l['priced'] for l in legs])
+        n, need = len(legs), math.ceil(CRAZY * len(legs) - 1e-9)
+        d, d0 = dist_of(Q), dist_of(Q0)
+        # a typical round with the same number of big favourites: n favourites drawn from these leagues' past big
+        # favourites (research estimate, and prices alone), and how often real rounds of about that size went crazy
+        pool = [g for g in big if g['lg'] in lgs]
+        qa, pa_ = np.array([cal_q(g) for g in pool]), np.array([1 - g['pf'] for g in pool])
+        idx = rng.integers(0, len(pool), size=(20000, n))
+        u = rng.random((20000, n))
+        typ, typP = float(np.mean((u < qa[idx]).sum(axis=1) >= need)), float(np.mean((u < pa_[idx]).sum(axis=1) >= need))
         Rl = round_stats(lgs)
-        typ = []
-        for _, v in Rl:
-            q = np.array([cal_q(g) for g in v])
-            ff = rng.random((4000, len(q))) < q
-            typ.append(float(np.mean(ff.mean(axis=1) >= CRAZY)))
-        real_l = [sum(g['fail'] for g in v) / len(v) for _, v in Rl]
-        fc = {'round': rk.isoformat(), 'leagues': sorted(NAMES[l] for l in lgs), 'games': len(by_round[rk]), 'favs': len(legs), 'expFails': round(float(Q.sum()), 2),
-              'expFailsPriced': round(float(Q0.sum()), 2), 'pCrazy': round(float(np.mean(nf / len(Q) >= CRAZY)), 4), 'pCrazyPriced': round(float(np.mean(f0.mean(axis=1) >= CRAZY)), 4),
-              'typical': round(float(np.mean(typ)), 4), 'typicalReal': round(float(np.mean(np.array(real_l) >= CRAZY)), 4), 'typicalRounds': len(Rl),
-              'dist': [round(float(np.mean(nf == i)), 4) for i in range(len(Q) + 1)], 'pAllWin': round(float(np.mean(nf == 0)), 4),
-              'legs': sorted(legs, key=lambda l: -l['model']), 'heldCauses': [TESTS[j][0] for j in held_idx]}
+        for w in (2, 4, 8):
+            near = [v for _, v in Rl if abs(len(v) - n) <= w]
+            if len(near) >= 15:
+                break
+        realN = [sum(g['fail'] for g in v) >= math.ceil(CRAZY * len(v) - 1e-9) for v in near]
+        fc = {'round': rk.isoformat(), 'leagues': sorted(NAMES[l] for l in lgs), 'games': len(by_round[rk]), 'favs': n, 'need': need, 'expFails': round(float(Q.sum()), 2),
+              'expFailsPriced': round(float(Q0.sum()), 2), 'pCrazy': round(float(d[need:].sum()), 4), 'pCrazyPriced': round(float(d0[need:].sum()), 4),
+              'typical': round(typ, 4), 'typicalPriced': round(typP, 4), 'typicalReal': round(float(np.mean(realN)), 4) if realN else None, 'typicalRounds': len(realN), 'typicalWindow': w,
+              'dist': [round(float(x), 4) for x in d], 'pAllWin': round(float(d[0]), 4),
+              'done': sum(1 for l in legs if 'result' in l), 'failed': sum(1 for l in legs if l.get('result') == 'failed'), 'carried': sum(1 for l in legs if l.get('frozen')),
+              'startedUnpriced': missing, 'legs': sorted(legs, key=lambda l: -l['model']), 'heldCauses': [TESTS[j][0] for j in held_idx]}
 runsNow.sort(key=lambda r: -r['unbeaten'])
 
 out = {'updated': NOW.strftime('%Y-%m-%dT%H:%M:%SZ'), 'seasons': sorted({g['season'] for g in games}), 'leagues': sorted({NAMES[g['lg']] for g in games}),
-       'games': len(games), 'bigFavs': len(big), 'favThreshold': FAV, 'euroGames': len(EG), 'euroTeams': EURO_TEAMS, 'feedResultsAdded': added,
+       'games': len(games), 'bigFavs': len(big), 'favThreshold': FAV, 'euroGames': len(EG), 'euroTeams': EURO_TEAMS, 'feedResultsAdded': added, 'unmatchedFeedNames': unmatched,
        'resultsThrough': max(g['date'] for g in games).isoformat(), 'overall': overall,
        'calib': {'a': round(float(cb[0]), 4), 'b': round(float(cb[1]), 4), 'buckets': buckets},
        'model': {'a': round(float(fb[0]), 4), 'b': round(float(fb[1]), 4), 'causes': {TESTS[j][0]: round(float(fb[2 + i]), 4) for i, j in enumerate(held_idx)}}, 'causes': strata, 'months': months,
        'unbeatenRuns': runs, 'rounds': roundsInfo, 'craziest': crazy, 'crazyTraits': traits, 'runsNow': runsNow[:12], 'forecast': fc,
        'source': 'football-data.co.uk results with closing odds (Pinnacle, else market average), margin removed; European games from ESPN scoreboards'}
-try:
-    pat = json.load(open(PAT))
-except (OSError, ValueError):
-    pat = {}
 pat['research'] = out
 json.dump(pat, open(PAT, 'w'), separators=(',', ':'))
 print(f"{len(games)} games, {len(big)} big favourites, seasons {out['seasons'][0]}..{out['seasons'][-1]}, results to {out['resultsThrough']} (+{added} from the feed); {len(EG)} European games, {EURO_TEAMS} of our teams")
+if unmatched:
+    print('WARNING feed names with no football-data match (their results are not counted):', '; '.join(unmatched))
 print(f"overall fails {overall['fails']} vs {overall['expected']} priced (z {overall['z']}); calibration a {cb[0]:.3f} b {cb[1]:.3f}")
 for s in sorted(strata, key=lambda s: s['pReg']):
     print(f"  {s['key']:14} n {s['n']:5} fails {s['fails']:4} vs {s['expected']:7} ratio {s['ratio']:.2f} | OR {s['or']:.2f} [{s['orLo']:.2f}-{s['orHi']:.2f}] p {s['pReg']:.4f} holm {s['pHolm']:.3f} {'HOLDS' if s['holds'] else ''}")
@@ -471,6 +536,6 @@ print('traits:', [(t['key'], t['crazy'], t['other']) for t in traits])
 print('craziest:', [(c['date'], c['failed'], c['favs'], c['z']) for c in crazy[:5]])
 print('runs now:', [(r['team'], r['unbeaten'], r['pLose']) for r in runsNow[:8]])
 if fc:
-    print(f"forecast {fc['round']} ({', '.join(fc['leagues'])}): {fc['favs']} big favourites, exp fails {fc['expFails']} (priced {fc['expFailsPriced']}); P(crazy) {fc['pCrazy']} (priced {fc['pCrazyPriced']}), typical {fc['typical']} (real {fc['typicalReal']})")
+    print(f"forecast {fc['round']} ({', '.join(fc['leagues'])}): {fc['favs']} big favourites ({fc['done']} finished, {fc['failed']} failed, {fc['carried']} carried, {fc['startedUnpriced']} started unpriced), exp fails {fc['expFails']} (priced {fc['expFailsPriced']}); P(crazy {fc['need']}+) {fc['pCrazy']} (priced {fc['pCrazyPriced']}), typical {fc['typical']} (priced {fc['typicalPriced']}, real {fc['typicalReal']} of {fc['typicalRounds']} rounds)")
     for l in fc['legs'][:6]:
         print('   ', l['fav'], 'vs', l['dog'], l['priced'], '->', l['model'], [r['text'] for r in l['reasons']])

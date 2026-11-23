@@ -257,6 +257,12 @@ data = {'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'w
         'sources': {'csv': 'football-data.co.uk 2026-27 results with closing odds', 'feedAfter': csv_end, 'leagues': sorted(set(g['comp'] for g in games))},
         'favThreshold': FAV, 'bets': bets, 'sims': SIMS, 'tests': tests, 'significant': sig, 'verdict': verdict, 'weeks': weeks, 'calibration': cal, 'drawByGap': drawByGap,
         'totals': {'favs': int(isfav.sum()), 'favFails': int(real['totfail']), 'favFailsExp': round(float(np.sum(np.where(isfav, 1 - favp, 0))), 1), 'draws': int(real['totdraw']), 'drawsExp': round(float(P[:, 1].sum()), 1)}}
+try:  # keep the 6-season research block (tools/weekend_research.py): its forecast carries a round's pre-match legs across runs
+    old = json.load(open(OUT))
+    if isinstance(old, dict) and 'research' in old:
+        data['research'] = old['research']
+except (OSError, ValueError):
+    pass
 json.dump(data, open(OUT, 'w'), separators=(',', ':'))
 print(f'{N} games, {B} rounds ({start}..{end}); favourites 60%+: {int(isfav.sum())}, failed {int(real["totfail"])} vs {data["totals"]["favFailsExp"]} priced; draws {int(real["totdraw"])} vs {data["totals"]["drawsExp"]} priced')
 for k, t in tests.items():

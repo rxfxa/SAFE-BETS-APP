@@ -49,11 +49,15 @@
     const R = PT && PT.research, F = R && R.forecast; if (!F) return null;
     const legs = [];
     for (const L of F.legs) {
-      const g = SB.gameById(L.gid); if (!g || (SB.isVoid && SB.isVoid(g))) continue;
-      const done = SB.isFinal(g), f = favOf(g);
-      let priced = L.priced, model = L.model, res = null;
-      if (done && g.score) { const h = g.score.home, a = g.score.away, r = h > a ? 'home' : h < a ? 'away' : 'draw'; res = r !== L.favSide; }
-      else if (f && ((f.side === 'H') === (L.favSide === 'home'))) { priced = 1 - f.p; model = modelQ(R, f.p, L.flags); }
+      const g = SB.gameById(L.gid);
+      if (g && SB.isVoid && SB.isVoid(g)) continue;
+      if (!g && !L.result) continue;  // gone from the feed with no result
+      let priced = L.priced, model = L.model, res = L.result ? L.result === 'failed' : null;
+      // finished games count as they ended (the feed's finished games carry no prices, so read the score first)
+      if (g && SB.isFinal(g) && g.score) { const h = g.score.home, a = g.score.away, r = h > a ? 'home' : h < a ? 'away' : 'draw'; res = r !== L.favSide; }
+      // games still to start follow today's prices; games under way keep their pre-match chance
+      else if (res == null && g && g.prob && !SB.started(g)) { const f = favOf(g); if (f && (f.side === 'H') === (L.favSide === 'home')) { priced = 1 - f.p; model = modelQ(R, f.p, L.flags); } }
+      const done = res != null;
       legs.push({ ...L, g, done, res, priced, model, q: res == null ? model : res ? 1 : 0, q0: res == null ? priced : res ? 1 : 0 });
     }
     if (!legs.length) return null;
@@ -67,18 +71,19 @@
   const swapSide = s => (s === 'home' ? 'away' : 'home');
   function nextCards(X) {
     if (!X) return [];
-    const open = X.legs.filter(l => !l.done && SB.openG(l.g));
+    const open = X.legs.filter(l => l.g && !l.done && SB.openG(l.g));
     const card = (id, title, legs, sub) => { legs = legs.filter(l => l.p > 0); return legs.length >= 2 ? { id, title, sub, legs } : null; };
     const against = l => leg(l.g, l.favSide === 'home' ? 'DCX2' : 'DC1X', `${l.dog} or draw (vs ${l.fav})`);
-    const slip = [...open].sort((a, b) => b.model - a.model);
-    const steady = [...open].sort((a, b) => a.model - b.model);
+    const slip = [...open].sort((a, b) => b.model - a.model), up3 = slip.length >= 3 ? slip.slice(0, 3) : [];
+    const steady = open.filter(l => !up3.includes(l)).sort((a, b) => a.model - b.model);  // never the same games as the 3-upset lotto
     const R = PT.research, runs = (R.runsNow || []).filter(r => { const g = SB.gameById(r.gid); return g && SB.openG(g); });
     const seen = new Set(), runLegs = [];
     for (const r of runs) { if (runLegs.length >= 3 || seen.has(r.gid)) continue; seen.add(r.gid); const g = SB.gameById(r.gid); runLegs.push(leg(g, r.side === 'home' ? 'A' : 'H', `${g[swapSide(r.side)].name} beat ${r.team} (unbeaten in ${r.unbeaten})`)); }
-    const roi = R.overall ? sgn(R.overall.favRoi) : '';
+    const roi = R.overall ? sgn(R.overall.favRoi) : '', F = R.forecast || {};
+    const wild = F.typicalReal > 0 && F.typicalRounds ? `In ${F.typicalRounds} past rounds of these leagues with about ${X.n} big favourites, ${P(F.typicalReal)} were this wild (about 1 in ${Math.round(1 / F.typicalReal)}).` : 'Rounds this wild are rare.';
     return [
-      card('pt-crazy3', 'Crazy weekend lotto · 3 upsets', slip.slice(0, 3).map(against), 'The three big favourites the research rates likeliest to drop points: each underdog only has to avoid losing. A long shot: big favourites usually come through.'),
-      card('pt-crazy5', 'Full chaos · 5 favourites slip', slip.slice(0, 5).map(against), 'What a crazy weekend looks like on a slip. Over 6 seasons only about 1 round in 12 was this wild.'),
+      up3.length ? card('pt-crazy3', 'Crazy weekend lotto · 3 upsets', up3.map(against), 'The three big favourites the research rates likeliest to drop points: each underdog only has to avoid losing. A long shot: big favourites usually come through.') : null,
+      slip.length >= 5 ? card('pt-crazy5', 'Full chaos · 5 favourites slip', slip.slice(0, 5).map(against), `What a crazy weekend looks like on a slip. ${wild}`) : null,
       card('pt-runs', 'Unbeaten runs end', runLegs, 'The longest unbeaten runs on the line this round, each one ending in a loss. History says long runs end a little less often than their prices suggest, so this is a lotto.'),
       card('pt-steady', 'The steady weekend', steady.slice(0, 4).map(l => leg(l.g, l.favSide === 'home' ? 'H' : 'A', `${l.fav} to win`)), `The four big favourites the research is surest about. Backing every big favourite at closing odds over 6 seasons returned ${roi}: no edge to speak of, but it is the side history supports.`),
     ].filter(Boolean);
@@ -99,14 +104,14 @@
         <div class="ptgauge" role="img" aria-label="${P(X.pCrazy)} this round vs ${P(F.typical)} in a typical round"><span class="fill" style="width:${Math.min(100, X.pCrazy * 100 * 2).toFixed(1)}%"></span><span class="mark" style="left:${Math.min(100, F.typical * 100 * 2).toFixed(1)}%"></span></div>
         <div class="ptscale"><span>0%</span><span>typical ${P(F.typical)}</span><span>50%+</span></div>
         <div class="ptlead">${word}.</div>
-        <div class="why">The research expects ${X.exp.toFixed(1)} of the ${X.n} big favourites (${esc(F.leagues.join(', '))}) to drop points; the prices alone say ${X.exp0.toFixed(1)}. A typical round of these leagues over 6 seasons had a ${P(F.typical)} chance at its prices, and ${P(F.typicalReal)} of them (${N0(F.typicalRounds)} rounds) actually went crazy. Every big favourite winning: ${P(X.dist[0])}.${X.done ? ` So far ${X.failed} of ${X.done} finished have dropped points.` : ''}</div>
+        <div class="why">The research expects ${X.exp.toFixed(1)} of the ${X.n} big favourites (${esc(F.leagues.join(', '))}) to drop points; the prices alone say ${X.exp0.toFixed(1)}. A typical round of these leagues with ${X.n} big favourites has a ${P(F.typical)} chance by the same research estimate${F.typicalPriced != null ? ` (${P(F.typicalPriced)} at the prices alone)` : ''}${F.typicalReal != null ? `, and ${P(F.typicalReal)} of ${N0(F.typicalRounds)} past rounds that size actually went crazy` : ''}. Every big favourite winning: ${P(X.dist[0])}.${X.done ? ` So far ${X.failed} of ${X.done} finished have dropped points.` : ''}</div>
         <div class="pthist" aria-label="Chance of each number of big favourites dropping points">${X.dist.map((p, i) => `<div class="${i >= X.need ? 'hot' : ''}"><span style="height:${Math.max(2, p / mx * 100).toFixed(0)}%"></span><small>${i}</small></div>`).join('')}</div>
         <div class="note" style="margin:4px 0 0">How many of the ${X.n} drop points (red = crazy). Each game counted on its own: 6 seasons found no sign that upsets come in clusters.</div></div>
       <h2>Likeliest to slip <small>big favourites, research estimate of dropping points</small></h2>
       <div class="panel" style="padding:2px 14px">${X.legs.slice().sort((a, b) => b.q - a.q).map(l => {
-        const key = l.favSide === 'home' ? 'DCX2' : 'DC1X', p = l.done ? null : SB.p1(l.g, key);
+        const key = l.favSide === 'home' ? 'DCX2' : 'DC1X', p = !l.done && l.g && SB.openG(l.g) ? SB.p1(l.g, key) : null;
         const chips = l.reasons.map(r => { const c = causeOf(r.key), [cls, v] = verdictOf(c); return `<span class="ptchip ${cls}" title="${c ? `odds ratio ${c.or} vs similar-priced favourites, p ${pv(c.pReg)}` : ''}">${esc(r.text)} · ${esc(v)}</span>`; }).join('');
-        return `<div class="mrow"><div class="lbl">${esc(l.fav)} vs ${esc(l.dog)}<small>${esc(l.comp)} · ${esc(SB.when(l.g))} · ${l.favSide === 'home' ? 'at home' : 'away'} · priced ${P(1 - l.priced)} to win ${formHTML(l.form)}</small>${chips ? `<span class="ptchips">${chips}</span>` : ''}</div>
+        return `<div class="mrow"><div class="lbl">${esc(l.fav)} vs ${esc(l.dog)}<small>${esc(l.comp)}${l.g ? ' · ' + esc(SB.when(l.g)) : ''} · ${l.favSide === 'home' ? 'at home' : 'away'} · priced ${P(1 - l.priced)} to win ${formHTML(l.form)}</small>${chips ? `<span class="ptchips">${chips}</span>` : ''}</div>
           <span class="mono" style="font-weight:800" title="research estimate (prices alone: ${P(l.priced)})">${l.done ? (l.res ? '✗ slipped' : '✓ won') : P(l.q)}</span><span></span>${p ? `<button class="yes ${SB.inSlip(l.gid, key) ? 'in' : ''}" data-leg="${esc(l.gid)}|${key}" aria-label="${esc(l.dog)} or draw at ${esc(SB.fmtOdds(p))}">${esc(SB.fmtOdds(p))}</button>` : '<span></span>'}</div>`;
       }).join('')}</div>
       <div class="note">Percent = the research estimate that the favourite fails to win (draw or loss): today's price, corrected by how 6 seasons of big favourites did at their prices. The chips are this game's situations, with what the research found about each (see 6 seasons). The button adds "underdog or draw".</div>

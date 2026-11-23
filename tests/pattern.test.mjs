@@ -53,7 +53,7 @@ try {
   check('the tab opens on Next weekend with the crazy-weekend meter', /Crazy weekend meter/.test(txt) && (await page.evaluate(() => __pattern.view)) === 'next');
   const X = await page.evaluate(() => { const x = __pattern.forecast(); return { n: x.n, need: x.need, p: x.pCrazy, sum: x.dist.reduce((a, b) => a + b, 0), tail: x.dist.slice(x.need).reduce((a, b) => a + b, 0), legs: x.legs.map(l => ({ gid: l.gid, q: l.q, fav: l.favSide })) }; });
   check('the meter shows the exact chance that 40%+ of the big favourites drop points', Math.abs(X.sum - 1) < 1e-9 && Math.abs(X.tail - X.p) < 1e-12 && X.need === Math.ceil(.4 * X.n - 1e-9) && txt.includes(`${Math.round(X.p * 100)}%`) && txt.includes(`${X.need}+ of the ${X.n} big favourites`), JSON.stringify({ n: X.n, need: X.need, p: X.p }));
-  check('it is compared with a typical round of the same leagues', new RegExp(`typical ${Math.round(R.forecast.typical * 100)}%`).test(txt) && /(About a normal|Wilder than a normal|Quieter than a normal) weekend/.test(txt));
+  check('it is compared with a typical round of the same leagues and the same number of big favourites', new RegExp(`typical ${Math.round(R.forecast.typical * 100)}%`).test(txt) && /(About a normal|Wilder than a normal|Quieter than a normal) weekend/.test(txt) && new RegExp(`with ${R.forecast.favs} big favourites has a ${Math.round(R.forecast.typical * 100)}% chance by the same research estimate \\(${Math.round(R.forecast.typicalPriced * 100)}% at the prices alone\\)`).test(txt));
   const rows = await page.evaluate(() => [...document.querySelectorAll('#main .panel')][0].querySelectorAll('.mrow').length);
   check('one row per big favourite, likeliest to slip first, each with its reasons and what the research found', rows === X.n && /Likeliest to slip/.test(txt) && /no proven effect|a hint, not proven|held up/.test(txt), `${rows} rows vs ${X.n}`);
   check('unbeaten runs on the line, with the chance each ends', !R.runsNow.length || (/Unbeaten runs on the line/.test(txt) && R.runsNow.every(r => txt.includes(r.team)) && /are not "due" to end/.test(txt)));
@@ -72,12 +72,20 @@ try {
   const b0 = page.locator('#main .panel').first().locator('[data-leg]').first(), lk = await b0.getAttribute('data-leg');
   await b0.click();
   check('"underdog or draw" buttons add the leg to the slip', await page.evaluate(k => __fm2.slip.some(L => L.gid + '|' + L.key === k), lk), lk);
-  // a finished game counts as it ended
-  const fin = await page.evaluate(() => { const x0 = __pattern.forecast(), L = x0.legs[0], g = SB.gameById(L.gid), keep = { status: g.status, score: g.score };
-    g.status = 'closed'; g.score = L.favSide === 'home' ? { home: 0, away: 1 } : { home: 1, away: 0 };
-    const x1 = __pattern.forecast(); Object.assign(g, keep); if (!keep.score) delete g.score; const l1 = x1.legs.find(l => l.gid === L.gid);
-    return { done: x1.done, failed: x1.failed, q: l1.q, up: x1.pCrazy > x0.pCrazy }; });
-  check('when a favourite has lost, it counts as a fail and the meter goes up', fin.done === 1 && fin.failed === 1 && fin.q === 1 && fin.up, JSON.stringify(fin));
+  // a finished game counts as it ended - and, as in the real feed, a finished game has no prices any more
+  const fin = await page.evaluate(() => { const x0 = __pattern.forecast(), L = x0.legs[0], g = SB.gameById(L.gid), keep = { status: g.status, score: g.score, prob: g.prob };
+    g.status = 'closed'; g.prob = null; g.score = L.favSide === 'home' ? { home: 0, away: 1 } : { home: 1, away: 0 };
+    let x1, err = null, txt = '';
+    try { x1 = __pattern.forecast(); SB.render(); txt = document.querySelector('#main').textContent; } catch (e) { err = e.message; }
+    const l1 = x1 && x1.legs.find(l => l.gid === L.gid);
+    const cards = x1 ? __pattern.nextCards(x1).map(c => ({ id: c.id, gids: c.legs.map(l => l.gid) })) : [];
+    Object.assign(g, keep); if (!keep.score) delete g.score; SB.render();
+    return { err, done: x1 && x1.done, failed: x1 && x1.failed, q: l1 && l1.q, up: x1 && x1.pCrazy > x0.pCrazy, page: /Crazy weekend meter/.test(txt) && /So far 1 of 1 finished have dropped points/.test(txt) && /✗ slipped/.test(txt), inCards: cards.some(c => c.gids.includes(L.gid)) }; });
+  check('a finished favourite with no prices left (as the feed sends it) counts as a fail, the meter goes up and the page still renders', !fin.err && fin.done === 1 && fin.failed === 1 && fin.q === 1 && fin.up && fin.page, JSON.stringify(fin));
+  check('a finished game is never offered in a parlay card', fin.inCards === false);
+  const cr = await page.evaluate(() => { const x = __pattern.forecast(), C = __pattern.nextCards(x), by = Object.fromEntries(C.map(c => [c.id, c.legs.map(l => l.gid)])), open = x.legs.filter(l => !l.done).length;
+    return { open, c3: by['pt-crazy3'] || null, c5: by['pt-crazy5'] || null, st: by['pt-steady'] || [] }; });
+  check('card rules: 3 upsets only with 3+ open favourites, 5 only with 5+, steady never on the 3-upset games', (cr.open >= 3 ? cr.c3 && cr.c3.length === 3 : !cr.c3) && (cr.open >= 5 ? cr.c5 && cr.c5.length === 5 : !cr.c5) && !(cr.c3 || []).some(g => cr.st.includes(g)), JSON.stringify(cr));
   check('Next weekend at 390px: no horizontal scroll', (await noScroll(page)) <= 0, `${await noScroll(page)}px`);
 
   // ---------- 6 seasons ----------

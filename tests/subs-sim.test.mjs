@@ -29,6 +29,9 @@ page.on('pageerror', e => errors.push(e.message));
 await page.clock.setFixedTime(new Date('2026-11-22T10:00:00Z'));
 await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA }));
 await page.route('**/mypicks.json', r => r.fulfill({ status: 404, body: 'nf' }));
+// the morning's data files are pinned too (live ones change every day): injuries, player form, last-4 box scores
+for (const [f, fx] of [['injuries.json', 'injuries-2026-11-23.json'], ['playerform.json', 'playerform-2026-11-23b.json'], ['nbalast4.json', 'nbalast4-2026-11-23b.json']])
+  await page.route('**/' + f, r => r.fulfill({ status: 200, contentType: 'application/json', body: fs.readFileSync(path.join(ROOT, 'tests/fixtures', fx), 'utf8') }));
 try {
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender && window.__fm2, null, { timeout: 60000 });

@@ -1444,13 +1444,22 @@ function subCands(legs,i,cardId){
         if(dog){if(m.key!=='H'&&m.key!=='A')continue;const p=p1(g,m.key),o=p1(g,m.key==='H'?'A':'H');if(!(p>=.25&&p<=.46&&p<o))continue;}
         const p=p1(g,m.key);if(!(p>0))continue;const k=csOnly?'cs':m.group;if(!best[k]||Math.abs(p-Lp)<Math.abs(best[k].p-Lp))best[k]={gid:g.id,key:m.key,label:csOnly?`${m.label} (exact score)`:dog?`${(m.key==='H'?g.home:g.away).name} moneyline (underdog)`:m.label,p};}
       Object.values(best).forEach(take);}}
+  // fewer than 3 swaps (a crowded same game parlay, or few games on the day): also offer the same player at another line,
+  // or another exact score in the same game - ranked a little below swaps from other players / games
+  if(out.length<3){const g0=gameById(L.gid),alt=[];
+    if(isP(L.key)){const [,pid,t0]=String(L.key).split(':'),pl=DATA.players.find(p=>p.id===pid);
+      if(pl&&pl.status==='active'&&g0&&openG(g0))for(const t of new Set([...(LADDER[pl.stat]||[]),...[-2,-1,1,2].map(d=>Math.max(1,Math.round(pl.avg)+d))])){if(t===+t0)continue;const p=playerP(pl,t);if(p>=.05&&p<=.98)alt.push({gid:pl.gid,key:`P:${pl.id}:${t}`,label:`${pl.name} ${t}+ ${STATN[pl.stat]}`,p});}}
+    else if(csOnly&&g0&&openG(g0)&&priced(g0)){for(const m of marketsFor(g0)){if(!m.cs||m.key===L.key||out.some(o=>o.gid===g0.id&&o.key===m.key))continue;const p=p1(g0,m.key);if(p>0)alt.push({gid:g0.id,key:m.key,label:`${m.label} (exact score)`,p});}}
+    alt.sort((a,b)=>Math.abs(a.p-Lp)-Math.abs(b.p-Lp));
+    for(const x of alt){if(out.length>=3)break;const n0=out.length;take(x);if(out.length>n0)out[n0].d+=.03;}}
   out.sort((a,b)=>a.d-b.d);
   const close=out.filter(x=>Math.abs(x.p-Lp)<=.06),pickd=(close.length>=3?close:out).slice(0,8);
   // why each one: value, how it fits the rest of the card, the opponent / game, recent form, and what has been losing lately
   for(const x of pickd){const why=[],g=gameById(x.gid);let sc=Math.abs(x.p-Lp);
     const dp=Math.round((x.p-Lp)*100);why.push(Math.abs(dp)<=2?'same chance':dp>0?`${dp} pts likelier`:`${-dp} pts longer`);
     if(isP(x.key)){const i=pLegInfo(x.key),pl=i&&i.pl;
-      if(pl){if(STAT_PREF[pl.stat]){why.push('points leg (preferred)');sc-=.02;}
+      if(pl){const li=isP(L.key)&&pLegInfo(L.key);if(li&&li.pl.id===pl.id){why.push('same player, another line');sc+=.01;}
+        if(STAT_PREF[pl.stat]){why.push('points leg (preferred)');sc-=.02;}
         for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid)continue;
           if(pl.stat==='ast'&&oi.pl.stat==='pts'){why.push(`his assists feed ${oi.pl.name}'s points`);sc-=.03;}
           else if(pl.stat==='pts'&&oi.pl.stat==='ast'){why.push(`${oi.pl.name}'s assists feed his points`);sc-=.03;}

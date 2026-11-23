@@ -197,6 +197,7 @@ h2 a{font-size:14px;color:var(--blue);cursor:pointer;font-weight:700}
 .subrec{background:color-mix(in srgb,var(--yes) 8%,transparent);border-radius:8px}.subwhy{display:block;color:var(--text);opacity:.85;margin-top:2px}.subbtn.rec{font-size:12px;font-weight:800;padding:0 8px}
 .subbtn{flex:none;min-width:34px;min-height:34px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--text);font-size:15px;cursor:pointer}.subbtn:hover{border-color:var(--yes)}.ctxn{display:block;font-size:11.5px;color:var(--mute);margin-top:2px}
 .reclegs{display:flex;flex-direction:column;gap:3px;margin-top:6px;font-size:13px}.rok{color:var(--yes)}.rno{color:var(--no)}.rmid{color:var(--mute)}
+.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.rmore{background:none;border:0;padding:2px 0;color:var(--cyan);font-weight:600;font-size:13px;cursor:pointer}
 .steplbl{display:flex;gap:6px;margin-top:5px}.steplbl span{flex:1;min-width:0;overflow:hidden;text-align:center;font-size:11px;color:var(--dim);font-weight:600}
 .inrow{display:flex;gap:8px;align-items:center}
 input[type=text],input[type=number]{background:var(--soft);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:11px 12px;font:600 16px var(--f);width:100%;font-variant-numeric:tabular-nums}
@@ -742,8 +743,8 @@ function simBits(g,key){const s=sim(g);if(!s)return null;const m=mkOf(g,key);if(
   return c[key]=B;}
 const pCache=new Map();
 // ---------------- player legs (fantasy) ----------------
-const STATN={pts:'points',ast:'assists',reb:'rebounds',hpts:'points',sog:'shots on goal',sot:'shots on target'};
-const LADDER={pts:[10,15,20,25,30],ast:[2,3,4,5,6,7,8,9,10],reb:[3,4,5,6,7,8,9,10,12],hpts:[1,2],sog:[2,3,4],sot:[1,2]};
+const STATN={rec:'receptions',pts:'points',ast:'assists',reb:'rebounds',hpts:'points',sog:'shots on goal',sot:'shots on target'};
+const LADDER={rec:[2,3,4,5,6,7,8],pts:[10,15,20,25,30],ast:[2,3,4,5,6,7,8,9,10],reb:[3,4,5,6,7,8,9,10,12],hpts:[1,2],sog:[2,3,4],sot:[1,2]};
 function erf(x){const t=1/(1+.3275911*Math.abs(x));const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
 const Phi=z=>.5*(1+erf(z/Math.SQRT2));
 function playerPbase(pl,a,thr){ // chance of thr+ given a mean a
@@ -1202,7 +1203,7 @@ function renderFantasy(){
   const HY=[5,10,15].map(n=>buildTicket({n,sports:fz.sports,minP:.6,target:.7,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed}));
   html+=`<h2>High-yield tickets <small>${fz.sports.length===5?'mixed sports':fz.sports.map(s=>(allS.find(a=>a[0]===s)||[,s])[1]).join(' + ')} · bigger payouts</small></h2><div class="grid">${HY.map((T,i)=>ticketCard('hy'+[5,10,15][i],`High yield · ${[5,10,15][i]} legs`,T,'Legs around 70% each. Long shots by design, with a real payout if it lands.')).join('')}</div>
    <div class="note">Every extra leg cuts the chance of hitting. Treat 10 and 15 leggers as small-stake lottery tickets.</div>`;
-  html+=sgpHTML(allS)+megaHTML()+stackHTML()+recsHTML(id=>!/^mp-|^up|^pt-/.test(id));
+  html+=sgpHTML(allS)+megaHTML()+stackHTML()+recLegsHTML()+recsHTML(id=>!/^mp-|^up|^pt-/.test(id));
   $('main').innerHTML=html;wireFz();
 }
 // same game parlay: every leg from one game, same scroller and style as the fantasy parlay
@@ -1565,6 +1566,18 @@ function buildStacks(){
     [[S[0],n0],[S[1],n1]].forEach(([s,n])=>{if(!n||!s.M.length)return;const take=s.M.slice(0,n);stacks.push({...s,M:take,c});
       for(const m of take)legs.push({gid:g.id,key:`P:${m.pl.id}:${m.thr}`,label:`${m.pl.name} ${m.thr}+ ${STATN[m.st]}`,p:m.p,sport:'nba'});});});
   return {days,day,legs,stacks,nG:G.length};}
+function recLegsHTML(){
+  const lim=now()+8*864e5,C=[];
+  for(const pl of DATA.players){if(pl.stat!=='rec'||pl.status!=='active')continue;const g=gameById(pl.gid);if(!g||!openG(g)||startMs(g)>lim)continue;
+    const legs=playerLegs(pl).filter(x=>x.p>=.72).sort((a,b)=>b.thr-a.thr);if(!legs.length)continue;const L=legs[0],rf=recentOf(pl);
+    C.push({gid:g.id,key:L.key,label:L.label,p:L.p,sport:g.sport,team:pl.team,g,pl,last:rf?rf.last5:null,hits:rf?rf.last5.filter(v=>v>=L.thr).length:null});}
+  if(!C.length)return '';
+  C.sort((a,b)=>(b.hits!=null&&b.last?b.hits/b.last.length:0)-(a.hits!=null&&a.last?a.hits/a.last.length:0)||b.p-a.p);
+  const legs=[],teams=new Set(),games=new Set();for(const x of C){if(legs.length>=4)break;if(teams.has(x.team)||games.has(x.gid))continue;legs.push(x);teams.add(x.team);games.add(x.gid);}
+  return `<h2>Reception legs <small>NFL and college · reliable catchers</small></h2>
+   <div class="note">Receivers' catches from their last 4 games (ESPN box scores), at the highest line they clear about three times in four. One catcher per team: receivers on one team share the targets.</div>
+   ${legs.length>=2?ticketCard('rec4',`${legs.length}-leg reception parlay`,{legs:legs.map(({gid,key,label,p,sport})=>({gid,key,label,p,sport})),p:parlayProb(legs).p,n:legs.length},'Different teams and games.'):''}
+   <div class="panel" style="padding:2px 14px">${C.slice(0,10).map(x=>`<div class="mrow"><div class="lbl">${esc(x.label)}<small>${esc(x.g.away.abbr)} @ ${esc(x.g.home.abbr)} · ${esc(SPORTNAME[x.sport]||x.sport)}${x.last?` · last ${x.last.length}: ${x.last.join(', ')} · cleared ${x.hits}/${x.last.length}`:''}</small><small class="ctxn">levels: ${LADDER.rec.map(t=>({t,p:playerP(x.pl,t)})).filter(y=>y.p>=.2&&y.p<=.97).map(y=>`${y.t}+ ${pct(y.p)}`).join(' · ')}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes ${inSlip(x.gid,x.key)?'in':''}" data-leg="${x.gid}|${x.key}" aria-label="${esc(x.label)}">${btnPx(x.p)}</button></div>`).join('')}</div>`;}
 function stackHTML(){
   const B=buildStacks();
   if(!B.days.length)return `<h2>Duo & trio stacks</h2><div class="pc"><div class="why">No NBA games open right now.</div></div>`;
@@ -2163,7 +2176,7 @@ async function load(){ // -> true when DATA was replaced
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
   // nbaroles.json + injuries.json = season averages and injury report: NBA games with no posted props get season-average
   // player legs from them (addRolePlayers); mypicks.json = the once-a-day My Parlay Picks made by the daily job
-  let [d,pr,sc,ro,inj,mp,pf,l4,rc]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json'),get('recs.json')]);
+  let [d,pr,sc,ro,inj,mp,pf,l4,rc,nr]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json'),get('recs.json'),get('nflrec.json')]);
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
@@ -2181,11 +2194,25 @@ async function load(){ // -> true when DATA was replaced
   d.last4=l4&&l4.teams?l4:(dataLoaded?DATA.last4:null);d.recs=rc&&Array.isArray(rc.days)?rc:(dataLoaded?DATA.recs:null);
   if(!pf&&dataLoaded&&DATA.playerform)d.playerform=DATA.playerform;
   else if(pf&&Array.isArray(pf.players)){d.playerform=new Map();for(const x of pf.players){if(!x||!x.name||!x.team||!x.stat)continue;const l5=(x.last5||[]).map(Number).filter(Number.isFinite);d.playerform.set(String(x.team).toUpperCase()+'|'+nameKey(x.name)+'|'+x.stat,{...x,last5:l5,avg5:l5.length?l5.reduce((a,b)=>a+b,0)/l5.length:null});}}d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
+  if(!nr&&dataLoaded)nr=REC_LAST;REC_LAST=nr;addReceivers(d,nr);
   applyLines(d);
   const ids=new Set(d.games.map(g=>g.id));for(const [k,v] of SIMC)if(!ids.has(k.slice(0,k.indexOf('|'))))SIMC.delete(k);
   DATA=d;pCache.clear();PCTX.clear();autoCache={};dataLoaded=true;if(!d.seeded)lastGood=Date.now();emit('data',DATA);return true;
 }
-let lastGood=null,ROLES_LAST=null,INJ_LAST=null;
+let lastGood=null,ROLES_LAST=null,INJ_LAST=null,REC_LAST=null;
+function clampLong(root){if(!root)return;for(const el of root.querySelectorAll('.why,.note,.subwhy,.lineup>div')){if(el.dataset.cl)continue;el.dataset.cl='1';
+    if((el.textContent||'').length<180)continue;el.classList.add('clamp');
+    if(el.scrollHeight<=el.clientHeight+2){el.classList.remove('clamp');continue;}
+    const b=document.createElement('button');b.type='button';b.className='rmore';b.textContent='Read more';b.setAttribute('aria-expanded','false');el.after(b);}}
+document.addEventListener('click',e=>{const b=e.target.closest('.rmore');if(!b)return;const el=b.previousElementSibling;if(!el)return;const open=el.classList.toggle('clamp');b.textContent=open?'Read more':'Show less';b.setAttribute('aria-expanded',String(!open));});
+{let q=false;const run=()=>{q=false;clampLong(document.getElementById('main'));clampLong(document.getElementById('sheet'));};
+ new MutationObserver(()=>{if(!q){q=true;requestAnimationFrame(run);}}).observe(document.documentElement,{childList:true,subtree:true});}
+// NFL / college receivers (nflrec.json, ESPN box scores via tools/rec_last4.py): a reception leg per receiver on each
+// upcoming game of his team; his last games feed recent form like the NBA box scores do
+function addReceivers(d,nr){if(!nr||!Array.isArray(nr.teams))return;d.playerform=d.playerform||new Map();
+  for(const T of nr.teams){for(const g of d.games){if(g.sport!==T.sport||isFinal(g)||isVoid(g))continue;const side=g.home.abbr===T.feedAbbr?g.home:g.away.abbr===T.feedAbbr?g.away:null;if(!side)continue;
+    for(const r of T.players||[]){if(!(r.avg>=2))continue;d.players.push({id:`${nameKey(r.name)}-rec~${g.id}`,gid:g.id,name:r.name,stat:'rec',avg:+r.avg,status:'active',team:side.abbr,est:true,mpg:0});
+      if(d.playerform instanceof Map)d.playerform.set(side.abbr+'|'+nameKey(r.name)+'|rec',{name:r.name,team:side.abbr,stat:'rec',last5:r.rec,avg5:r.avg,confidence:'verified',note:'ESPN box scores'});}}}}
 // NBA games with no posted props: one player record per rotation player and stat from nbaroles.json season averages (points 8+,
 // rebounds 4+, assists 3+, 18+ minutes, 3+ games). Out / doubtful players are left out; questionable / day-to-day ones are kept
 // but marked, so the ticket builders (active players only) skip them. ids carry the game id, so back-to-backs never collide.

@@ -23,6 +23,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - the fantasy ticket and high-yield tickets;
   - a same game parlay (pick a game, 2-10 legs);
   - a 20-leg safest combo on one day;
+  - **reception legs (NFL / college)**: receivers' catches from their last 4 ESPN box scores (nflrec.json, tools/rec_last4.py), each with his levels (ladder of lines and chances); a 4-leg reception parlay, one catcher per team;
   - **duo / trio stacks**: same-team starters whose stats feed each other (playmaker assists + scorer points + big rebounds; never two players on one stat), close games first, last-4 box scores, substitutes, legs and games scrollers.
 - **Upset Parlays (upsets.js):**
   - underdogs and draws from Polymarket;
@@ -51,6 +52,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **Player model:** season average, with recent form (playerform.json) counting 30%. The team's expected points come from the total and spread. In blowouts (15+ NBA, 17+ NFL, 21+ college), starters ×0.8 and bench ×1.15.
 
 ## Look
+- Long descriptions (.why / .note / reasons) clamp to 3 lines with "Read more" / "Show less" (clampLong, runs after every render).
 - Clean theme (2026-11-23): slate background, flat rounded cards, Inter font, no italics / caps / glows, pill chips and price buttons (a Polymarket-style override block at the end of index.html's main style). Logo and layout kept.
 
 ## Data files (who writes them)
@@ -66,6 +68,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | playerform.json | tools/nba_last4.py (ESPN box scores) and tools/player-form-research.wf.js → playerform_merge.py |
 | nbalast4.json | tools/nba_last4.py |
 | pattern.json | tools/weekend_pattern.py (football-data.co.uk CSVs; fixtures in tests/fixtures/fd) |
+| nflrec.json | tools/rec_last4.py (ESPN box scores, NFL / college receivers on upcoming games) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
@@ -86,7 +89,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 34 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 35 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -134,3 +137,4 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Replacements for missed picks; ⇄ swap in the builder.
   - ★ Rec swaps with reasons; lessons; clean Polymarket-style theme.
   - 📈 Team Trends tab (248 teams; upset watch, over/under leans).
+  - NFL / college reception legs (259 receivers, last 4 box scores, levels); "Read more" on long text.

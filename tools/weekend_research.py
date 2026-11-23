@@ -375,7 +375,9 @@ for g in fd_games:
     sc = g.get('score') or {}
     if g.get('status') == 'closed' and sc.get('home') is not None and sc.get('away') is not None:
         fres[g['id']] = {'gid': g['id'], 'comp': g['comp'], 'home': g['home']['name'], 'away': g['away']['name'], 'date': sdate(g).date().isoformat(), 'hg': int(sc['home']), 'ag': int(sc['away'])}
-fres = {k: r for k, r in fres.items() if not (last_csv[LG[r['comp']]] and date.fromisoformat(r['date']) <= last_csv[LG[r['comp']]])}
+listed = {g['id']: g for g in fd_games}
+fres = {k: r for k, r in fres.items() if not (last_csv[LG[r['comp']]] and date.fromisoformat(r['date']) <= last_csv[LG[r['comp']]])
+        and not (k in listed and listed[k].get('status') != 'closed')}  # a game the feed has since called off (or reopened) no longer counts
 added = 0
 for r in sorted(fres.values(), key=lambda r: (r['date'], r['gid'])):
     lg, d = LG[r['comp']], date.fromisoformat(r['date'])
@@ -413,7 +415,8 @@ def dist_of(qs):
     for q in qs:
         d = np.concatenate([d * (1 - q), [0.0]]) + np.concatenate([[0.0], d * q])
     return d
-cur = lambda lg, team: state.get((CUR, lg, team))
+seasonOf = lambda d: (lambda y: f'{y % 100:02d}{(y + 1) % 100:02d}')(d.year if d.month >= 7 else d.year - 1)
+cur = lambda lg, team, d=None: state.get((CUR, lg, team)) if d is None or seasonOf(d) == CUR else None  # league games THIS season
 
 # ---------- forecast: the next full round in the feed ----------
 # The round is every Friday-Monday feed game of these leagues (finished ones too), chosen while any of its games is still to
@@ -472,7 +475,7 @@ if rk:
         # runs at stake this round: every team on 6+ unbeaten, with its chance of losing
         for side, other, pl in (('home', 'away', pa), ('away', 'home', ph)):
             t = ft(g['comp'], g[side]['name'])
-            s = cur(LG[g['comp']], t) if t else None
+            s = cur(LG[g['comp']], t, st) if t else None
             if s and s['unb'] >= 6:
                 rr = next((r for r in runs if r['lo'] <= s['unb'] <= r['hi']), None)
                 runsNow.append({'gid': g['id'], 'team': g[side]['name'], 'abbr': g[side]['abbr'], 'side': side, 'comp': g['comp'], 'start': g['start'], 'opp': g[other]['name'],
@@ -485,15 +488,16 @@ if rk:
         ds = 'away' if fs == 'home' else 'home'
         favT, dogT = g[fs], g[ds]
         fk, dk = ft(g['comp'], favT['name']), ft(g['comp'], dogT['name'])
-        fst, dst = (cur(LG[g['comp']], fk) if fk else None), (cur(LG[g['comp']], dk) if dk else None)
+        fst, dst = (cur(LG[g['comp']], fk, st) if fk else None), (cur(LG[g['comp']], dk, st) if dk else None)
         lastG = last_before(LG[g['comp']], fk, st, fst['last'] if fst else None) if fk else None
         rest = (st - lastG).days if lastG else None
         eb, ea = euro_gap(fk, st) if fk else (None, None)
         deb, _ = euro_gap(dk, st) if dk else (None, None)
         # the favourite's league game number this season: games played, plus league fixtures still to come before this one
-        gnum = ((fst['gp'] if fst else 0) + 1 + sum(1 for d in fixt.get((LG[g['comp']], fk), []) if (not fst or not fst['last'] or d > fst['last']) and d < st)) if fk else None
+        sstart = date(st.year if st.month >= 7 else st.year - 1, 7, 1)
+        gnum = ((fst['gp'] if fst else 0) + 1 + sum(1 for d in fixt.get((LG[g['comp']], fk), []) if d >= sstart and (not fst or not fst['last'] or d > fst['last']) and d < st)) if fk else None
         x = {'postBreak': (rest or 0) >= 12 and not inr(eb, 1, 11), 'shortRest': inr(rest, 1, 3), 'euroBefore': inr(eb, 1, 4), 'euroAfter': inr(ea, 1, 4),
-             'dogEuroBefore': inr(deb, 1, 4), 'christmas': xmas(st), 'early': bool(gnum and gnum <= 3), 'late': bool(gnum and sched(CUR, LG[g['comp']]) - gnum <= 3),
+             'dogEuroBefore': inr(deb, 1, 4), 'christmas': xmas(st), 'early': bool(gnum and gnum <= 3), 'late': bool(gnum and seasonOf(st) == CUR and 0 <= sched(CUR, LG[g['comp']]) - gnum <= 3),
              'favUnbeaten10': bool(fst and fst['unb'] >= 10), 'favWin5': bool(fst and fst['win'] >= 5), 'favLost2': bool(fst and fst['loss'] >= 2),
              'dogUnbeaten5': bool(dst and dst['unb'] >= 5), 'dogLost4': bool(dst and dst['loss'] >= 4), 'favAway': fs == 'away', 'huge': pf >= .75}
         flags = [k for k, v in x.items() if v]

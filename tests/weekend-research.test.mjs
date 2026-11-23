@@ -77,6 +77,21 @@ try {
   const R3 = run(feed2, '2026-11-28T16:00:00Z', path.join(T, 'fresh.json')), F3 = R3.forecast;
   check('with no earlier forecast, started games are counted as unpriced, never invented', !F3 || F3.round !== F1.round || (F3.startedUnpriced > 0 && F3.carried === 0), JSON.stringify(F3 && { round: F3.round, unpriced: F3.startedUnpriced, favs: F3.favs }));
 
+  // a result the feed later calls off (abandoned) stops counting, even though it was kept from an earlier run
+  const ab = R1.feedResults[0], feedA = JSON.parse(fs.readFileSync(feed1, 'utf8')); feedA.games.find(g => g.id === ab.gid).status = 'abandoned';
+  const feed7 = path.join(T, 'feed-abandoned.json'); fs.writeFileSync(feed7, JSON.stringify(feedA));
+  const P7 = path.join(T, 'p7.json'); fs.writeFileSync(P7, JSON.stringify({ research: R1 }));
+  const R7 = run(feed7, '2026-11-24T12:00:00Z', P7);
+  check('a kept result whose game the feed has since called off no longer counts', !R7.feedResults.some(r => r.gid === ab.gid) && R7.feedResults.length === R1.feedResults.length - 1, ab.gid);
+
+  // the opening weekend of a new season (its results file has no rows yet): last season's game counts and runs don't carry over
+  const shift = Date.parse('2027-08-21T00:00:00Z') - Date.parse('2026-11-28T00:00:00Z'), feedS = JSON.parse(fs.readFileSync(feed1, 'utf8'));
+  feedS.games = feedS.games.filter(g => g.sport === 'soccer' && Date.parse(g.start) >= Date.parse('2026-11-27T00:00:00Z') && Date.parse(g.start) < Date.parse('2026-12-01T12:00:00Z'))
+    .map(g => ({ ...g, id: g.id + '-aug', start: new Date(Date.parse(g.start) + shift).toISOString().replace(/\.\d+Z$/, 'Z') }));
+  const feed8 = path.join(T, 'feed-aug.json'); fs.writeFileSync(feed8, JSON.stringify(feedS));
+  const R8 = run(feed8, '2027-08-19T12:00:00Z', path.join(T, 'aug.json')), F8 = R8.forecast;
+  check('opening weekend: favourites are "start of season", never "end of season", and no runs carry over from last season', F8 && F8.legs.length > 0 && F8.legs.every(l => l.flags.includes('early') && !l.flags.includes('late')) && R8.runsNow.length === 0, JSON.stringify(F8 && F8.legs.map(l => l.flags)));
+
   // weekend_pattern.py (run first each morning) keeps the research block
   py(['tools/weekend_pattern.py', path.join(ROOT, 'tests/fixtures/fd'), '--days', '90', '--end', '2026-11-23', '--feed', feed1, '--sims', '200', '--out', P]);
   const after = JSON.parse(fs.readFileSync(P, 'utf8'));

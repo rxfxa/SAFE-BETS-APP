@@ -91,6 +91,19 @@ try {
     g2.status = k2; SB.render();
     return { ended: t1.includes('✗ run ended'), off: /1 of this morning's \d+ big favourites is off/.test(t2), noVerdict: !/(About a normal|Wilder than a normal|Quieter than a normal) weekend/.test(t2), n: x.n, favs: R.forecast.favs, typicalFor: t2.includes(`with ${R.forecast.favs} big favourites has a`) }; });
   check('a run on the line whose team lost shows "run ended"; a favourite postponed since the morning run is called out, with no normal/wilder verdict', fx.ended && fx.off && fx.noVerdict && fx.n === fx.favs - 1 && fx.typicalFor, JSON.stringify(fx));
+  // runs card from priced games only; a favourite whose price fell below 75% loses its 'huge favourite' chip; why cards are missing
+  const mx = await page.evaluate(() => { const R = __pattern.PT.research, out = {};
+    const keep = []; const set = (id, k, v) => { const g = SB.gameById(id); keep.push([g, k, g[k]]); g[k] = v; };
+    const r0 = R.runsNow[0]; set(r0.gid, 'prob', null);
+    out.runs = (__pattern.nextCards(__pattern.forecast()).find(c => c.id === 'pt-runs') || { legs: [] }).legs.map(l => l.gid);
+    out.runsOk = !out.runs.includes(r0.gid);
+    const H = R.forecast.legs.find(l => l.flags.includes('huge')); if (H) { const g = SB.gameById(H.gid); set(H.gid, 'prob', H.favSide === 'home' ? { home: .62, draw: .2, away: .18 } : { home: .18, draw: .2, away: .62 }); SB.render();
+      const row = [...document.querySelectorAll('#main .panel')][0].querySelectorAll('.mrow'); out.huge = [...row].some(r => r.textContent.includes(H.fav) && /huge favourite/.test(r.textContent)); }
+    for (const [g, k, v] of keep.reverse()) g[k] = v;
+    for (const id of new Set([...R.forecast.legs.map(l => l.gid), ...R.runsNow.map(r => r.gid)])) { const g = SB.gameById(id); if (g) { keep.push([g, 'prob', g.prob]); g.prob = null; } } SB.render();
+    out.msg = /Prices for the big favourites still to play are not posted yet/.test(document.querySelector('#main').textContent);
+    for (const [g, k, v] of keep.reverse()) g[k] = v; SB.render(); return out; });
+  check('the runs card skips unpriced games; a favourite now under 75% loses its "huge favourite" chip; a missing card says why', mx.runsOk && mx.huge === false && mx.msg, JSON.stringify(mx));
   const cr = await page.evaluate(() => { const x = __pattern.forecast(), C = __pattern.nextCards(x), by = Object.fromEntries(C.map(c => [c.id, c.legs.map(l => l.gid)])), open = x.legs.filter(l => !l.done).length;
     return { open, c3: by['pt-crazy3'] || null, c5: by['pt-crazy5'] || null, st: by['pt-steady'] || [] }; });
   check('card rules: 3 upsets only with 3+ open favourites, 5 only with 5+, steady never on the 3-upset games', (cr.open >= 3 ? cr.c3 && cr.c3.length === 3 : !cr.c3) && (cr.open >= 5 ? cr.c5 && cr.c5.length === 5 : !cr.c5) && !(cr.c3 || []).some(g => cr.st.includes(g)), JSON.stringify(cr));

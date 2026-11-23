@@ -58,7 +58,9 @@ try {
         const C = F.subCands(legs, i, 'mp-' + P.id), others = legs.filter((_, j) => j !== i);
         const bad = C.filter(x => {
           if (others.some(o => o.gid === x.gid && o.key === x.key)) return true;
-          if (x.key.startsWith('P:')) { const a = info(x.key); return !a || others.some(o => { if (!o.key.startsWith('P:')) return false; const b = info(o.key); return b && (b.name === a.name || (b.gid === a.gid && b.team === a.team && b.stat === a.stat)); }); }
+          // no player twice - unless the research links his two different stats (a TD and his yards, catches and yards...)
+          if (x.key.startsWith('P:')) { const a = info(x.key); return !a || others.some(o => { if (!o.key.startsWith('P:')) return false; const b = info(o.key); if (!b) return false;
+            if (b.name === a.name) { const r = F.legRho(F.legMeta(x), F.legMeta(o), x.gid); return b.stat === a.stat || !r || r.r < .15; } return b.gid === a.gid && b.team === a.team && b.stat === a.stat; }); }
           return false;
         });
         return { n: C.length, bad: bad.length, kinds: [...new Set(C.map(x => x.key.startsWith('P:') ? 'P' : /^CS/.test(x.key) ? 'CS' : x.key === 'H' || x.key === 'A' ? 'ML' : 'G'))], oneGame: P.id === 'sgp5' ? C.every(x => x.gid === L.gid) : true,

@@ -743,13 +743,17 @@ function simBits(g,key){const s=sim(g);if(!s)return null;const m=mkOf(g,key);if(
   return c[key]=B;}
 const pCache=new Map();
 // ---------------- player legs (fantasy) ----------------
-const STATN={rec:'receptions',pts:'points',ast:'assists',reb:'rebounds',hpts:'points',sog:'shots on goal',sot:'shots on target'};
-const LADDER={rec:[2,3,4,5,6,7,8],pts:[10,15,20,25,30],ast:[2,3,4,5,6,7,8,9,10],reb:[3,4,5,6,7,8,9,10,12],hpts:[1,2],sog:[2,3,4],sot:[1,2]};
+const STATN={rec:'receptions',pts:'points',ast:'assists',reb:'rebounds',hpts:'points',sog:'shots on goal',sot:'shots on target',ryd:'rushing yards',recyd:'receiving yards',pyd:'passing yards'};
+const LADDER={rec:[2,3,4,5,6,7,8],pts:[10,15,20,25,30],ast:[2,3,4,5,6,7,8,9,10],reb:[3,4,5,6,7,8,9,10,12],hpts:[1,2],sog:[2,3,4],sot:[1,2],
+  ryd:[20,30,40,50,60,70,80,90,100,120],recyd:[20,30,40,50,60,70,80,90,100],pyd:[150,175,200,225,250,275,300,325]};
+const YARDS={ryd:1,recyd:1,pyd:1};
 function erf(x){const t=1/(1+.3275911*Math.abs(x));const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
 const Phi=z=>.5*(1+erf(z/Math.SQRT2));
 function playerPbase(pl,a,thr){ // chance of thr+ given a mean a
   if(pl.stat==='pts'){const sd=.28*a+3;return 1-Phi((thr-.5-a)/sd);}
   if(pl.stat==='ast'||pl.stat==='reb'){const sd=Math.sqrt(a)*1.25+.5;return 1-Phi((thr-.5-a)/sd);}
+  // yards: normal, with the player's own game-to-game spread shrunk toward the spread model measured on this season's box scores
+  if(YARDS[pl.stat]){const sd=pl.sd||(.45*a+8);return 1-Phi((thr-.5-a)/sd);}
   let c=0;for(let k=0;k<thr;k++)c+=pois(a,k);return 1-c;}
 // Reading the game around a player, not just his average:
 //  - recent form: his last 5 games (playerform.json, researched each morning) weigh 30% against the season average
@@ -771,7 +775,7 @@ function playerMeans(pl){
   const g=gameById(pl.gid),c=g&&teamCtx(g,pl.team);if(!c)return {an:a,ab:a,pb:0,rf,c:null};
   const an=a*(1+({pts:.8,ast:.6,reb:.3}[pl.stat]||.5)*(c.tf-1));
   const starter=pl.mpg?pl.mpg>=26:(pl.stat==='pts'?pl.avg>=12:pl.stat==='reb'?pl.avg>=6:pl.avg>=4),bench=pl.mpg>0&&pl.mpg<20;
-  return {an,ab:an*(starter?.8:bench?1.15:.92),pb:c.pb,rf,c};}
+  return {an,ab:YARDS[pl.stat]?an:an*(starter?.8:bench?1.15:.92),pb:c.pb,rf,c};}
 // chance of thr+ (or under thr-.5) split by blowout / not, so the joint sim can draw it from the simulated margin
 function playerParts(pl,thr,under){const M=playerMeans(pl),f=a=>under?1-playerPbase(pl,a,thr):playerPbase(pl,a,thr);return {pn:f(M.an),pbw:f(M.ab),pb:M.pb,M};}
 function playerP(pl,thr){const P=playerParts(pl,thr);return (1-P.pb)*P.pn+P.pb*P.pbw;}
@@ -790,11 +794,98 @@ let GBY=null,GBYD=null;function gameById(id){if(GBYD!==DATA){GBYD=DATA;GBY=new M
 function legLabel(L){if(isP(L.key)){const i=pLegInfo(L.key);return i?i.label:L.label;}const g=gameById(L.gid);
   const lt=legType(L.key);if(lt){if(!g)return L.label||L.key;let s=null;try{s=lt.label(L.key,g);}catch(e){console.warn(e);}return s||L.label||L.key;}
   const m=g&&mkOf(g,L.key);return m?m.label:L.label;}
-// parlay hit chance: same-game legs priced jointly (exact score matrix for soccer/NHL, 100,000 sims otherwise), separate games multiplied
+// ---------------- legs that help each other (pairs.json, tools/leg_pairs.py) ----------------
+// Measured on this season's box scores (ESPN), per sport: for each pair of legs that can share a parlay (the same player's two
+// stats, two teammates in set roles, a player and his team's result, a player and the game total), how often both landed
+// against each player's own usual level, as the correlation of a normal copula with a bootstrap range. Only "reliable" pairs
+// (range excludes 0) are used; everything else counts as unlinked. Legs on one game are priced together with them: two legs
+// exactly (bivariate normal), more by a seeded 20,000-draw simulation; the 500,000-run simulation draws the same links.
+const PSTAT={hpts:'point'};
+let PAIRI=null,PAIRD=null;
+function pairsIdx(){if(PAIRD===DATA.pairs&&PAIRI)return PAIRI;PAIRD=DATA.pairs;PAIRI=new Map();
+  for(const [sp,S] of Object.entries((DATA.pairs&&DATA.pairs.sports)||{}))for(const [k,r] of Object.entries(S.pairs||{})){
+    const parts=k.split('|'),pre=/^([A-Z]{2}|tm)$/.test(parts[0])?parts.shift():'';PAIRI.set(sp+'#'+(pre?pre+'|':'')+parts.sort().join('|'),r);}
+  return PAIRI;}
+function pairRow(sp,pre,a,b){const I=pairsIdx(),k=[a,b].sort().join('|');
+  for(const s2 of sp==='ncaaf'?['ncaaf','nfl']:[sp])for(const q of pre==='tm'?['tm']:pre?(pre==='TE'?['TE','WR','']:[pre,'']):['']){const r=I.get(s2+'#'+(q?q+'|':'')+k);if(r)return r.reliable?r:null;}
+  return null;}
+let LMC=new Map(),LMD=null;
+function legMeta(L,g){if(!L)return null;g=g||gameById(L.gid);if(LMD!==DATA){LMD=DATA;LMC=new Map();RLC.clear();}const ck=L.gid+'|'+L.key;if(LMC.has(ck))return LMC.get(ck);
+  let m=null;const k=String(L.key||'');
+  if(isP(k)){const i=pLegInfo(k);if(i){const pl=i.pl;m={who:pl.team+'|'+nameKey(pl.name),name:pl.name,team:pl.team,stat:PSTAT[pl.stat]||pl.stat,pos:pl.pos||(DATA.nflpos&&DATA.nflpos.get(pl.team+'|'+nameKey(pl.name)))||null,sport:g?g.sport:null,flip:!!i.under};}}
+  else if(g&&/^TD:A:/.test(k)){const [,,team,slug]=k.split(':'),x=DATA.nflByTd&&DATA.nflByTd.get(team+'|'+slug);m={who:team+'|'+(x?nameKey(x.name):slug),name:x?x.name:slug,team,stat:'td',pos:x?x.pos:null,sport:g.sport,flip:false};}
+  else if(g&&/^G:[^:]+$/.test(k)&&window.__soccer&&__soccer.model){try{const R=__soccer.model(g.id),x=R&&R.byId&&R.byId.get(k.slice(2));if(x)m={who:(x.abbr||x.team||'')+'|'+nameKey(x.name),name:x.name,team:x.abbr||x.team,stat:'goal',sport:g.sport,flip:false};}catch(e){}}
+  else if(g&&(k==='H'||k==='A'))m={stat:'win',team:(k==='H'?g.home:g.away).abbr,sport:g.sport,game:true};
+  else if(g){const o=/^([OU])(\d+(?:\.\d+)?)$/.exec(k);if(o)m={stat:'over',sport:g.sport,game:true,flip:o[1]==='U'};}
+  LMC.set(ck,m);return m;}
+// each team's roles in one game, from its players' averages: NBA scorer / second scorer / playmaker / big; NFL QB, top
+// receiver, lead back; NHL its two top scorers (the research measured these roles)
+const RLC=new Map();
+function teamRoles(gid,team){const k=gid+'|'+team;if(RLC.has(k))return RLC.get(k);const P=(DATA.players||[]).filter(p=>p.gid===gid&&p.team===team&&p.status==='active');
+  const top=(f,n=1)=>P.filter(f).sort((a,b)=>b.avg-a.avg).slice(0,n).map(p=>team+'|'+nameKey(p.name)),pos=p=>p.pos||(DATA.nflpos&&DATA.nflpos.get(team+'|'+nameKey(p.name)));
+  const sc=top(p=>p.stat==='pts',2),h=top(p=>p.stat==='hpts',2);
+  const r={scorer:sc[0],scorer2:sc[1],playmaker:top(p=>p.stat==='ast')[0],big:top(p=>p.stat==='reb')[0],QB:top(p=>p.stat==='pyd')[0],WR1:top(p=>p.stat==='recyd'&&/^(WR|TE)$/.test(pos(p)||''))[0],RB1:top(p=>p.stat==='ryd'&&pos(p)==='RB')[0],top1:h[0],top2:h[1]};
+  RLC.set(k,r);return r;}
+function teamRow(A,B,gid){const RL=teamRoles(gid,A.team),is=(M,role)=>!!RL[role]&&RL[role]===M.who,sp=A.sport,either=(f1,f2)=>(f1(A)&&f2(B))||(f1(B)&&f2(A));
+  if(sp==='nfl'||sp==='ncaaf'){const qb=x=>x.stat==='pyd'&&is(x,'QB'),wr=x=>x.stat==='recyd'&&is(x,'WR1'),rb=x=>x.stat==='ryd'&&is(x,'RB1');
+    if(either(qb,wr))return pairRow(sp,'tm','pyd','recyd');if(either(qb,rb))return pairRow(sp,'tm','pyd','ryd');if(either(wr,rb))return pairRow(sp,'tm','recyd','ryd');}
+  if(sp==='nba'){const sc=x=>x.stat==='pts'&&is(x,'scorer'),pm=x=>x.stat==='ast'&&is(x,'playmaker'),bg=x=>x.stat==='reb'&&is(x,'big'),s2=x=>x.stat==='pts'&&is(x,'scorer2');
+    if(either(sc,pm))return pairRow(sp,'tm','ast','pts');if(either(sc,bg))return pairRow(sp,'tm','pts','reb');if(either(sc,s2))return pairRow(sp,'tm','pts','pts');}
+  if(sp==='nhl'){const t=x=>x.stat==='point'&&(is(x,'top1')||is(x,'top2'));if(t(A)&&t(B))return pairRow(sp,'tm','point','point');}
+  return null;}
+// the measured link between two legs on one game: {r, row} (r signed for the legs as bet: an under, or the other team's
+// win, flips it), or null when the research has no reliable figure for the pair
+function legRho(A,B,gid){if(!A||!B||A===B||A.sport!==B.sport)return null;let row=null,s=(A.flip?-1:1)*(B.flip?-1:1);
+  if(A.game&&B.game)return null;  // two game markets: the game's own simulations already price them together
+  if(A.game||B.game){const G=A.game?A:B,P=A.game?B:A;if(!P.team)return null;row=pairRow(P.sport,P.pos,P.stat,G.stat);if(G.stat==='win'&&G.team!==P.team)s=-s;}
+  else if(A.who&&A.who===B.who){if(A.stat===B.stat)return null;row=pairRow(A.sport,A.pos||B.pos,A.stat,B.stat);}
+  else if(A.team&&A.team===B.team&&gid)row=teamRow(A,B,gid);
+  return row?{r:s*row.rho,row}:null;}
+// P(X<a, Y<b) for standard normals with correlation r: Plackett's identity, 32-point Gauss-Legendre
+const GLX=[],GLW=[];{const n=32;for(let i=1;i<=n;i++){let x=Math.cos(Math.PI*(i-.25)/(n+.5)),d=0;for(let it=0;it<100;it++){let a=1,b=0;for(let j=1;j<=n;j++){const c=b;b=a;a=((2*j-1)*x*b-(j-1)*c)/j;}d=n*(x*a-b)/(x*x-1);const dx=a/d;x-=dx;if(Math.abs(dx)<1e-15)break;}GLX.push(x);GLW.push(2/((1-x*x)*d*d));}}
+function bvnP(a,b,r){if(Math.abs(r)<1e-12)return Phi(a)*Phi(b);let s=0;for(let i=0;i<GLX.length;i++){const t=r/2*(GLX[i]+1),q=1-t*t;s+=GLW[i]*Math.exp(-(a*a-2*t*a*b+b*b)/(2*q))/(2*Math.PI*Math.sqrt(q));}
+  return clamp(Phi(a)*Phi(b)+r/2*s,0,1);}
+function chol(A){const n=A.length,L=A.map(()=>new Array(n).fill(0));for(let i=0;i<n;i++)for(let j=0;j<=i;j++){let s=A[i][j];for(let k=0;k<j;k++)s-=L[i][k]*L[j][k];if(i===j){if(s<=1e-10)return null;L[i][i]=Math.sqrt(s);}else L[i][j]=s/L[j][j];}return L;}
+// links that don't fit together (e.g. three strong ones that can't all hold) are shrunk until the matrix is valid
+function cholPD(C){let A=C.map(r=>r.slice());for(let t=0;t<60;t++){const L=chol(A);if(L)return L;A=A.map((r,i)=>r.map((v,j)=>i===j?1:v*.92));}return A.map((r,i)=>r.map((v,j)=>i===j?1:0));}
+// chance that every leg hits, marginal chances ps and link matrix R (normal copula); unlinked groups multiply exactly
+const JPC=new Map();
+function jointP(ps,R){const d=ps.length;if(!d)return 1;if(ps.some(p=>!(p>0)))return 0;
+  const par=[...ps.keys()],f=i=>par[i]===i?i:(par[i]=f(par[i]));for(let i=0;i<d;i++)for(let j=i+1;j<d;j++)if(Math.abs(R[i][j])>1e-9)par[f(i)]=f(j);
+  const grp=new Map();for(let i=0;i<d;i++){const r=f(i);if(!grp.has(r))grp.set(r,[]);grp.get(r).push(i);}
+  let out=1;
+  for(const ix of grp.values()){const z=ix.map(i=>ps[i]>=1?9:invNorm(clamp(ps[i],1e-9,1-1e-9)));
+    if(ix.length===1){out*=ps[ix[0]];continue;}
+    if(ix.length===2){out*=bvnP(z[0],z[1],R[ix[0]][ix[1]]);continue;}
+    const Rs=ix.map(i=>ix.map(j=>R[i][j])),key=z.map(v=>v.toFixed(4)).join(',')+'|'+Rs.map(r=>r.map(v=>v.toFixed(3)).join(',')).join(';');
+    if(JPC.has(key)){out*=JPC.get(key);continue;}
+    const L=cholPD(Rs),rnd=mulberry32(hashStr(key)),N=20000,k=ix.length,e=new Float64Array(k);let hit=0;
+    for(let n=0;n<N;n++){for(let i=0;i<k;i++)e[i]=gauss(rnd);let ok=true;for(let i=0;i<k&&ok;i++){let x=0;for(let j=0;j<=i;j++)x+=L[i][j]*e[j];if(!(x<z[i]))ok=false;}if(ok)hit++;}
+    const p=hit/N;if(JPC.size>4000)JPC.clear();JPC.set(key,p);out*=p;}
+  return clamp(out,0,1);}
+// one game's legs together: player legs and anytime TDs as linked units; the game's own markets (and module legs such as
+// soccer scorers) priced together by the game's model as one block, linked to each unit by its strongest measured link
+function gameJoint(g,units,blk){
+  const pu=units.map(L=>isP(L.key)?((pLegInfo(L.key)||{}).p||0):(g?p1(g,L.key):0));let pb=null;
+  if(blk.length){if(!g)return 0;pb=probOf(g,blk);}
+  if(pb===0||pu.some(x=>!(x>0)))return 0;
+  const d=units.length+(pb!=null?1:0);if(!g||d<2)return pu.reduce((a,b)=>a*b,1)*(pb==null?1:pb);
+  const M=units.map(L=>legMeta(L,g)),BM=blk.map(k=>legMeta({gid:g.id,key:k},g)).filter(Boolean),R=[];
+  for(let i=0;i<d;i++){R.push(new Array(d).fill(0));R[i][i]=1;}
+  for(let i=0;i<units.length;i++){for(let j=i+1;j<units.length;j++){const r=legRho(M[i],M[j],g.id);if(r)R[i][j]=R[j][i]=r.r;}
+    if(pb!=null){let best=0;for(const b of BM){const r=legRho(M[i],b,g.id);if(r&&Math.abs(r.r)>Math.abs(best))best=r.r;}R[i][d-1]=R[d-1][i]=best;}}
+  return jointP(pb!=null?[...pu,pb]:pu,R);}
+const isUnit=k=>isP(k)||/^TD:A:/.test(k);
+// parlay hit chance: each game's legs priced together (exact score matrix for soccer/NHL, 100,000 sims otherwise, and the
+// measured links between player legs, TDs and the game's result), separate games multiplied
 function parlayProb(legs){
-  const by={};let p=1,indep=1;
-  for(const L of legs){if(isP(L.key)){const i=pLegInfo(L.key);const q=i?i.p:0;p*=q;indep*=q;}else (by[L.gid]=by[L.gid]||[]).push(L.key);}
-  for(const gid in by){const g=gameById(gid);if(!g)return {p:0,indep:0};p*=probOf(g,by[gid]);for(const k of by[gid])indep*=p1(g,k);}
+  const by=new Map();let p=1,indep=1;
+  for(const L of legs){if(!by.has(L.gid))by.set(L.gid,[]);by.get(L.gid).push(L);}
+  for(const [gid,Ls] of by){const g=gameById(gid),units=Ls.filter(L=>isUnit(L.key)),blk=Ls.filter(L=>!isUnit(L.key)).map(L=>L.key);
+    if(blk.length&&!g)return {p:0,indep:0};
+    for(const L of units)indep*=isP(L.key)?((pLegInfo(L.key)||{}).p||0):(g?p1(g,L.key):0);
+    for(const k of blk)indep*=p1(g,k);
+    p*=gameJoint(g,units,blk);}
   return {p,indep};
 }
 // settle market `key` of game g for a final score h-a: true / false / null (unknown)
@@ -1172,11 +1263,21 @@ function buildTicket(o){
   const legs=[],perGame={},perWho={};const order=Object.keys(bySport);let guard=0;
   while(legs.length<o.n&&guard++<500){let added=false;
     for(const sp of order){if(legs.length>=o.n)break;const list=bySport[sp];
-      const i=list.findIndex(x=>(perGame[x.gid]||0)<o.perGame&&(perWho[x.who]||0)<o.perPlayer&&!(x.kind==='player'&&legs.some(y=>y.kind==='player'&&y.gid===x.gid&&y.team===x.team&&y.stat===x.stat)));
+      const i=list.findIndex(x=>(perGame[x.gid]||0)<o.perGame&&(perWho[x.who]||0)<o.perPlayer&&!(x.kind==='player'&&legs.some(y=>y.kind==='player'&&y.gid===x.gid&&y.team===x.team&&y.stat===x.stat))
+        &&!legs.some(y=>{if(y.gid!==x.gid)return false;const r=legRho(legMeta(x),legMeta(y),x.gid);return !!r&&r.r<=-.15;}));  // works against a leg already on the card
       if(i<0)continue;const x=list.splice(i,1)[0];const before=legs.length?parlayProb(legs).p:1,after=parlayProb([...legs,x]).p;if(after<=0||(legs.length&&after>=before*.995))continue;  // contradicts the slip, or adds nothing (BAR win already covers "no draw")
       for(let j=legs.length-1;j>=0;j--){const y=legs[j];if(y.gid!==x.gid||y.kind==='player')continue;const rest=[...legs.slice(0,j),...legs.slice(j+1),x];
         if(parlayProb(rest).p<=after*1.005){legs.splice(j,1);perGame[y.gid]--;}}  // the new leg already covers this one
-      legs.push(x);perGame[x.gid]=(perGame[x.gid]||0)+1;if(x.who)perWho[x.who]=(perWho[x.who]||0)+1;added=true;}
+      legs.push(x);perGame[x.gid]=(perGame[x.gid]||0)+1;if(x.who)perWho[x.who]=(perWho[x.who]||0)+1;added=true;
+      // its partner: a leg in the same game that the research says goes with it (the same player's other stat, his team's
+      // result, his QB...), when one clears the card's floor - so the card's legs help each other
+      if(o.pair!==false&&legs.length<o.n&&(perGame[x.gid]||0)<o.perGame){const mx=legMeta(x);let best=null;
+        for(const sp2 of order)for(const y of bySport[sp2]){if(y.gid!==x.gid)continue;const r=legRho(mx,legMeta(y),x.gid);if(!r||r.r<.15)continue;
+          if(y.who&&y.who!==x.who&&(perWho[y.who]||0)>=o.perPlayer)continue;
+          if(y.kind==='player'&&legs.some(z=>z.kind==='player'&&z.gid===y.gid&&z.team===y.team&&z.stat===y.stat))continue;
+          if(legs.some(z=>{if(z.gid!==y.gid)return false;const q=legRho(legMeta(y),legMeta(z),y.gid);return !!q&&q.r<=-.15;}))continue;
+          const a=parlayProb([...legs,y]).p;if(a>0&&(!best||a>best.a))best={y,a};}
+        if(best){const y=best.y,L2=bySport[y.sport];L2.splice(L2.indexOf(y),1);legs.push(y);perGame[y.gid]++;if(y.who)perWho[y.who]=(perWho[y.who]||0)+1;}}}
     if(!added)break;}
   const pr=parlayProb(legs);return {legs,p:pr.p,hours,n:o.n};
 }
@@ -1206,7 +1307,7 @@ function renderFantasy(){
   const HY=[5,10,15].map(n=>buildTicket({n,sports:fz.sports,minP:.6,target:.7,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed}));
   html+=`<h2>High-yield tickets <small>${fz.sports.length===5?'mixed sports':fz.sports.map(s=>(allS.find(a=>a[0]===s)||[,s])[1]).join(' + ')} · bigger payouts</small></h2><div class="grid">${HY.map((T,i)=>ticketCard('hy'+[5,10,15][i],`High yield · ${[5,10,15][i]} legs`,T,'Legs around 70% each. Long shots by design, with a real payout if it lands.')).join('')}</div>
    <div class="note">Every extra leg cuts the chance of hitting. Treat 10 and 15 leggers as small-stake lottery tickets.</div>`;
-  html+=sgpHTML(allS)+megaHTML()+stackHTML()+recLegsHTML()+recsHTML(id=>!/^mp-|^up|^pt-/.test(id));
+  html+=sgpHTML(allS)+helpHTML()+megaHTML()+stackHTML()+recLegsHTML()+recsHTML(id=>!/^mp-|^up|^pt-/.test(id));
   $('main').innerHTML=html;wireFz();
 }
 // same game parlay: every leg from one game, same scroller and style as the fantasy parlay
@@ -1227,7 +1328,7 @@ function sgpHTML(allS){
    <div class="fbox"><div class="ctrl"><div><div class="big mono" id="sgpN">${n}</div><div style="font-size:13px;color:var(--dim);font-weight:700">LEGS</div></div><input type="range" id="sgpR" min="2" max="10" value="${n}" aria-label="Same game parlay legs"></div>
    <div class="sec" style="margin-top:14px">Game</div><div style="display:flex;gap:7px;flex-wrap:wrap">${games.map(x=>`<button class="chip ${x.id===g.id?'on':''}" data-sgpg="${esc(x.id)}">${sportIco(x.sport)}${esc(x.away.abbr)} @ ${esc(x.home.abbr)}</button>`).join('')}</div></div>`+
    (most<n?`<div class="pc"><div class="pchead"><span class="pctitle">${esc(g.away.abbr)} @ ${esc(g.home.abbr)}</span></div><div class="why">This game has at most ${most} leg${most===1?'':'s'} that fit together right now. Lower the legs or pick another game.</div></div>`
-     :ticketCard('sgp',`${n}-leg same game parlay · ${esc(g.away.abbr)} @ ${esc(g.home.abbr)}`,T,`${esc(when(g))}.${T.minP<minP?` <b>This game is short of ${Math.round(minP*100)}% legs, so some legs here are down to ${Math.round(T.minP*100)}%.</b>`:''} Legs in the same game move together (a blowout helps some legs and hurts others), so the game lines are priced jointly from the simulation.`))+
+     :ticketCard('sgp',`${n}-leg same game parlay · ${esc(g.away.abbr)} @ ${esc(g.home.abbr)}`,T,`${esc(when(g))}.${T.minP<minP?` <b>This game is short of ${Math.round(minP*100)}% legs, so some legs here are down to ${Math.round(T.minP*100)}%.</b>`:''} Legs in the same game move together (a blowout helps some legs and hurts others), so they are priced jointly: the game lines from the simulation, player legs with the links measured on this season's box scores.`))+
    `<button class="btn full ghost" id="sgpNew" style="margin-bottom:6px">🔀 New same game mix</button>`;
 }
 // 20 legs: the 3 safest legs from each of the best games (2 from the last), every leg ~85% or more
@@ -1418,7 +1519,8 @@ function legInfoOf(L){if(isP(L.key)){const i=pLegInfo(L.key);return i?{player:i.
 function clashes(x,others){
   const xi=legInfoOf(x);
   for(const o of others){if(legSig(o)===legSig(x))return true;const oi=legInfoOf(o);
-    if(xi&&oi){if(nameKey(xi.player.name)===nameKey(oi.player.name))return true;
+    if(xi&&oi){if(nameKey(xi.player.name)===nameKey(oi.player.name)){  // the same player twice: only two different stats the research links
+        if(xi.player.stat===oi.player.stat)return true;const r=legRho(legMeta(x),legMeta(o),x.gid);if(!r||r.r<.15)return true;continue;}
       if(xi.player.gid===oi.player.gid&&xi.player.team===oi.player.team&&xi.player.stat===oi.player.stat)return true;}}  // the mental game: one shooter per team per stat
   return false;}
 function subCands(legs,i,cardId){
@@ -1450,6 +1552,8 @@ function subCands(legs,i,cardId){
     if(isP(L.key)){const [,pid,t0]=String(L.key).split(':'),pl=DATA.players.find(p=>p.id===pid);
       if(pl&&pl.status==='active'&&g0&&openG(g0))for(const t of new Set([...(LADDER[pl.stat]||[]),...[-2,-1,1,2].map(d=>Math.max(1,Math.round(pl.avg)+d))])){if(t===+t0)continue;const p=playerP(pl,t);if(p>=.05&&p<=.98)alt.push({gid:pl.gid,key:`P:${pl.id}:${t}`,label:`${pl.name} ${t}+ ${STATN[pl.stat]}`,p});}}
     else if(csOnly&&g0&&openG(g0)&&priced(g0)){for(const m of marketsFor(g0)){if(!m.cs||m.key===L.key||out.some(o=>o.gid===g0.id&&o.key===m.key))continue;const p=p1(g0,m.key);if(p>0)alt.push({gid:g0.id,key:m.key,label:`${m.label} (exact score)`,p});}}
+    // a game market: the same game's other lines (alternate spreads / totals), not only the best one per market
+    else if(!isP(L.key)&&!legType(L.key)&&g0&&openG(g0)&&priced(g0)){for(const m of marketsFor(g0)){if(m.cs||m.nopool||m.key===L.key||out.some(o=>o.gid===g0.id&&o.key===m.key))continue;const p=p1(g0,m.key);if(p>0)alt.push({gid:g0.id,key:m.key,label:m.label,p});}}
     alt.sort((a,b)=>Math.abs(a.p-Lp)-Math.abs(b.p-Lp));
     for(const x of alt){if(out.length>=3)break;const n0=out.length;take(x);if(out.length>n0)out[n0].d+=.03;}}
   out.sort((a,b)=>a.d-b.d);
@@ -1460,15 +1564,16 @@ function subCands(legs,i,cardId){
     if(isP(x.key)){const i=pLegInfo(x.key),pl=i&&i.pl;
       if(pl){const li=isP(L.key)&&pLegInfo(L.key);if(li&&li.pl.id===pl.id){why.push('same player, another line');sc+=.01;}
         if(STAT_PREF[pl.stat]){why.push('points leg (preferred)');sc-=.02;}
-        for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid)continue;
-          if(pl.stat==='ast'&&oi.pl.stat==='pts'){why.push(`his assists feed ${oi.pl.name}'s points`);sc-=.03;}
-          else if(pl.stat==='pts'&&oi.pl.stat==='ast'){why.push(`${oi.pl.name}'s assists feed his points`);sc-=.03;}
-          else if(pl.stat!==oi.pl.stat){why.push(`doesn't compete with ${oi.pl.name} (${STATN[oi.pl.stat]})`);sc-=.01;}}
+        for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid||oi.pl.stat===pl.stat)continue;
+          if(!legRho(legMeta(x),legMeta(o),x.gid)){why.push(`doesn't compete with ${oi.pl.name} (${STATN[oi.pl.stat]})`);sc-=.01;}}
         const c=g&&closeOf(g);if(c&&c.p>=.45){why.push(`close game (${pct(c.p)} within 8): starters play`);sc-=.015;}
         const M=playerMeans(pl);if(M.c&&M.c.pb>=.25){why.push(`blowout risk ${pct(M.c.pb)}: may sit late`);sc+=.02;}
         const l4=last4Of(pl.team,pl.name),th=+x.key.split(':')[2];if(l4){const v=l4.rows.filter(r=>!r.dnp&&r[pl.stat]!=null).map(r=>r[pl.stat]);if(v.length){const h=v.filter(z=>z>=th).length;why.push(`cleared ${h}/${v.length} recent games`);sc-=.02*(h/v.length-.5);}}
         else if(M.rf)why.push(`last ${M.rf.last5.length}: ${M.rf.last5.join(', ')}`);}
     } else if(g){const Lg=gameById(L.gid);if(Lg&&Lg.comp===g.comp)why.push('same league');if(x.gid!==L.gid)why.push(`${g.away.abbr} @ ${g.home.abbr}`);}
+    // what the research measured between this option and the card's other legs on the same game
+    for(const o of others){if(o.gid!==x.gid)continue;const r=legRho(legMeta(x),legMeta(o),x.gid);if(!r||Math.abs(r.r)<.1)continue;
+      if(r.r>0){why.push(`helps ${o.label}: ${helpWhy(r)}`);sc-=.06*r.r;}else{why.push(`⚠ works against ${o.label}: ${helpWhy(r)}`);sc+=.06*-r.r;}}
     const ls=lessonOf(x);if(ls&&ls.gap<-.15){why.push(`⚠ ${ls.k} legs hit ${ls.w}/${ls.n} lately vs ${pct(ls.expRate)} expected`);sc+=.03;}
     else if(ls&&ls.gap>.1)why.push(`${ls.k} legs hit ${ls.w}/${ls.n} lately`);
     x.why=why;x.sc=sc;}
@@ -1484,29 +1589,48 @@ function ctxNote(L){if(!isP(L.key))return '';const i=pLegInfo(L.key);if(!i)retur
 // ---- 500,000 runs, game by game: one simulated result per game per run (margin + total for NBA / NFL / college football,
 // a final score for soccer / NHL); every leg on that game is settled on it, and player legs draw from their blowout / normal
 // chance by the simulated margin. Legs the engine can't settle on a score are drawn on their own at their chance.
-const N5=500000,RHO=.2,SQR=Math.sqrt(RHO),SQ1=Math.sqrt(1-RHO);  // teammates' legs: correlation .2 through a shared team factor
+const N5=500000;  // runs per card simulation; links between legs come from pairs.json (legRho)
 function gauss(R){let u=0;while(u===0)u=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R());}
+// normal score of each value's mid-rank (ties share one), weighted: the simulated margin / total as a standard normal
+function zScores(vals,w){const cnt=new Map();let tot=0;for(let i=0;i<vals.length;i++){const q=w?w[i]:1;cnt.set(vals[i],(cnt.get(vals[i])||0)+q);tot+=q;}
+  const ks=[...cnt.keys()].sort((a,b)=>a-b),sc=new Map();let c=0;for(const k of ks){const q=cnt.get(k);sc.set(k,invNorm(clamp((c+q/2)/tot,1e-6,1-1e-6)));c+=q;}
+  const out=new Float64Array(vals.length);for(let i=0;i<vals.length;i++)out[i]=sc.get(vals[i]);return out;}
+function simZ(s){return s._z||(s._z={zm:zScores(s.mg),zt:zScores(s.tt)});}
+function goalsZ(O){if(O._z)return O._z;const m=new Float64Array(O.n),t=new Float64Array(O.n);for(let i=0;i<O.n;i++){m[i]=O.h[i]-O.a[i];t[i]=O.h[i]+O.a[i];}return O._z={zm:zScores(m,O.p),zt:zScores(t,O.p)};}
+// 500,000 runs, game by game: each game's result is drawn from its own simulations (or exact score matrix); player legs and
+// anytime TDs are correlated normals linked to each other, to their team's margin and to the game total by the measured links
+// (pairs.json); starters sit late in simulated blowouts (NBA, NHL). Legs on different games are independent.
 function simJoint(legs,N=N5){
   const by=new Map();legs.forEach((L,i)=>{if(!by.has(L.gid))by.set(L.gid,[]);by.get(L.gid).push(i);});
   const R=mulberry32(hashStr(legs.map(legSig).join(','))),G=[];
   for(const [gid,ix] of by){const g=gameById(gid),m=g&&priced(g)?fit(g):null,e={ix,mode:'ind'};
-    if(m&&m.kind==='margin'){const s0=sim(g);if(s0){e.mode='margin';e.s=s0;}}
-    else if(m&&m.kind==='goals'){const O=outcomes(g);if(O){e.mode='goals';const c=new Float64Array(O.n);let a=0;for(let k=0;k<O.n;k++){a+=O.p[k];c[k]=a;}e.cdf=c;e.n=O.n;}}
+    if(m&&m.kind==='margin'){const s0=sim(g);if(s0){e.mode='margin';e.s=s0;const Z=simZ(s0);e.zm=Z.zm;e.zt=Z.zt;}}
+    else if(m&&m.kind==='goals'){const O=outcomes(g);if(O){e.mode='goals';const c=new Float64Array(O.n);let a=0;for(let k=0;k<O.n;k++){a+=O.p[k];c[k]=a;}e.cdf=c;e.n=O.n;const Z=goalsZ(O);e.zm=Z.zm;e.zt=Z.zt;}}
+    const U=[];
     e.ev=ix.map(i=>{const L=legs[i];
       if(isP(L.key)){const inf=pLegInfo(L.key);if(!inf)return {t:'ind',p:0};const thr=inf.under?Math.floor(inf.thr)+1:inf.thr,P=playerParts(inf.pl,thr,inf.under);
-        const tn=t=>invNorm(clamp(t,1e-6,1-1e-6));return {t:'pl',pn:P.pn,pb:P.pbw,zn:tn(P.pn),zb:tn(P.pbw),B:BLOW[g&&g.sport]||1e9,side:g&&inf.pl.team===g.away.abbr?1:0,under:!!inf.under};}
+        const tn=t=>invNorm(clamp(t,1e-6,1-1e-6)),v={t:'u',zn:tn(P.pn),zb:tn(P.pbw),B:BLOW[g&&g.sport]||1e9,L,x:0};U.push(v);return v;}
+      if(g&&/^TD:A:/.test(L.key)){const z=invNorm(clamp(p1(g,L.key),1e-6,1-1e-6)),v={t:'u',zn:z,zb:z,B:1e9,L,x:0};U.push(v);return v;}
       if(g&&!legType(L.key)&&mkOf(g,L.key)){if(e.mode==='goals')return {t:'mask',M:stdMask(g,L.key)};if(e.mode==='margin')return {t:'f',f:mkOf(g,L.key).f};}
       return {t:'ind',p:g?p1(g,L.key):(+L.p||0)};});
+    if(U.length){const k=U.length,Mt=U.map(v=>legMeta(v.L,g)),C=[];for(let a=0;a<k+2;a++){C.push(new Array(k+2).fill(0));C[a][a]=1;}
+      const hw=g?legMeta({gid:g.id,key:'H'},g):null,ov=g?{stat:'over',sport:g.sport,game:true}:null;
+      for(let a=0;a<k;a++){const r1=legRho(Mt[a],hw,gid),r2=legRho(Mt[a],ov,gid);C[0][a+2]=C[a+2][0]=r1?r1.r:0;C[1][a+2]=C[a+2][1]=r2?r2.r:0;
+        for(let b=a+1;b<k;b++){const r=legRho(Mt[a],Mt[b],gid);C[a+2][b+2]=C[b+2][a+2]=r?r.r:0;}}
+      e.U=U;e.Lc=cholPD(C);e.ee=new Float64Array(k+2);}
     G.push(e);}
   const lh=new Float64Array(legs.length);let hits=0;
   for(let r=0;r<N;r++){let all=true;
-    for(const e of G){let mg=0,tt=0,idx=0;const zt=[gauss(R),gauss(R)];  // one shared factor per team per run
-      if(e.mode==='margin'){const j=(R()*e.s.N)|0;mg=e.s.mg[j];tt=e.s.tt[j];}
-      else if(e.mode==='goals'){const u=R()*e.cdf[e.n-1];let lo=0,hi=e.n-1;while(lo<hi){const md=(lo+hi)>>1;if(e.cdf[md]<u)lo=md+1;else hi=md;}idx=lo;}
-      for(let k=0;k<e.ix.length;k++){const v=e.ev[k];let ok;
-        if(v.t==='pl'){const z=e.mode==='margin'&&Math.abs(mg)>=v.B?v.zb:v.zn,x=SQR*(v.under?zt[v.side]:-zt[v.side])+SQ1*gauss(R);ok=x<z;}  // a big team night pushes overs up, unders down
+    for(const e of G){let mg=0,tt=0,idx=0,zm=0,zt=0;
+      if(e.mode==='margin'){const j=(R()*e.s.N)|0;mg=e.s.mg[j];tt=e.s.tt[j];zm=e.zm[j];zt=e.zt[j];}
+      else if(e.mode==='goals'){const u=R()*e.cdf[e.n-1];let lo=0,hi=e.n-1;while(lo<hi){const md=(lo+hi)>>1;if(e.cdf[md]<u)lo=md+1;else hi=md;}idx=lo;zm=e.zm[idx];zt=e.zt[idx];}
+      else if(e.U){zm=gauss(R);zt=gauss(R);}
+      if(e.U){const L=e.Lc,ee=e.ee,k=e.U.length;ee[0]=zm/L[0][0];ee[1]=(zt-L[1][0]*ee[0])/L[1][1];for(let a=2;a<k+2;a++)ee[a]=gauss(R);
+        for(let a=0;a<k;a++){const row=L[a+2];let x=0;for(let b=0;b<=a+2;b++)x+=row[b]*ee[b];e.U[a].x=x;}}
+      for(let q=0;q<e.ix.length;q++){const v=e.ev[q];let ok;
+        if(v.t==='u'){const z=e.mode==='margin'&&Math.abs(mg)>=v.B?v.zb:v.zn;ok=v.x<z;}
         else if(v.t==='mask')ok=!!(v.M&&v.M[idx]);else if(v.t==='f')ok=!!v.f(mg,tt);else ok=R()<v.p;
-        if(ok)lh[e.ix[k]]++;else all=false;}}
+        if(ok)lh[e.ix[q]]++;else all=false;}}
     if(all)hits++;}
   const rate=hits/N,se=Math.sqrt(rate*(1-rate)/N);
   return {N,hits,rate,lo:Math.max(0,rate-1.96*se),hi:rate+1.96*se,legs:[...lh].map(x=>x/N),sig:legs.map(legSig).join(',')};}
@@ -1579,6 +1703,50 @@ function buildStacks(){
     [[S[0],n0],[S[1],n1]].forEach(([s,n])=>{if(!n||!s.M.length)return;const take=s.M.slice(0,n);stacks.push({...s,M:take,c});
       for(const m of take)legs.push({gid:g.id,key:`P:${m.pl.id}:${m.thr}`,label:`${m.pl.name} ${m.thr}+ ${STATN[m.st]}`,p:m.p,sport:'nba'});});});
   return {days,day,legs,stacks,nG:G.length};}
+// what the research found for a pair, in words
+function helpWhy(r){const w=r.row,s=(r.r>=0?'+':'−')+Math.abs(r.r).toFixed(2);
+  return `${w.desc.toLowerCase()}: ${w.pBgivenA!=null?`${pct(w.pBgivenA)} vs ${pct(w.pB)} when the first lands, `:''}link ${s} over ${w.n.toLocaleString()} games this season`;}
+function stackNote(){const a=pairsIdx().get('nba#tm|ast|pts'),b=pairsIdx().get('nba#pts|reb'),s=r=>(r.rho>=0?'+':'−')+Math.abs(r.rho).toFixed(2);
+  if(!a)return 'A team\'s playmaker (assists), scorer (points) and big (rebounds) make up a stack.';
+  return `This season's box scores: a playmaker's assists and his top scorer's points landed together ${a.reliable?'more often than chance':'about as often as chance would give'} (link ${s(a)}${a.reliable?'':', not reliable'}, ${a.n} games), so stacks are picked for roles and close games${a.reliable?'':', not for a proven lift between the teammates'}.${b&&b.reliable?` A player's own points and rebounds do go together (link ${s(b)}).`:''}`;}
+// pairs of legs in one game that the research says help each other: the same player's two stats (a back's touchdown and
+// rushing yards, a receiver's catches and yards, a skater's point and shots), a QB and his top receiver, a player and his
+// team's win. Each at the line nearest 65%; priced together; best together-chance first, two per game at most.
+let HPC=null;
+function helpPairs(){if(HPC&&HPC.d===DATA&&now()-HPC.t<5*60e3)return HPC.v;const v=helpPairs0();HPC={d:DATA,t:now(),v};return v;}
+function helpPairs0(){const out=[],FB={nfl:1,ncaaf:1};  // football is weekly: its next 8 days; the rest the next 3
+  for(const g of DATA.games){if(!openG(g)||startMs(g)>now()+(FB[g.sport]?8:3)*864e5||!['nfl','ncaaf','nba','nhl','soccer'].includes(g.sport))continue;
+    const C=[];
+    for(const pl of DATA.players||[]){if(pl.gid!==g.id||pl.status!=='active'||!LADDER[pl.stat])continue;
+      const ls=LADDER[pl.stat].map(t=>({t,p:playerP(pl,t)})).filter(x=>x.p>=.4&&x.p<=.9);if(!ls.length)continue;
+      const b=ls.reduce((a,x)=>Math.abs(x.p-.65)<Math.abs(a.p-.65)?x:a);C.push({gid:g.id,key:`P:${pl.id}:${b.t}`,label:`${pl.name} ${b.t}+ ${STATN[pl.stat]}`,p:b.p,sport:g.sport});}
+    if(g.sport==='nfl'&&DATA.nflByTd&&legType('TD:A:X:y'))for(const [k,x] of DATA.nflByTd){const [team,slug]=k.split('|');if(team!==g.home.abbr&&team!==g.away.abbr)continue;
+      const key=`TD:A:${team}:${slug}`,p=p1(g,key);if(p>=.15&&p<=.9)C.push({gid:g.id,key,label:`${x.name} anytime TD`,p,sport:g.sport});}
+    if(priced(g))for(const s of ['H','A']){const p=p1(g,s);if(p>=.45&&p<=.92)C.push({gid:g.id,key:s,label:`${(s==='H'?g.home:g.away).name} to win`,p,sport:g.sport});}
+    const P=[];
+    for(let i=0;i<C.length;i++)for(let j=i+1;j<C.length;j++){const r=legRho(legMeta(C[i],g),legMeta(C[j],g),g.id);if(!r||r.r<.15)continue;
+      const pj=parlayProb([C[i],C[j]]).p,pi=C[i].p*C[j].p;if(pj<.2)continue;P.push({g,a:C[i],b:C[j],r,pj,pi,lift:pj/pi});}
+    // per game, the best pair of each kind (a leg may sit in pairs of different kinds)
+    P.sort((x,y)=>y.pj*Math.sqrt(y.lift)-x.pj*Math.sqrt(x.lift));const kinds=new Set();
+    for(const x of P){if(kinds.has(x.r.row.desc))continue;kinds.add(x.r.row.desc);out.push(x);}}
+  return out.sort((x,y)=>y.pj*Math.sqrt(y.lift)-x.pj*Math.sqrt(x.lift));}
+// the pairs by kind (touchdown + yards first), the best three of each
+function helpGroups(P){const by=new Map();for(const x of P){const k=x.r.row.desc;if(!by.has(k))by.set(k,[]);by.get(k).push(x);}
+  return [...by.entries()].sort((a,b)=>(/touchdown/i.test(b[0])-/touchdown/i.test(a[0]))||(b[1][0].r.r-a[1][0].r.r)).slice(0,8).map(([k,v])=>({k,row:v[0].r.row,xs:v.slice(0,2)}));}
+function helpHTML(){const P=helpPairs(),R=DATA.pairs;
+  if(!R||!R.sports)return '';
+  const top=[];for(const [sp,S] of Object.entries(R.sports))for(const [k,w] of Object.entries(S.pairs||{}))if(w.reliable&&w.rho>=.2&&!/\|(win|over)$/.test(k)&&w.pBgivenA!=null)top.push({sp,w});
+  top.sort((a,b)=>b.w.rho-a.w.rho);
+  // the paired parlay: one touchdown pair if there is one, then the likeliest pairs, each from a different game
+  const pick=[],td=P.find(x=>/TD:A:/.test(x.a.key+x.b.key));if(td)pick.push(td);for(const x of P){if(pick.length>=3)break;if(pick.some(y=>y.g.id===x.g.id))continue;pick.push(x);}
+  const T=pick.length>=2?(()=>{const legs=pick.flatMap(x=>[x.a,x.b]);return {legs,p:parlayProb(legs).p,n:legs.length};})():null;
+  return `<h2>Legs that help each other <small>pairs that land together, measured this season</small></h2>
+   <div class="note">When one leg lands, the other usually does too: a running back who scores has usually been running well, a receiver's catches bring his yards, a skater's goal comes with shots. These are measured on this season's box scores (${Object.entries(R.sports).map(([sp,S])=>`${(SPORTNAME[sp]||sp)} ${S.games}`).join(', ')} games) against each player's own usual level, and the chances below price both legs together. Pairs with no reliable link are left out.</div>
+   ${top.length?`<div class="panel" style="padding:2px 14px">${top.slice(0,6).map(({sp,w})=>`<div class="mrow"><div class="lbl">${esc(w.desc)} <small>${esc(SPORTNAME[sp]||sp)} · when the first landed, the second did ${pct(w.pBgivenA)} of the time vs ${pct(w.pB)} overall · ${w.n.toLocaleString()} player-games</small></div><span class="mono" style="font-weight:800">×${w.lift}</span><span></span></div>`).join('')}</div>`:''}
+   ${P.length?helpGroups(P).map(G=>`<div class="sec">${esc(G.k)} <span style="font-weight:600;text-transform:none;letter-spacing:0">· link ${G.row.rho>=0?'+':'−'}${Math.abs(G.row.rho).toFixed(2)}</span></div><div class="panel" style="padding:2px 14px">${G.xs.map(x=>`<div class="mrow"><div class="lbl">${esc(x.a.label)} + ${esc(x.b.label)}<small>${esc(x.g.away.abbr)} @ ${esc(x.g.home.abbr)} · ${esc(when(x.g))} · ${pct(x.a.p)} and ${pct(x.b.p)} · together ${pct(x.pj)} (${pct(x.pi)} if unrelated)</small><small class="subwhy">${esc(helpWhy(x.r))}</small></div><span class="mono" style="font-weight:800">${pct(x.pj)}</span><span></span><button class="yes" data-addpair="${esc(x.g.id)}|${esc(x.a.key)}|${esc(x.b.key)}" aria-label="Add ${esc(x.a.label)} and ${esc(x.b.label)}">Add both</button></div>`).join('')}</div>`).join(''):'<div class="pc"><div class="why">No pairs with a reliable link in the coming games.</div></div>'}
+   ${T?ticketCard('pairs',`Paired parlay · ${T.legs.length} legs`,T,'The strongest pairs from different games. Each pair is priced together; the 500,000 runs draw the same links.'):''}`;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-addpair]');if(!b)return;const [gid,...ks]=b.dataset.addpair.split('|');
+  for(const k of ks)if(!inSlip(gid,k))toggleLeg(gid,k);renderSlipBar();toast('Both legs added to the slip');});
 function recLegsHTML(){
   const lim=now()+8*864e5,C=[];
   for(const pl of DATA.players){if(pl.stat!=='rec'||pl.status!=='active')continue;const g=gameById(pl.gid);if(!g||!openG(g)||startMs(g)>lim)continue;
@@ -1597,12 +1765,12 @@ function stackHTML(){
   const T={legs:B.legs,p:parlayProb(B.legs).p,n:B.legs.length},fmtDay=d=>dayLabel(d);
   const mrow=(m)=>`<div class="stkm"><b>${esc(m.role)}: ${esc(m.pl.name)} ${m.thr}+ ${STATN[m.st]}</b> <span class="mono">${pct(m.p)}</span>
     <small>${m.vals.length?`last ${m.l4.rows.length}: ${m.l4.rows.map(r=>r.dnp?'DNP':r[m.st]).join(', ')} · cleared ${m.hits}/${m.vals.length}`:'last games not found'}${m.missedLast?' · <b style="color:var(--no)">missed his last game</b>':''}${m.sub?` · if he sits: ${esc(m.sub.name)} (${m.sub.avg} ${STATN[m.st]})`:''}</small></div>`;
-  return `<h2>Duo & trio stacks <small>starters whose stats feed each other</small></h2>
-   <div class="note">A playmaker's assists need someone to score, so a team's playmaker (assists), scorer (points) and big (rebounds) tend to land together. Two players on the same stat fight over the same shots, so they're never stacked. Close games keep starters on the floor, so the closest games go first.</div>
+  return `<h2>Duo & trio stacks <small>scorer, playmaker and big · close games first</small></h2>
+   <div class="note">${stackNote()} Two players on the same stat fight over the same shots, so they're never stacked. Close games keep starters on the floor, so the closest games go first.</div>
    <div class="fbox"><div class="ctrl"><div><div class="big mono" id="stkLN">${stk.legs}</div><div style="font-size:13px;color:var(--dim);font-weight:700">LEGS</div></div><input type="range" id="stkL" min="2" max="15" value="${stk.legs}" aria-label="Stack legs"></div>
     <div class="ctrl" style="margin-top:10px"><div><div class="big mono" id="stkGN">${stk.games}</div><div style="font-size:13px;color:var(--dim);font-weight:700">GAMES</div></div><input type="range" id="stkG" min="1" max="${Math.max(1,Math.min(8,B.nG||1))}" value="${Math.min(stk.games,Math.max(1,B.nG||1))}" aria-label="Stack games"></div>
     <div class="sec" style="margin-top:12px">Day</div><div style="display:flex;gap:7px;flex-wrap:wrap">${B.days.map(([d,n])=>`<button class="chip ${d===B.day?'on':''}" data-stkday="${d}">${esc(fmtDay(d))} · ${n}</button>`).join('')}</div></div>
-   ${B.legs.length>=2?ticketCard('stk',`${B.legs.length}-leg stack parlay · ${esc(fmtDay(B.day))}`,T,`${B.stacks.length} stacks from ${new Set(B.stacks.map(s=>s.g.id)).size} games. The card's % multiplies the legs; the 500,000 runs let teammates' legs move together, as stacks do.`):'<div class="pc"><div class="why">Not enough starters with a playmaker, scorer and big on this day yet.</div></div>'}
+   ${B.legs.length>=2?ticketCard('stk',`${B.legs.length}-leg stack parlay · ${esc(fmtDay(B.day))}`,T,`${B.stacks.length} stacks from ${new Set(B.stacks.map(s=>s.g.id)).size} games. The card's % and the 500,000 runs use the links measured on this season's box scores.`):'<div class="pc"><div class="why">Not enough starters with a playmaker, scorer and big on this day yet.</div></div>'}
    ${B.stacks.map(s=>`<div class="pc"><div class="pchead"><span class="pctitle">${esc(s.team)} stack · ${esc(s.g.away.abbr)} @ ${esc(s.g.home.abbr)}</span><span class="hit h-mid">${s.c?`${pct(s.c.p)} within 8`:'closeness n/a'}</span></div>
      <div class="why">${s.c?`${s.c.p>=.45?'Close game: starters should play big minutes.':'Could get away from one side: starters may sit late.'} (${s.c.src==='Polymarket'?'from Polymarket\'s moneyline':'from the game\'s simulations'})`:''}${s.games?` In the last ${s.games} games together the stack cleared every line ${s.both} time${s.both===1?'':'s'} and moved the same way ${s.moved} time${s.moved===1?'':'s'}.`:''}</div>
      ${s.M.map(mrow).join('')}</div>`).join('')}
@@ -1902,6 +2070,10 @@ function openSlip(){
   tips.push(baseP>=.75?['ok','✓',`<b>Anchor leg:</b> <span>${esc(legLabel(base))} (${pct(baseP)}). Strong start.</span>`]:baseP>=.62?['warn','!',`<b>Anchor leg is soft</b> <span>(${pct(baseP)}). Look for a leg you're more sure of, or go smaller.</span>`]:['bad','✗',`<b>No strong anchor leg.</b> <span>Your most likely leg is only ${pct(baseP)}. Bet a single or a 2-leg instead.</span>`]);
   tips.push(slip.length<=3?['ok','✓',`<b>${slip.length} legs.</b> <span>Small parlays hit far more often.</span>`]:slip.length===4?['warn','!',`<b>4 legs.</b> <span>Still OK, but each extra leg cuts your chances.</span>`]:['bad','✗',`<b>${slip.length} legs is a lot.</b> <span>This is how parlays lose by one leg. Trim the weakest.</span>`]);
   tips.push(pr.p===0?['bad','✗',`<b>Conflicting legs.</b> <span>These can't all win together.</span>`]:connected?['ok','✓',`<b>Connected legs: ${connected}.</b> <span>Same-game legs that move together${boost>1.01?`, worth +${pct(boost-1)} vs. random legs`:boost<.99?`, though some pull against each other (${pct(boost-1)})`:''}.</span>`]:['warn','!',`<b>No connected legs.</b> <span>Try adding a leg from the base's game that helps it win.</span>`]);
+  {const H=[],W=[];for(let i=0;i<slip.length;i++)for(let j=i+1;j<slip.length;j++){const A=slip[i],B=slip[j];if(A.gid!==B.gid)continue;const r=legRho(legMeta(A),legMeta(B),A.gid);if(!r||Math.abs(r.r)<.1)continue;
+      (r.r>0?H:W).push(`${legLabel(A)} + ${legLabel(B)} (${helpWhy(r)})`);}
+   if(H.length)tips.push(['ok','✓',`<b>Legs that help each other:</b> <span>${esc(H.slice(0,3).join('; '))}.</span>`]);
+   if(W.length)tips.push(['warn','!',`<b>Legs that work against each other:</b> <span>${esc(W.slice(0,3).join('; '))}. Consider swapping one.</span>`]);}
   {const seen={},clash=[];for(const L of slip){if(!isP(L.key))continue;const pl=playerById(L.key.split(':')[1]);if(!pl)continue;const k=L.gid+'|'+pl.team+'|'+pl.stat;if(seen[k])clash.push(seen[k]+' and '+pl.name);else seen[k]=pl.name;}
    if(clash.length)tips.push(['bad','✗',`<b>Teammates fighting for the same stat:</b> <span>${esc(clash.join('; '))}. They take from each other, so drop one.</span>`]);}
   tips.push(['ok','$',`<b>Shop the price.</b> <span>Fair odds are <b class="mono">${pr.p>0?fmtOdds(pr.p):'—'}</b>. Check your books and only bet it if one pays more.</span>`]);
@@ -2189,7 +2361,7 @@ async function load(){ // -> true when DATA was replaced
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
   // nbaroles.json + injuries.json = season averages and injury report: NBA games with no posted props get season-average
   // player legs from them (addRolePlayers); mypicks.json = the once-a-day My Parlay Picks made by the daily job
-  let [d,pr,sc,ro,inj,mp,pf,l4,rc,nr]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json'),get('recs.json'),get('nflrec.json')]);
+  let [d,pr,sc,ro,inj,mp,pf,l4,rc,nr,pj,np]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json'),get('recs.json'),get('nflrec.json'),get('pairs.json'),get('nflplayers.json')]);
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
@@ -2208,11 +2380,32 @@ async function load(){ // -> true when DATA was replaced
   if(!pf&&dataLoaded&&DATA.playerform)d.playerform=DATA.playerform;
   else if(pf&&Array.isArray(pf.players)){d.playerform=new Map();for(const x of pf.players){if(!x||!x.name||!x.team||!x.stat)continue;const l5=(x.last5||[]).map(Number).filter(Number.isFinite);d.playerform.set(String(x.team).toUpperCase()+'|'+nameKey(x.name)+'|'+x.stat,{...x,last5:l5,avg5:l5.length?l5.reduce((a,b)=>a+b,0)/l5.length:null});}}d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
   if(!nr&&dataLoaded)nr=REC_LAST;REC_LAST=nr;addReceivers(d,nr);
+  // pairs.json: which legs help each other (tools/leg_pairs.py); nflplayers.json: NFL / college yards lines from box scores
+  d.pairs=pj&&pj.sports?pj:(dataLoaded?DATA.pairs:null);if(!np&&dataLoaded)np=NFLP_LAST;NFLP_LAST=np;addNflPlayers(d,np);
   applyLines(d);
   const ids=new Set(d.games.map(g=>g.id));for(const [k,v] of SIMC)if(!ids.has(k.slice(0,k.indexOf('|'))))SIMC.delete(k);
   DATA=d;pCache.clear();PCTX.clear();autoCache={};dataLoaded=true;if(!d.seeded)lastGood=Date.now();emit('data',DATA);return true;
 }
-let lastGood=null,ROLES_LAST=null,INJ_LAST=null,REC_LAST=null;
+let lastGood=null,ROLES_LAST=null,INJ_LAST=null,REC_LAST=null,NFLP_LAST=null;
+// the anytime-TD legs' player slug (firsttd.js): accents and Jr / Sr / II... dropped, words joined by dashes
+const tdSlug=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/ /g,'-');
+// NFL / college yards legs (nflplayers.json, this season's ESPN box scores via tools/leg_pairs.py): rushing yards for backs
+// (and running QBs), receiving yards for receivers, tight ends and backs, passing yards for QBs - each on his team's upcoming
+// games, with his own game-to-game spread. A player who missed his team's last game is left out (likely hurt).
+function addNflPlayers(d,np){d.nflpos=new Map();d.nflByTd=new Map();if(!np||!Array.isArray(np.teams))return;d.playerform=d.playerform||new Map();
+  for(const T of np.teams){const P=(T.players||[]).filter(p=>p&&p.name&&Array.isArray(p.dates)&&p.dates.length);if(!P.length)continue;
+    const lastDate=Math.max(...P.map(p=>Date.parse(p.dates[p.dates.length-1])||0)),SD=(((d.pairs||{}).sports||{})[T.sport]||{}).sd||{};
+    for(const p of P)d.nflpos.set(T.feedAbbr+'|'+nameKey(p.name),p.pos);
+    for(const g of d.games){if(g.sport!==T.sport||isFinal(g)||isVoid(g))continue;const side=g.home.abbr===T.feedAbbr?g.home:g.away.abbr===T.feedAbbr?g.away:null;if(!side)continue;
+      for(const p of P){if(T.sport==='nfl'&&p.pos)d.nflByTd.set(side.abbr+'|'+tdSlug(p.name),{name:p.name,pos:p.pos});
+        if((Date.parse(p.dates[p.dates.length-1])||0)<lastDate)continue;  // missed the last game
+        for(const [st,ok,act] of [['ryd',p.pos==='RB'||p.pos==='QB',i=>(p.ra||[])[i]>0],['recyd',p.pos==='WR'||p.pos==='TE'||p.pos==='RB',i=>(p.tgt||[])[i]>0||(p.rec||[])[i]>0],['pyd',p.pos==='QB',i=>(p.pa||[])[i]>=10]]){
+          if(!ok||!Array.isArray(p[st]))continue;const v=p[st].filter((_,i)=>act(i)).map(Number).filter(Number.isFinite);if(v.length<3)continue;
+          const avg=v.reduce((a,b)=>a+b,0)/v.length;if(avg<(st==='pyd'?120:20))continue;
+          const m=SD[st]?SD[st].a+SD[st].b*avg:.45*avg+8,own=v.length>=5?Math.sqrt(v.reduce((a,b)=>a+(b-avg)**2,0)/(v.length-1)):m,sd=Math.max(6,.5*m+.5*own);
+          const id=`${nameKey(p.name)}-${st}~${g.id}`;if(d.players.some(x=>x.id===id))continue;
+          d.players.push({id,gid:g.id,name:p.name,stat:st,avg:+avg.toFixed(1),sd:+sd.toFixed(1),pos:p.pos,status:'active',team:side.abbr,est:true,mpg:0});
+          const l4=v.slice(-4);if(d.playerform instanceof Map)d.playerform.set(side.abbr+'|'+nameKey(p.name)+'|'+st,{name:p.name,team:side.abbr,stat:st,last5:l4,avg5:+(l4.reduce((a,b)=>a+b,0)/l4.length).toFixed(1),confidence:'verified',note:'ESPN box scores'});}}}}}
 function clampLong(root){if(!root)return;for(const el of root.querySelectorAll('.why,.note,.subwhy,.lineup>div')){if(el.dataset.cl)continue;el.dataset.cl='1';
     if((el.textContent||'').length<180)continue;el.classList.add('clamp');
     if(el.scrollHeight<=el.clientHeight+2){el.classList.remove('clamp');continue;}
@@ -2261,7 +2454,7 @@ function refreshAll(){
 function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
 document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
 setInterval(refreshTick,10*60*1000);
-window.__fm2={lessons,legKind,get autoCache(){return autoCache},mpReplace,recsHTML,buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+window.__fm2={legMeta,legRho,jointP,bvnP,gameJoint,helpPairs,helpGroups,sgpTicketFor:g=>sgpTicket(g,5,.7,0,true),pairRow,teamRoles,lessons,legKind,get autoCache(){return autoCache},mpReplace,recsHTML,buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

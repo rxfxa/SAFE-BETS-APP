@@ -24,7 +24,8 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - a same game parlay (pick a game, 2-10 legs);
   - a 20-leg safest combo on one day;
   - **reception legs (NFL / college)**: receivers' catches from their last 4 ESPN box scores (nflrec.json, tools/rec_last4.py), each with his levels (ladder of lines and chances); a 4-leg reception parlay, one catcher per team;
-  - **duo / trio stacks**: same-team starters whose stats feed each other (playmaker assists + scorer points + big rebounds; never two players on one stat), close games first, last-4 box scores, substitutes, legs and games scrollers.
+  - **duo / trio stacks**: same-team starters by role (playmaker assists + scorer points + big rebounds; never two players on one stat), close games first, last-4 box scores, substitutes, legs and games scrollers. The box scores show NBA teammates' lines barely move together (link +0.06, not reliable), and the page says so.
+  - **legs that help each other** (helpHTML): pairs grouped by kind, touchdown pairs first, each priced together vs unrelated, "Add both", and a paired parlay. Pair kinds include a back's TD + rushing yards, a receiver's catches + yards, QB + top receiver, a player + his team's win, NBA points + rebounds, NHL point + shots.
 - **Upset Parlays (upsets.js):**
   - underdogs and draws from Polymarket;
   - researched form (form.json) and a form-backed parlay;
@@ -51,7 +52,13 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 ## Every parlay card
 - **Swap legs (⇄):** 3+ substitutes of about the same chance that don't clash with the card. No player twice, no two players on one team for one stat, and the card's own rules hold. Kept per card for the day, with undo.
   When a crowded card leaves fewer than 3, the list adds the same player at another line or another exact score in the same game (ranked lower).
-- **🎲 500,000 runs:** game by game. Player legs are benched in simulated blowouts, and teammates share a team factor (correlation 0.2). Re-runs after a swap.
+- **🎲 500,000 runs:** game by game. Player legs and anytime TDs are correlated normals linked to each other, to their team's simulated margin and to the game total by the measured links (pairs.json); NBA / NHL starters sit late in simulated blowouts. Re-runs after a swap.
+- **Legs that help each other (pairs.json, tools/leg_pairs.py):**
+  - Measured on this season's ESPN box scores: NFL 162 games, college 822, NBA 248, NHL 334, soccer 545.
+  - Each leg "lands" when the player beats his own median (TD / goal: scores). The link is the normal-copula correlation of the 2x2 table, with a bootstrap over players. It is used only when its range excludes 0 and there are 150+ games.
+  - Examples: an NFL back's TD + rushing yards +0.42 (66% vs 46%); a receiver's catches + yards about +0.8; QB yards + top receiver +0.46; back's yards + team win +0.38; NBA points + rebounds +0.23; NHL goal + shots +0.43.
+  - Same-game legs are priced together (2 exact, 3+ by a seeded simulation). Builders add a partner leg that helps (link >= .15) and keep off legs that work against each other (<= -.15). Swaps and the slip say which legs help or hurt each other.
+  - The same player twice is allowed only for two different stats the research links.
 - **▶ Watch live** opens the Simulator.
 - **★ Rec next to every leg** (and ⇄): the swap list puts one RECOMMENDED pick on top. Every option says why: value, how it fits the card (assists feed a teammate's points), close game or blowout risk, recent box scores, and lessons (kinds of legs that keep missing are flagged and ranked down).
 - **The parlay builder** has ★ Rec and ⇄ on every leg too (same rules); picking a swap replaces that leg in the slip.
@@ -61,7 +68,8 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - "How our parlays did" shows on My Parlay Picks (all types) and Fantasy (its own types).
   - A My Parlay Picks card that misses a leg gets a "Replacement" card of the same kind, from games still to play.
   - "Lessons so far": each kind of leg's hit rate vs what the model expected (memory of what loses), with what to do next time.
-- **Player model:** season average, with recent form (playerform.json) counting 30%. The team's expected points come from the total and spread. In blowouts (15+ NBA, 17+ NFL, 21+ college), starters ×0.8 and bench ×1.15.
+- **Player model:** season average, with recent form (playerform.json) counting 30%. The team's expected points come from the total and spread. In blowouts (15+ NBA, 17+ NFL, 21+ college), starters ×0.8 and bench ×1.15 (not for yards: the measured game-script link covers it).
+- **NFL / college yards legs (nflplayers.json):** rushing (backs, running QBs), receiving (WR / TE / RB), passing (QBs), each a normal with the player's spread shrunk to a measured a + b·mean model. A player who missed his team's last game is left out.
 
 ## Look
 - Long descriptions (.why / .note / reasons) clamp to 3 lines with "Read more" / "Show less" (clampLong, runs after every render).
@@ -83,6 +91,8 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | tools/euro_games.json | tools/euro_games.py (`--recent 21` daily; the full history once) |
 | .work/fdhist/*.csv (not committed) | tools/fd_history.py: 7 seasons × 7 leagues, past seasons kept |
 | nflrec.json | tools/rec_last4.py (ESPN box scores, NFL / college receivers on upcoming games) |
+| pairs.json, nflplayers.json | tools/leg_pairs.py (7:32 AM run; box-score cache in .work/box, only new games fetched) |
+| firsttd.json | tools/leg_pairs.py refreshes every NFL team's season TDs from box scores (game-day "status" notes kept) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
@@ -103,7 +113,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 36 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 37 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -165,3 +175,9 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
       - "typical" compared rounds of different sizes;
       - smaller ones: the 'late' cause in a part-played season, rest days, price buttons on started games, duplicate cards.
   - Swaps: crowded cards now always offer 3+ (today's exact-score cards and an SGP leg had 2).
+  - Legs that help each other (owner's idea: "McCaffrey 1 TD and 30+ rushing yards helped both legs"):
+    - measured on this season's box scores for 5 sports;
+    - NFL / college yards legs;
+    - linked legs priced together in cards and the 500,000-run sim;
+    - builders pair helping legs; firsttd.json refreshed from box scores (Seattle was missing).
+    - Correction: NBA teammates' lines barely move together, so the old 0.2 team factor and the "assists feed points" claim were removed.

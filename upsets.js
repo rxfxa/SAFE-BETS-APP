@@ -3,6 +3,7 @@
 // form.json = each team's current form researched from actual results (unbeaten run, win / losing streak, last 5, table
 // position, with sources): shown on every leg, and a second "form-backed" parlay takes only upsets the form supports.
 // Every parlay can be simulated 500,000 times: at the market's chances, and at the app's own model where it prices the game.
+// Every leg has a ⇄ swap: stand-ins of the same kind and about the same chance from games (and teams) not already on the card.
 (function () {
   const SB = window.SB;
   if (!SB || !(SB.version >= 2) || typeof SB.registerTab !== 'function') { console.warn('upsets.js: window.SB v2 API not found'); return; }
@@ -139,16 +140,69 @@
   const CARDS = {}, SIMS = {};  // card id -> legs; card id -> last 500k result (with the legs' signature, so a stale result is never shown)
   const sigOf = legs => legs.map(l => l.game + l.kind + l.label + l.mid + l.ask).join('|');
   const formLine = (name, f, sport) => f ? `<span class="fline">${esc(name)}: ${L5(f)} ${esc(formWords(f, sport) || f.record || '')}</span>` : '';
+  // ---------------- leg swaps ----------------
+  // card -> original leg's game -> the stand-in's key. Kept across re-renders; dropped once the original (or the stand-in)
+  // leaves the card, or the stand-in would now share a game or team with it.
+  const SWAP = { upMain: new Map(), upForm: new Map(), upEdge: new Map() }, META = {}, DRAWN = new Set();
+  let OPEN = null;  // 'card|game' whose stand-ins are showing
+  const N_SUB = 5, kOf = l => l.game + '|' + l.kind + '|' + l.label;
+  const KW = { upset: 'underdog', draw: 'draw', edge: 'close-game pick', form: 'form-backed upset' };
+  let GB = null, GM = null;
+  const gameOf = s => { const b = board(); if (b !== GB) { GB = b; GM = new Map(b.map(g => [g.slug, g])); } return GM.get(s); };
+  // a team is sport + code: college names are mascots ("Tigers" is ten schools), so the name alone isn't enough
+  const teamsOf = l => { const pg = gameOf(l.game); return pg ? [pg.home, pg.away].map(t => l.sport + ':' + (t.abbr || nk(t.alias || t.name))) : [l.sport + ':' + nk(l.team), l.sport + ':' + nk(l.vs)]; };
+  // the sim treats legs as independent: no second leg from a game on the card, nor from a team already on it
+  const clash = (c, taken) => { const T = new Set(teamsOf(c)); return taken.some(o => o.game === c.game || teamsOf(o).some(t => T.has(t))); };
+  function withSwaps(id) {
+    const m = META[id], S = SWAP[id], legs = m.base.slice();
+    for (const [g, k] of [...S]) {
+      const i = m.base.findIndex(l => l.game === g), s = m.pool.find(c => kOf(c) === k);
+      if (i < 0 || !s || clash(s, legs.filter((_, j) => j !== i).concat(m.base.filter((_, j) => j !== i)))) { S.delete(g); continue; }
+      legs[i] = { ...s, orig: m.base[i] };
+    }
+    return legs;
+  }
+  // stand-ins for the slot whose original leg is in game g: same kind, closest market chance first (ties: better form)
+  function subsFor(id, g, legs = CARDS[id]) {
+    const m = META[id], o = m && m.base.find(l => l.game === g); if (!o || !legs) return null;
+    const taken = legs.concat(m.base), on = new Set(taken.map(l => l.game)), same = m.pool.filter(c => c.kind === o.kind && c.game !== g), d = c => Math.round(Math.abs(c.mid - o.mid) * 100);
+    const fit = same.filter(c => !clash(c, taken)).sort((a, b) => d(a) - d(b) || (b.edge ? b.edge.score : 0) - (a.edge ? a.edge.score : 0) || !!b.away - !!a.away || (a.label < b.label ? -1 : 1));
+    const onN = same.filter(c => on.has(c.game)).length;
+    return { o, fit, list: fit.slice(0, N_SUB), total: same.length, onN, teamN: same.length - fit.length - onN };
+  }
+  const where = c => (c.sport === 'soccer' ? 'Soccer · ' + c.comp : c.comp || c.sport.toUpperCase());
+  const decOf = l => (l.ask > 0 ? 1 / l.ask : 1);
+  function subsHTML(id, g, legs, prob, dec) {
+    const r = subsFor(id, g, legs); if (!r) return '';
+    const { o, list, total, onN, teamN } = r, cur = legs.find(l => (l.orig || l).game === g) || o, w = KW[id === 'upForm' ? 'form' : o.kind];
+    const gap = c => { const d = Math.round((c.mid - o.mid) * 100); return d === 0 ? 'same chance' : d > 0 ? `${d} pt${d === 1 ? '' : 's'} likelier` : `${-d} pt${d === -1 ? '' : 's'} longer shot`; };
+    const why = c => [gap(c) + ', different game', c.kind === 'draw' ? `draw against a ${P(c.fav)} favourite` : c.kind === 'upset' ? (c.away ? 'away underdog' : 'home underdog') : ''].filter(Boolean).join(' · ');
+    const n = list.length, held = [onN ? `${onN} already on this card` : '', teamN ? `${teamN} sharing a team with it` : ''].filter(Boolean);
+    return `<div class="subs"><div class="subhd">Swap <b>${esc(o.label)}</b> (${P(o.mid)}) for another ${esc(w)} of about the same chance, from a game and teams not already on this card:</div>
+      ${list.map(c => { const np = prob / cur.mid * c.mid, nd = dec / decOf(cur) * decOf(c);  // the card re-priced with this leg in
+        return `<button type="button" class="subrow" data-up-pick="${id}" data-g="${esc(g)}" data-k="${esc(kOf(c))}"><span class="st"><b>${esc(c.label)}</b><span class="mono">${P(c.mid)}</span></span>
+        <small>${esc(where(c))} · ${C(c.ask)} to buy${c.model != null ? ` · our model ${P(c.model)}` : ''} · card ${PP(np)}, pays ×${nd.toFixed(1)}</small><small>${esc(why(c))}</small>${c.edge && c.edge.why.length ? `<span class="subwhy">${esc(c.edge.why.join(' · '))}</span>` : ''}</button>`; }).join('')}
+      ${n < 3 ? `<div class="note">${n ? `Only ${n} stand-in${n === 1 ? '' : 's'}` : 'No stand-in'}: the board has ${total} other ${esc(total === 1 ? w : w + 's')} in this window${held.length ? ', ' + held.join(', ') : ''}.${id === 'upForm' ? ' A form-backed leg needs a form edge of 1 or more.' : ''}${ST.sports.includes('all') ? '' : ' All sports gives more to choose from.'}</div>` : ''}</div>`;
+  }
+  // draw a card from its built legs (base) with swaps applied; pool = the legs that may stand in
+  function card(id, base, pool, title, sub) { META[id] = { base, pool, title, sub }; DRAWN.add(id); return parlayCard(withSwaps(id), id, title, sub); }
+  function redraw(id) { const el = document.getElementById(id), m = META[id]; if (el && m) el.outerHTML = parlayCard(withSwaps(id), id, m.title, m.sub); }
   function parlayCard(legs, id, title, sub) {
     CARDS[id] = legs;
-    const prob = legs.reduce((s, l) => s * l.mid, 1), dec = legs.reduce((s, l) => s * (l.ask > 0 ? 1 / l.ask : 1), 1), st = stakeNum();
-    const sports = [...new Set(legs.map(l => l.sport))];
+    const prob = legs.reduce((s, l) => s * l.mid, 1), dec = legs.reduce((s, l) => s * decOf(l), 1), st = stakeNum();
+    const sports = [...new Set(legs.map(l => l.sport))], nSw = legs.filter(l => l.orig).length, swaps = !!META[id];
+    const S = SIMS[id], live = !!(S && S.sig !== sigOf(legs));  // the legs changed after a 500k result: run it again for these legs
+    if (live) liveRun(id);
     return `<div class="pc" id="${id}"><div class="pchead"><span class="pctitle">${esc(title || `${legs.length}-leg upset parlay`)}</span><span class="hit h-lo">${PP(prob)} market chance</span></div>
-      <div class="why">${sports.length} sport${sports.length === 1 ? '' : 's'} · one leg per game${sub ? ' · ' + esc(sub) : ''}</div>
-      <div style="margin:8px 0">${legs.map((l, i) => `<div class="leg"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : l.kind === 'edge' ? 'close game' : 'underdog'} · ${C(l.ask)} to buy${l.model != null ? ` · our model ${P(l.model)}` : ''} · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span>
-        ${l.fd || l.ff ? `<div class="fbox2">${formLine(l.team, l.fd, l.sport)}${formLine(l.vs, l.ff, l.sport)}${l.edge && l.edge.why.length ? `<span class="fwhy">${esc(l.edge.why.join(' · '))}</span>` : ''}</div>` : ''}</div><span class="legp mono">${P(l.mid)}</span></div>`).join('')}</div>
+      <div class="why">${sports.length} sport${sports.length === 1 ? '' : 's'} · one leg per game${sub ? ' · ' + esc(sub) : ''}${swaps ? ` · ${nSw ? `${nSw} leg${nSw === 1 ? '' : 's'} swapped` : '⇄ swaps a leg'}` : ''}</div>
+      <div style="margin:8px 0">${legs.map((l, i) => { const g = (l.orig || l).game, open = swaps && OPEN === id + '|' + g;
+        return `<div class="leg${l.orig ? ' swapped' : ''}"><span class="legdot">${i + 1}</span><div class="legtxt"><b>${esc(l.label)}</b><span>${esc(l.comp)} · ${l.kind === 'draw' ? 'draw' : l.kind === 'edge' ? 'close game' : 'underdog'} · ${C(l.ask)} to buy${l.model != null ? ` · our model ${P(l.model)}` : ''} · <a href="${esc(l.url)}" target="_blank" rel="noopener">Polymarket</a></span>
+        ${l.orig ? `<span class="swtag">SWAPPED · in for ${esc(l.orig.label)} (${P(l.orig.mid)})</span>` : ''}
+        ${l.fd || l.ff ? `<div class="fbox2">${formLine(l.team, l.fd, l.sport)}${formLine(l.vs, l.ff, l.sport)}${l.edge && l.edge.why.length ? `<span class="fwhy">${esc(l.edge.why.join(' · '))}</span>` : ''}</div>` : ''}</div><span class="legp mono">${P(l.mid)}</span>
+        ${swaps ? `<span class="legact">${l.orig ? `<button type="button" class="upx" data-up-undo="${id}" data-g="${esc(g)}" title="Undo swap" aria-label="Undo swap: put ${esc(l.orig.label)} back">↺</button>` : ''}<button type="button" class="upx" data-up-swap="${id}" data-g="${esc(g)}" title="Swap this leg" aria-label="Swap leg ${i + 1}" aria-expanded="${open}">⇄</button></span>` : ''}</div>
+        ${open ? subsHTML(id, g, legs, prob, dec) : ''}`; }).join('')}</div>
       <div class="kpis"><div class="kpi"><b class="mono">${dec ? '×' + dec.toFixed(1) : '—'}</b><span>pays at Polymarket prices</span></div><div class="kpi"><b class="mono">${st && dec ? '$' + (st * dec).toFixed(2) : '—'}</b><span>returns on $${st}</span></div></div>
-      <button class="btn full ghost" data-up-sim="${id}" style="margin-top:8px">${SIMS[id] && SIMS[id].sig === sigOf(legs) ? '🎲 Run again' : '🎲 Simulate 500,000 runs'}</button><div class="upsim" data-up-out="${id}">${simHTML(id)}</div>
+      <button class="btn full ghost" data-up-sim="${id}" style="margin-top:8px"${live ? ' disabled' : ''}>${live ? 'Running 500,000…' : S ? '🎲 Run again' : '🎲 Simulate 500,000 runs'}</button><div class="upsim" data-up-out="${id}">${live ? '<div class="why">The legs changed: running 500,000 again for the legs shown…</div>' : simHTML(id)}</div>
       <div class="note">Crazy on purpose: most of these lose. The % on each leg is the market's chance; form is shown beside it, not added to it.</div></div>`;
   }
   // ---------------- 500,000-run simulation ----------------
@@ -168,6 +222,16 @@
     const mkt = runSim(legs, legs.map(l => l.mid), seed), withModel = legs.filter(l => l.model != null).length;
     const mod = withModel ? runSim(legs, legs.map(l => (l.model != null ? l.model : l.mid)), seed ^ 0x9e3779b9) : null;
     return SIMS[id] = { sig: sigOf(legs), dec, mkt, mod, withModel, n: legs.length, at: Date.now() };
+  }
+  // "live": a card that already has a result is run again whenever its legs change (a swap, an undo, new prices)
+  const PEND = new Set();
+  function liveRun(id) {
+    if (PEND.has(id)) return; PEND.add(id);
+    setTimeout(() => { PEND.delete(id); const S = SIMS[id], L = CARDS[id]; if (S && L && L.length && S.sig !== sigOf(L)) simulate(id); paintSim(id); }, 30);  // after the card paints
+  }
+  function paintSim(id) {
+    const out = document.querySelector(`[data-up-out="${id}"]`), b = document.querySelector(`[data-up-sim="${id}"]`);
+    if (out) out.innerHTML = simHTML(id); if (b) { b.disabled = false; b.textContent = SIMS[id] ? '🎲 Run again' : '🎲 Simulate 500,000 runs'; }
   }
   const pctS = x => (x >= .01 ? (x * 100).toFixed(2) : (x * 100).toPrecision(2)) + '%';
   function simHTML(id) {
@@ -189,6 +253,7 @@
       return;
     }
     const cands = candidates(), legs = cands.length ? build(cands) : [];
+    DRAWN.clear();
     const fdate = FORM && FORM.updated ? new Date(FORM.updated).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
     main.innerHTML = `<h2>💥 Upset Parlays <small>underdogs and draws, today's board</small></h2>
       <div class="note">Picks are underdogs (priced below their opponent, 15–50%) and soccer draws against a 55%+ favourite, from Polymarket's prices. Each leg's % is the market's chance (the midpoint); the payout uses the price to buy. Away underdogs rank first. ${fdate ? `Form (unbeaten runs, streaks, last 5, table) was researched game by game from results on ${esc(fdate)}${FORM.teams.some(t => t.confidence !== 'verified') ? '; teams marked ? could not be confirmed by a second source' : ''}.` : 'Researched form is not loaded yet.'}</div>
@@ -199,10 +264,11 @@
           <label class="fl" style="margin:0;flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="upMix" ${ST.mixed ? 'checked' : ''}><span>Mix sports</span></label>
           <button class="btn ghost" id="upNew">🔀 New mix</button></div>
       </div>
-      ${legs.length ? parlayCard(legs, 'upMain') : `<div class="pc"><div class="why">Not enough underdogs or draws on the board for these filters right now. Try "All sports" or a longer window.</div></div>`}
+      ${legs.length ? card('upMain', legs, cands) : `<div class="pc"><div class="why">Not enough underdogs or draws on the board for these filters right now. Try "All sports" or a longer window.</div></div>`}
       <div class="note">${cands.length} candidate legs from ${new Set(cands.map(c => c.game)).size} games in the next ${ST.hours} hours.</div>
       ${edgeSection()}
       ${formSections(cands)}`;
+    for (const id in SWAP) if (!DRAWN.has(id)) { SWAP[id].clear(); delete META[id]; if (OPEN && OPEN.startsWith(id + '|')) OPEN = null; }  // a card that's gone takes its swaps
   }
 
   // close games (no side over 62%; soccer: neither over 50% and within 15 points) where one side has the edge: home court /
@@ -234,7 +300,7 @@
     const idate = INJ && INJ.updated ? new Date(INJ.updated).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric' }) : null;
     return `<h2>Close games with an edge <small>home side, or the other team short-handed</small></h2>
       <div class="note">Games the market calls close (no side over 62%; soccer: neither side over 50%), where one team plays at home and/or the other is missing players on the injury report${idate ? ` (checked ${esc(idate)})` : ''}. The market already prices home advantage and announced injuries, so these are reasons, not a lock: the % on each leg is still the market's.</div>
-      ${legs.length >= 2 ? parlayCard(legs, 'upEdge', `${legs.length}-leg close-game edge parlay`, 'home side or opponent injuries') : ''}
+      ${legs.length >= 2 ? card('upEdge', legs, E, `${legs.length}-leg close-game edge parlay`, 'home side or opponent injuries') : ''}
       ${E.length ? `<div class="panel" style="padding:2px 14px">${E.slice(0, 12).map(l => `<div class="mrow"><div class="lbl">${esc(l.label)} <small>${esc(l.comp)} · market ${P(l.mid)}${l.model != null ? ` · our model ${P(l.model)}` : ''} · ${C(l.ask)} to buy</small><span class="fwhy">${esc(l.edge.why.join(' · '))}</span></div></div>`).join('')}${E.length > 12 ? `<div class="note">${E.length - 12} more close games lean to the home side only.</div>` : ''}</div>`
         : `<div class="pc"><div class="why">No close game in this window has a home or injury edge right now${ST.sports.includes('all') ? '' : ' for these sports'}.</div></div>`}`;
   }
@@ -263,7 +329,7 @@
     const gameRow = g => `<span class="fline">${esc(g.date || '')} ${g.home === false ? '@' : 'vs'} ${esc(g.opp)}${g.oppPos && g.oppOf ? ` (${ord(g.oppPos)} of ${g.oppOf})` : ''}: <b>${esc(g.result)}</b> ${esc(g.score || '')}</span>`;
     const rowT = (x, what) => `<div class="mrow"><div class="lbl">${esc(x.name)}${q(x)} <small>${esc(what)} · next: ${esc(x.opp)} (${esc(x.comp)}) · market ${P(x.p)}</small><span class="fline">${L5(x.f)} ${esc(x.f.record || '')}${x.f.lastGame ? ' · last: ' + esc(x.f.lastGame) : ''}</span></div></div>`;
     return `<h2>Form-backed upsets <small>underdog on a run or favourite in a slump</small></h2>
-      ${fl.length >= 2 ? parlayCard(fl, 'upForm', `${fl.length}-leg form-backed upset parlay`, 'form picks the legs, the market prices them') : `<div class="pc"><div class="why">${fl.length ? 'Only one upset on this board has the form behind it' : 'No upset on this board has the researched form behind it'} right now${ST.sports.includes('all') ? '' : ' for these sports'}.</div></div>`}
+      ${fl.length >= 2 ? card('upForm', fl, cands.filter(c => c.kind === 'upset' && c.edge && c.edge.score >= 1), `${fl.length}-leg form-backed upset parlay`, 'form picks the legs, the market prices them') : `<div class="pc"><div class="why">${fl.length ? 'Only one upset on this board has the form behind it' : 'No upset on this board has the researched form behind it'} right now${ST.sports.includes('all') ? '' : ' for these sports'}.</div></div>`}
       <h2>Unbeaten runs on this board <small>researched from results</small></h2>
       <div class="panel" style="padding:2px 14px">${runs.length ? runs.map(x => rowT(x, x.sport === 'soccer' || x.sport === 'nhl' ? `unbeaten in ${x.f.unbeaten}${x.f.winStreak >= 2 ? `, won the last ${x.f.winStreak}` : ''}` : `won ${x.f.winStreak} straight`)).join('') : '<div class="empty" style="border:0">No team playing in this window is on a run of 3 or more.</div>'}</div>
       <h2>Favourites in a slump <small>priced to win, but losing</small></h2>
@@ -288,13 +354,30 @@
   });
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-up-sim]'); if (!b) return;
-    const id = b.dataset.upSim, out = document.querySelector(`[data-up-out="${id}"]`); if (!CARDS[id]) return;
+    const id = b.dataset.upSim; if (!CARDS[id]) return;
     b.disabled = true; b.textContent = 'Running 500,000…';
-    setTimeout(() => { simulate(id); if (out) out.innerHTML = simHTML(id); b.disabled = false; b.textContent = '🎲 Run again'; }, 30);  // let the label paint first
+    setTimeout(() => { simulate(id); paintSim(id); }, 30);  // let the label paint first
+  });
+  // ⇄ opens a slot's stand-ins; picking one swaps it in, ↺ puts the original back. Only that card is redrawn.
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-up-swap],[data-up-pick],[data-up-undo]'); if (!b) return;
+    const id = b.dataset.upSwap || b.dataset.upPick || b.dataset.upUndo, g = b.dataset.g; if (!META[id] || !SWAP[id]) return;
+    const prev = OPEN && OPEN.slice(0, OPEN.indexOf('|'));
+    if (b.dataset.upSwap) OPEN = OPEN === id + '|' + g ? null : id + '|' + g;
+    else { if (b.dataset.upPick) SWAP[id].set(g, b.dataset.k); else SWAP[id].delete(g); OPEN = null; }
+    if (prev && prev !== id) redraw(prev);
+    redraw(id);
+    const f = document.querySelector(`[data-up-swap="${id}"][data-g="${CSS.escape(g)}"]`); if (f) f.focus({ preventScroll: true });  // the button was redrawn: keep focus on it
   });
   const css = document.createElement('style');
   css.textContent = '.fbox2{display:flex;flex-direction:column;gap:2px;margin-top:4px}.fline{display:block;font-size:12px;color:var(--mute)}.fwhy{font-size:12px;color:var(--yes);font-weight:700}' +
-    '.f5{display:inline-block;min-width:16px;padding:0 3px;margin-right:2px;border-radius:4px;font-style:normal;font-size:10px;font-weight:800;text-align:center;color:#000}.f5w{background:var(--yes)}.f5d{background:#9aa3ad}.f5l{background:var(--no);color:#fff}';
+    '.f5{display:inline-block;min-width:16px;padding:0 3px;margin-right:2px;border-radius:4px;font-style:normal;font-size:10px;font-weight:800;text-align:center;color:#000}.f5w{background:var(--yes)}.f5d{background:#9aa3ad}.f5l{background:var(--no);color:#fff}' +
+    '.legact{flex:none;display:flex;flex-direction:column;gap:4px}.upx{width:34px;height:34px;border-radius:6px;border:1px solid var(--line);background:var(--soft);color:var(--text);font-size:16px;line-height:1;cursor:pointer}' +
+    '.upx[aria-expanded=true]{border-color:var(--accent);color:var(--blue)}.leg.swapped .legdot{background:var(--amberbg);color:var(--amber)}.legtxt .swtag{display:block;margin-top:3px;font-size:11.5px;font-weight:800;letter-spacing:.05em;color:var(--amber)}' +
+    '.subs{margin:0 0 10px 34px;padding:8px 10px 10px;border:1px dashed var(--edge);border-radius:6px;background:var(--soft)}.subhd{font-size:12.5px;color:var(--mute);line-height:1.45}' +
+    '.subrow{display:block;width:100%;text-align:left;margin-top:6px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--text);font:inherit;cursor:pointer}.subrow:hover{border-color:var(--accent)}' +
+    '.subrow .st{display:flex;justify-content:space-between;gap:8px}.subrow .st b{font-size:14px;font-weight:650;min-width:0;overflow-wrap:anywhere}.subrow .st .mono{font-weight:800;flex:none}' +
+    '.subrow small{display:block;font-size:12px;color:var(--dim);line-height:1.4}.subwhy{display:block;font-size:12px;color:var(--yes);font-weight:700}';
   document.head.appendChild(css);
   document.addEventListener('input', e => {
     if (!e.target || !document.getElementById('main') || !document.getElementById('main').contains(e.target)) return;
@@ -310,5 +393,5 @@
   SB.registerTab({ key: 'upsets', label: '💥 Upset Parlays', after: 'polymarket', render });
   // the board arrives with Polymarket's data: redraw when it does
   SB.on && SB.on('data', () => { loadForm(); loadInj(); if (document.querySelector('#tabs [data-t="upsets"].on')) SB.render(); });
-  window.__upsets = { formOf, formEdge, formWords, simulate, edgeLegs, missing, get CARDS() { return CARDS; }, get SIMS() { return SIMS; }, N_SIM };
+  window.__upsets = { formOf, formEdge, formWords, simulate, edgeLegs, missing, subsFor, sigOf, get CARDS() { return CARDS; }, get SIMS() { return SIMS; }, get SWAPS() { return SWAP; }, N_SIM };
 })();

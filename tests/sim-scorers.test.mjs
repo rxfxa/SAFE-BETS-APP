@@ -1,5 +1,6 @@
 // Simulator: who scores. Unit checks on the scorer model (NBA points, NFL touchdowns), then the play-by-play in the Watch view.
-// Run: node tests/sim-scorers.test.mjs. Uses a saved slate (tests/fixtures/data-2026-11-18.json) and the app's own roster files.
+// Run: node tests/sim-scorers.test.mjs. Uses a saved slate (tests/fixtures/data-2026-11-18.json) with the clock fixed that evening,
+// and saved copies of the roster files of the same days (touchdowns, NBA rotations, injuries, props), so today's board doesn't matter.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,7 +19,11 @@ const server = http.createServer((req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}/index.html`;
-const FEED = fs.readFileSync(path.join(ROOT, 'tests/fixtures/data-2026-11-18.json'), 'utf8');
+const FIX = f => fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8');
+const NOW = '2026-11-18T21:50:00Z';  // evening of the saved slate: NBA, NHL and Thursday's NFL game still to play
+// every live file the scorer model reads -> its saved copy (firsttd.js adds ?t=..., so match on the path only)
+const FEEDS = { 'data.json': FIX('data-2026-11-18.json'), 'firsttd.json': FIX('firsttd-2026-11-19.json'), 'nbaroles.json': FIX('nbaroles-2026-11-18.json'),
+  'injuries.json': FIX('injuries-2026-11-18.json'), 'firstbasket.json': FIX('firstbasket-2026-11-18.json'), 'props.json': FIX('props-2026-11-18.json'), 'scorers.json': FIX('scorers-2026-11-18.json') };
 let fails = 0, skips = 0;
 const check = (name, ok, info = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${info ? ' :: ' + info : ''}`); if (!ok) fails++; };
 
@@ -28,7 +33,8 @@ const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
-await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: FEED }));
+await page.clock.setFixedTime(new Date(NOW));
+for (const [f, body] of Object.entries(FEEDS)) await page.route(new RegExp('/' + f.replace('.', '\\.') + '(\\?|$)'), r => r.fulfill({ status: 200, contentType: 'application/json', body }));
 
 async function watchGame(gid) {
   await page.evaluate(gid => SB.goTab('sim', { gid, mode: 'watch' }), gid);

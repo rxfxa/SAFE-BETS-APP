@@ -1,0 +1,3997 @@
+{
+ "updated": "2026-11-18T09:00:00Z",
+ "season": "2026-27",
+ "asOf": "Goal totals as of about 1-9 Nov 2026 (league matchday ~10-12); MLS = 2026 regular-season final totals",
+ "note": "League goal totals from web-search snippets; sources often differ by 1-2 goals. Model inputs only; confirm lineups before betting. prevG / prevApps / prevMins = previous league season (used as the player's prior); prevEst = partly derived. aliases = other names the feed may use.",
+ "teams": [
+  {
+   "team": "AFC Bournemouth",
+   "abbr": "BOU",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "tavernier-bou",
+     "name": "Marcus Tavernier",
+     "pos": "AM",
+     "goals": 5,
+     "status": "active",
+     "note": "per PL Golden Boot table early Nov"
+    },
+    {
+     "id": "evanilson-bou",
+     "name": "Evanilson",
+     "pos": "FW",
+     "goals": 4,
+     "status": "active",
+     "note": "per PL Golden Boot table early Nov"
+    }
+   ],
+   "sources": [
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ]
+  },
+  {
+   "team": "Arsenal FC",
+   "abbr": "ARS",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "saka-ars",
+     "name": "Bukayo Saka",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list; sources lag"
+    },
+    {
+     "id": "havertz-ars",
+     "name": "Kai Havertz",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list (Sports Mole had 2)"
+    },
+    {
+     "id": "odegaard-ars",
+     "name": "Martin Odegaard",
+     "pos": "AM",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "guimaraes-ars",
+     "name": "Bruno Guimaraes",
+     "pos": "MF",
+     "goals": 2,
+     "status": "active",
+     "note": "listed at Arsenal by NBC/Sports Mole"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.sportsmole.co.uk/football/arsenal/top-scorers.html"
+   ]
+  },
+  {
+   "team": "Aston Villa",
+   "abbr": "AVL",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "jackson-avl",
+     "name": "Nicolas Jackson",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 9,
+     "status": "active",
+     "note": "ESPN: 6 in 9 apps"
+    },
+    {
+     "id": "mcginn-avl",
+     "name": "John McGinn",
+     "pos": "MF",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "alysson-avl",
+     "name": "Alysson",
+     "pos": "FW",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "goretzka-avl",
+     "name": "Leon Goretzka",
+     "pos": "MF",
+     "goals": 1,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Premier_League"
+   ]
+  },
+  {
+   "team": "Brentford FC",
+   "abbr": "BRE",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "schade-bre",
+     "name": "Kevin Schade",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "thiago-bre",
+     "name": "Igor Thiago",
+     "pos": "FW",
+     "goals": 2,
+     "status": "active",
+     "note": "ESPN table, may lag"
+    },
+    {
+     "id": "janelt-bre",
+     "name": "Vitaly Janelt",
+     "pos": "MF",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.espn.com/soccer/stats/_/league/eng.1"
+   ]
+  },
+  {
+   "team": "Brighton & Hove Albion",
+   "abbr": "BRI",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "hinshelwood-bri",
+     "name": "Jack Hinshelwood",
+     "pos": "MF",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "ayari-bri",
+     "name": "Yasin Ayari",
+     "pos": "MF",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "kostoulas-bri",
+     "name": "Charalampos Kostoulas",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "yalcouye-bri",
+     "name": "Malick Yalcouye",
+     "pos": "MF",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ],
+   "aliases": [
+    "Brighton"
+   ]
+  },
+  {
+   "team": "Chelsea FC",
+   "abbr": "CFC",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "pedro-cfc",
+     "name": "Joao Pedro",
+     "pos": "FW",
+     "goals": 5,
+     "status": "active",
+     "note": "PL table early Nov"
+    },
+    {
+     "id": "rogers-cfc",
+     "name": "Morgan Rogers",
+     "pos": "AM",
+     "goals": 5,
+     "status": "active",
+     "note": "joined from Villa Jul 2026; PL table 5, FotMob 4 in 7 apps"
+    },
+    {
+     "id": "palmer-cfc",
+     "name": "Cole Palmer",
+     "pos": "AM",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "neto-cfc",
+     "name": "Pedro Neto",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://theanalyst.com/football/player/sc-244850/morgan-rogers"
+   ]
+  },
+  {
+   "team": "Coventry City",
+   "abbr": "COV",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "rudoni-cov",
+     "name": "Jack Rudoni",
+     "pos": "AM",
+     "goals": 3,
+     "apps": 10,
+     "status": "active",
+     "note": "ESPN: 3 in 10"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://thehardtackle.com/transfer-news/2026/11/15/coventry-city-learn-key-factor-to-keep-jack-rudoni-next-summer"
+   ]
+  },
+  {
+   "team": "Crystal Palace",
+   "abbr": "CRY",
+   "comp": [
+    "Premier League"
+   ],
+   "teamGoals": 10,
+   "teamMatches": 10,
+   "players": [
+    {
+     "id": "mitchell-cry",
+     "name": "Tyrick Mitchell",
+     "pos": "DF",
+     "goals": 2,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "nketiah-cry",
+     "name": "Eddie Nketiah",
+     "pos": "FW",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Premier_League"
+   ]
+  },
+  {
+   "team": "Everton FC",
+   "abbr": "EVE",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "barry-eve",
+     "name": "Thierno Barry",
+     "pos": "FW",
+     "goals": 6,
+     "status": "active",
+     "note": "NBC/Spreadex; PL table early Nov had 4"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27"
+   ]
+  },
+  {
+   "team": "Fulham FC",
+   "abbr": "FUL",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "king-ful",
+     "name": "Josh King",
+     "pos": "AM",
+     "goals": 2,
+     "status": "active",
+     "note": "NBC list; other scorers not found"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ]
+  },
+  {
+   "team": "Hull City",
+   "abbr": "HUL",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "belloumi-hul",
+     "name": "Mohamed Belloumi",
+     "pos": "AM",
+     "goals": 3,
+     "apps": 9,
+     "status": "active",
+     "note": "ESPN: 3 in 9"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://en.wikipedia.org/wiki/Mohamed_Belloumi"
+   ]
+  },
+  {
+   "team": "Ipswich Town",
+   "abbr": "IPS",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "emersonn-ips",
+     "name": "Emersonn",
+     "pos": "FW",
+     "goals": 2,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "clarke-ips",
+     "name": "Jack Clarke",
+     "pos": "FW",
+     "goals": 2,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "davis-ips",
+     "name": "Leif Davis",
+     "pos": "DF",
+     "goals": 2,
+     "status": "active",
+     "note": "SuperSport 2; ESPN lists 0 - unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://supersport.com/football/tour/c0ca5665-d9d9-42dc-ad86-a7f48a4da2c6/topplayers"
+   ]
+  },
+  {
+   "team": "Leeds United",
+   "abbr": "LEE",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "calvert-lewin-lee",
+     "name": "Dominic Calvert-Lewin",
+     "pos": "FW",
+     "goals": 4,
+     "status": "active",
+     "note": "PL table / NBC"
+    }
+   ],
+   "sources": [
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ]
+  },
+  {
+   "team": "Liverpool FC",
+   "abbr": "LFC",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "isak-lfc",
+     "name": "Alexander Isak",
+     "pos": "FW",
+     "goals": 7,
+     "apps": 9,
+     "status": "active",
+     "note": "7 in 9 per Spreadex/NBC; PL site had 6 on Nov 3"
+    },
+    {
+     "id": "gakpo-lfc",
+     "name": "Cody Gakpo",
+     "pos": "FW",
+     "goals": 1,
+     "status": "active",
+     "note": "stale early-season snapshot"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
+    "https://www.sportsmole.co.uk/football/liverpool/2026-27/top-scorers.html"
+   ]
+  },
+  {
+   "team": "Manchester City",
+   "abbr": "MCI",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "haaland-mci",
+     "name": "Erling Haaland",
+     "pos": "FW",
+     "goals": 9,
+     "apps": 10,
+     "uclGoals": 5,
+     "status": "active",
+     "note": "9 in 10 PL; 5 UCL goals after MD4. 2025-26: 27 PL goals in 35 apps, Golden Boot (premierleague.com)",
+     "prevG": 27,
+     "prevApps": 35
+    },
+    {
+     "id": "cherki-mci",
+     "name": "Rayan Cherki",
+     "pos": "AM",
+     "goals": 5,
+     "status": "active",
+     "note": "PL table / NBC"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates",
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27",
+    "https://www.vanguardngr.com/2026/11/full-list-champions-league-tops-scorers-after-matchday-4/",
+    "https://www.premierleague.com/en/news/4591856/haaland-wins-202526-premier-league-golden-boot-award"
+   ],
+   "aliases": [
+    "Man City"
+   ]
+  },
+  {
+   "team": "Manchester United",
+   "abbr": "MUN",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "mbeumo-mun",
+     "name": "Bryan Mbeumo",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 9,
+     "status": "active",
+     "note": "ESPN team stats"
+    },
+    {
+     "id": "fernandes-mun",
+     "name": "Bruno Fernandes",
+     "pos": "MF",
+     "goals": 3,
+     "apps": 8,
+     "status": "active",
+     "note": "ESPN team stats"
+    },
+    {
+     "id": "cunha-mun",
+     "name": "Matheus Cunha",
+     "pos": "FW",
+     "goals": 1,
+     "apps": 9,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "sesko-mun",
+     "name": "Benjamin Sesko",
+     "pos": "FW",
+     "goals": 1,
+     "apps": 4,
+     "status": "active",
+     "note": "ESPN"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/360",
+    "https://www.premierleague.com/en/news/4737300/premier-league-top-scorers-golden-boot-race-2026-27"
+   ],
+   "aliases": [
+    "Man United",
+    "Man Utd"
+   ]
+  },
+  {
+   "team": "Newcastle United",
+   "abbr": "NEW",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "elanga-new",
+     "name": "Anthony Elanga",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 3,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "willock-new",
+     "name": "Joe Willock",
+     "pos": "MF",
+     "goals": 2,
+     "apps": 6,
+     "status": "active",
+     "note": "ESPN"
+    },
+    {
+     "id": "barnes-new",
+     "name": "Harvey Barnes",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 9,
+     "status": "active",
+     "note": "AiScore"
+    }
+   ],
+   "sources": [
+    "https://global.espn.com/soccer/team/stats/_/id/361",
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ]
+  },
+  {
+   "team": "Nottingham Forest",
+   "abbr": "NFO",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "delap-nfo",
+     "name": "Liam Delap",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list attributes him to Forest; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ],
+   "aliases": [
+    "Nott'm Forest",
+    "Notts Forest"
+   ]
+  },
+  {
+   "team": "Sunderland AFC",
+   "abbr": "SUN",
+   "comp": [
+    "Premier League"
+   ],
+   "players": [
+    {
+     "id": "brobbey-sun",
+     "name": "Brian Brobbey",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    },
+    {
+     "id": "lefee-sun",
+     "name": "Enzo Le Fee",
+     "pos": "MF",
+     "goals": 3,
+     "status": "active",
+     "note": "NBC list"
+    }
+   ],
+   "sources": [
+    "https://www.nbcsports.com/soccer/news/premier-league-goals-leaders-2026-27-season-golden-boot-race-latest-stats-updates"
+   ]
+  },
+  {
+   "team": "Tottenham Hotspur",
+   "abbr": "TOT",
+   "comp": [
+    "Premier League",
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "gray-tot",
+     "name": "Archie Gray",
+     "pos": "MF",
+     "goals": 3,
+     "status": "active",
+     "note": "11v11 snippet, last goal 31 Oct 2026"
+    },
+    {
+     "id": "vanhecke-tot",
+     "name": "Jan Paul van Hecke",
+     "pos": "DF",
+     "goals": 2,
+     "status": "active",
+     "note": "ESPN; Gambling.com had 1"
+    }
+   ],
+   "sources": [
+    "https://www.11v11.com/teams/tottenham-hotspur/tab/stats/option/scorers/",
+    "https://www.espn.com/soccer/stats/_/league/eng.1",
+    "https://www.livescore.com/en/news/football/premier-league/tottenhams-biggest-problem-is-clear-and-roberto-de-zerbi-cant-fix-it-hotspur-hq/"
+   ],
+   "aliases": [
+    "Tottenham",
+    "Spurs"
+   ]
+  },
+  {
+   "team": "Bodoe/Glimt",
+   "abbr": "BOG",
+   "comp": [
+    "Champions League",
+    "Eliteserien"
+   ],
+   "teamGoals": 63,
+   "teamMatches": 26,
+   "players": [
+    {
+     "id": "helmersen-bog",
+     "name": "Andreas Helmersen",
+     "pos": "FW",
+     "goals": 13,
+     "status": "active",
+     "note": "2026 Eliteserien; sources 11-13 (ESPN 13)"
+    },
+    {
+     "id": "hogh-bog",
+     "name": "Kasper Hogh",
+     "pos": "FW",
+     "goals": 7,
+     "apps": 12,
+     "status": "active",
+     "note": "2026 Eliteserien, consistent 7 across sources"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/nor.1",
+    "https://www.eurosport.no/fotball/eliteserien/2026/toppscorer.shtml",
+    "https://en.wikipedia.org/wiki/2026_Eliteserien"
+   ],
+   "aliases": [
+    "Bodo/Glimt",
+    "Bodø/Glimt",
+    "FK Bodo/Glimt"
+   ]
+  },
+  {
+   "team": "FC Porto",
+   "abbr": "FCP",
+   "comp": [
+    "Champions League",
+    "Primeira Liga"
+   ],
+   "players": [
+    {
+     "id": "sainz-fcp",
+     "name": "Borja Sainz",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 11,
+     "status": "active",
+     "note": "leads club after MD11 (fcporto.ws 9 Nov)"
+    },
+    {
+     "id": "veiga-fcp",
+     "name": "Gabri Veiga",
+     "pos": "MF",
+     "goals": 5,
+     "apps": 11,
+     "status": "active",
+     "note": "1 pen per AiScore"
+    },
+    {
+     "id": "silva-fcp",
+     "name": "Andre Silva",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 11,
+     "status": "active",
+     "note": "1 pen per AiScore"
+    },
+    {
+     "id": "froholdt-fcp",
+     "name": "Victor Froholdt",
+     "pos": "MF",
+     "goals": 3,
+     "apps": 10,
+     "status": "active",
+     "note": "AiScore"
+    },
+    {
+     "id": "gomes-fcp",
+     "name": "William Gomes",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 8,
+     "status": "active",
+     "note": "AiScore"
+    }
+   ],
+   "sources": [
+    "https://www.fcporto.ws/borja-sainz-ultrapassa-gabri-veiga-e-assume-lideranca-dos-marcadores-do-fc-porto-na-liga/",
+    "https://www.aiscore.com/team-fc-porto/0ndkz6iy2pfeq3z"
+   ]
+  },
+  {
+   "team": "Feyenoord Rotterdam",
+   "abbr": "FEY",
+   "comp": [
+    "Champions League",
+    "Eredivisie"
+   ],
+   "players": [
+    {
+     "id": "hadjmoussa-fey",
+     "name": "Anis Hadj Moussa",
+     "pos": "FW",
+     "goals": 7,
+     "status": "active",
+     "note": "ESPN 7; other tables 6"
+    },
+    {
+     "id": "ferri-fey",
+     "name": "Nacho Ferri",
+     "pos": "FW",
+     "goals": 6,
+     "status": "active",
+     "note": "TopScorersFootball, may be stale"
+    },
+    {
+     "id": "zechiel-fey",
+     "name": "Gjivai Zechiel",
+     "pos": "MF",
+     "goals": 5,
+     "apps": 8,
+     "status": "active",
+     "note": "Vavel snapshot, may be stale"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/NED.1/view/scoring",
+    "https://www.topscorersfootball.com/eredivisie/season-2026/2027",
+    "https://www.vavel.com/en-us/data/eredivisie/stats/"
+   ],
+   "aliases": [
+    "Feyenoord"
+   ]
+  },
+  {
+   "team": "Galatasaray Istanbul",
+   "abbr": "GAL",
+   "comp": [
+    "Champions League",
+    "Super Lig"
+   ],
+   "players": [
+    {
+     "id": "osimhen-gal",
+     "name": "Victor Osimhen",
+     "pos": "FW",
+     "goals": 9,
+     "status": "doubtful",
+     "note": "9 league goals (most-cited). Knee arthroscopy 7 Nov 2026; 2-5 wk estimates, club targeting UCL v Aston Villa 24 Nov"
+    }
+   ],
+   "sources": [
+    "https://www.beinsports.com/en-us/soccer/sper-lig/articles/what-happened-to-victor-osimhen-and-why-does-he-need-knee-surgery-2026-11-06",
+    "https://turkish-football.com/super-lig-2026-27-complete-table-top-scorers-title-race-january-transfer-window-guide/",
+    "https://africasoccer.com/?p=654886"
+   ],
+   "aliases": [
+    "Galatasaray"
+   ]
+  },
+  {
+   "team": "LASK Linz",
+   "abbr": "ASK",
+   "comp": [
+    "Champions League",
+    "Austrian Bundesliga"
+   ],
+   "teamGoals": 23,
+   "teamMatches": 9,
+   "players": [
+    {
+     "id": "lang-ask",
+     "name": "Christoph Lang",
+     "pos": "FW",
+     "goals": 8,
+     "mins": 726,
+     "status": "active",
+     "note": "fussballdaten 8 (1 pen); kick.at 7"
+    },
+    {
+     "id": "adeniran-ask",
+     "name": "Samuel Adeniran",
+     "pos": "FW",
+     "goals": 6,
+     "status": "active",
+     "note": "fussballdaten; kick.at 5"
+    },
+    {
+     "id": "usor-ask",
+     "name": "Moses Usor",
+     "pos": "FW",
+     "goals": 3,
+     "status": "active",
+     "note": "fussballdaten"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/oesterreich/tore/",
+    "https://kick.at/vereine/lask-linz/"
+   ]
+  },
+  {
+   "team": "PSV Eindhoven",
+   "abbr": "PSV",
+   "comp": [
+    "Champions League",
+    "Eredivisie"
+   ],
+   "players": [
+    {
+     "id": "mijnans-psv",
+     "name": "Sven Mijnans",
+     "pos": "AM",
+     "goals": 9,
+     "apps": 10,
+     "status": "active",
+     "note": "ESPN 9 in 10; other tables 6"
+    },
+    {
+     "id": "til-psv",
+     "name": "Guus Til",
+     "pos": "AM",
+     "goals": 7,
+     "apps": 11,
+     "status": "active",
+     "note": "ESPN"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/NED.1/view/scoring",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Eredivisie"
+   ]
+  },
+  {
+   "team": "Sabah Masazir",
+   "abbr": "SBH",
+   "comp": [
+    "Champions League"
+   ],
+   "players": [
+    {
+     "id": "simic-sbh",
+     "name": "Veljko Simic",
+     "pos": "FW",
+     "uclGoals": 6,
+     "status": "active",
+     "note": "league goals unknown; 6 UCL incl. qualifying (footballtransfers)"
+    },
+    {
+     "id": "mickels-sbh",
+     "name": "Joy-Lance Mickels",
+     "pos": "FW",
+     "uclGoals": 4,
+     "status": "active",
+     "note": "league goals unknown; 4-5 UCL incl. qualifying, scored v Slavia MD2"
+    },
+    {
+     "id": "parris-sbh",
+     "name": "Kaheem Parris",
+     "pos": "FW",
+     "status": "active",
+     "note": "scored v Slavia Prague UCL MD2; totals unknown"
+    }
+   ],
+   "sources": [
+    "https://www.footballtransfers.com/en/leagues-cups/international/uefa-champions-league/statistics/players/top-scorers",
+    "https://foot-africa.com/en/news/champions-league-sabah-fc-seal-historic-first-win-1386107/",
+    "https://statz.ai/h2h/sabah-vs-agf/19766302"
+   ]
+  },
+  {
+   "team": "Charlotte FC",
+   "abbr": "CLT",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "toklomati-clt",
+     "name": "Idan Toklomati",
+     "pos": "FW",
+     "goals": 15,
+     "status": "active",
+     "note": "2026 regular season final total"
+    },
+    {
+     "id": "biel-clt",
+     "name": "Pep Biel",
+     "pos": "AM",
+     "goals": 13,
+     "apps": 34,
+     "status": "active",
+     "note": "2026 regular season final total"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://m.dongqiudi.com/en/top-scorers/26126"
+   ]
+  },
+  {
+   "team": "Chicago Fire",
+   "abbr": "CHI",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "haileselassie-chi",
+     "name": "Maren Haile-Selassie",
+     "pos": "FW",
+     "goals": 13,
+     "status": "active",
+     "note": "2026 regular season final total"
+    },
+    {
+     "id": "cuypers-chi",
+     "name": "Hugo Cuypers",
+     "pos": "FW",
+     "goals": 13,
+     "status": "active",
+     "note": "ESPN lists 13; apps figure unclear"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season"
+   ]
+  },
+  {
+   "team": "Columbus Crew",
+   "abbr": "CLB",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "rossi-clb",
+     "name": "Diego Rossi",
+     "pos": "FW",
+     "goals": 6,
+     "status": "active",
+     "note": "conflicting sources; stale"
+    },
+    {
+     "id": "abouali-clb",
+     "name": "Wessam Abou Ali",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 7,
+     "status": "active",
+     "note": "early-season ESPN snapshot"
+    },
+    {
+     "id": "mendez-clb",
+     "name": "Brais Mendez",
+     "pos": "AM",
+     "status": "active",
+     "note": "named club top scorer by MLS.com; total not found"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season",
+    "https://www.espn.ph/football/stats/_/league/usa.1"
+   ]
+  },
+  {
+   "team": "FC Cincinnati",
+   "abbr": "CIN",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "denkey-cin",
+     "name": "Kevin Denkey",
+     "pos": "FW",
+     "goals": 17,
+     "status": "active",
+     "note": "2026 regular season final total (one table 14)"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://m.dongqiudi.com/en/top-scorers/26126"
+   ]
+  },
+  {
+   "team": "FC Dallas",
+   "abbr": "DAL",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "musa-dal",
+     "name": "Petar Musa",
+     "pos": "FW",
+     "goals": 22,
+     "status": "active",
+     "note": "2nd in Golden Boot"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer",
+    "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ]
+  },
+  {
+   "team": "Houston Dynamo",
+   "abbr": "HOU",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "augusto-hou",
+     "name": "Guilherme Augusto",
+     "pos": "FW",
+     "goals": 16,
+     "status": "active",
+     "note": "2026 regular season final total"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season"
+   ]
+  },
+  {
+   "team": "Inter Miami CF",
+   "abbr": "MIA",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "messi-mia",
+     "name": "Lionel Messi",
+     "pos": "FW",
+     "goals": 26,
+     "apps": 31,
+     "status": "active",
+     "note": "Golden Boot winner, 17 assists"
+    },
+    {
+     "id": "suarez-mia",
+     "name": "Luis Suarez",
+     "pos": "FW",
+     "goals": 17,
+     "apps": 30,
+     "status": "active",
+     "note": "2026 regular season final total"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer",
+    "https://sports.yahoo.com/articles/lionel-messi-wins-2026-mls-000000223.html",
+    "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ],
+   "aliases": [
+    "Inter Miami"
+   ]
+  },
+  {
+   "team": "Los Angeles FC",
+   "abbr": "LAFC",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "bouanga-lafc",
+     "name": "Denis Bouanga",
+     "pos": "FW",
+     "goals": 18,
+     "allCompGoals": 25,
+     "status": "active",
+     "note": "18 league, 25 all comps (1 Nov 2026)"
+    }
+   ],
+   "sources": [
+    "https://en.wikipedia.org/wiki/2026_Los_Angeles_FC_season",
+    "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ],
+   "aliases": [
+    "LAFC"
+   ]
+  },
+  {
+   "team": "New England Revolution",
+   "abbr": "NE",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "gil-ne",
+     "name": "Carles Gil",
+     "pos": "AM",
+     "goals": 13,
+     "status": "active",
+     "note": "2026 regular season final total"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season"
+   ]
+  },
+  {
+   "team": "Orlando City SC",
+   "abbr": "ORL",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "ojeda-orl",
+     "name": "Martin Ojeda",
+     "pos": "AM",
+     "goals": 16,
+     "status": "active",
+     "note": "2026 regular season final total"
+    },
+    {
+     "id": "griezmann-orl",
+     "name": "Antoine Griezmann",
+     "pos": "FW",
+     "goals": 14,
+     "status": "active",
+     "note": "2026 regular season final total"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season"
+   ]
+  },
+  {
+   "team": "Philadelphia Union",
+   "abbr": "PHI",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "iloski-phi",
+     "name": "Milan Iloski",
+     "pos": "FW",
+     "goals": 19,
+     "status": "active",
+     "note": "2026 regular season final total, 7 assists"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer",
+    "https://www.espn.com/soccer/stats/_/league/usa.1"
+   ]
+  },
+  {
+   "team": "Portland Timbers",
+   "abbr": "POR",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "velde-por",
+     "name": "Kristoffer Velde",
+     "pos": "FW",
+     "status": "active",
+     "note": "named club top scorer by MLS.com; total not found"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season"
+   ]
+  },
+  {
+   "team": "Real Salt Lake",
+   "abbr": "RSL",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "solans-rsl",
+     "name": "Sergi Solans",
+     "pos": "FW",
+     "goals": 15,
+     "status": "active",
+     "note": "2026 regular season final total (one table 14)"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://m.dongqiudi.com/en/top-scorers/26126"
+   ]
+  },
+  {
+   "team": "Saint Louis City SC",
+   "abbr": "STL",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "navarro-stl",
+     "name": "Rafael Navarro",
+     "pos": "FW",
+     "goals": 19,
+     "status": "active",
+     "note": "2026 regular season final total, 8 assists"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/mls-golden-boot-tracker-2026-season-top-scorer"
+   ],
+   "aliases": [
+    "St. Louis City SC",
+    "St Louis City"
+   ]
+  },
+  {
+   "team": "San Jose Earthquakes",
+   "abbr": "SJ",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "judd-sj",
+     "name": "Preston Judd",
+     "pos": "FW",
+     "goals": 17,
+     "status": "active",
+     "note": "2026 regular season final total (other tables 13-16)"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/usa.1",
+    "https://m.dongqiudi.com/en/top-scorers/26126"
+   ]
+  },
+  {
+   "team": "Seattle Sounders",
+   "abbr": "SEA",
+   "comp": [
+    "MLS"
+   ],
+   "players": [
+    {
+     "id": "rusnak-sea",
+     "name": "Albert Rusnak",
+     "pos": "AM",
+     "status": "active",
+     "note": "named club top scorer by MLS.com; total not found"
+    },
+    {
+     "id": "joveljic-sea",
+     "name": "Dejan Joveljic",
+     "pos": "FW",
+     "goals": 13,
+     "status": "active",
+     "note": "TNT Sports lists him at Seattle with 13; club attribution unverified"
+    }
+   ],
+   "sources": [
+    "https://www.mlssoccer.com/news/every-mls-team-top-goalscorer-in-2026-season",
+    "https://www.tntsports.co.uk/football/mls/topscorer.shtml"
+   ]
+  },
+  {
+   "team": "FC Barcelona",
+   "abbr": "BAR",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "raphinha-bar",
+     "name": "Raphinha",
+     "pos": "FW",
+     "goals": 15,
+     "apps": 10,
+     "pens": true,
+     "status": "active",
+     "note": "15 league goals incl. 3 pens (Yahoo after Nov 1; Sports Infos after J12); 19 all comps per Wikipedia season page; status unverified. 2025-26: 11 La Liga goals in 20 apps / 1,299 min (SportBusy; FotMob says 13)",
+     "prevG": 11,
+     "prevMins": 1299,
+     "prevEst": true
+    },
+    {
+     "id": "yamal-bar",
+     "name": "Lamine Yamal",
+     "pos": "FW",
+     "goals": 10,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "10 goals incl. 1 pen; status unverified"
+    },
+    {
+     "id": "lopez-bar",
+     "name": "Fermin Lopez",
+     "pos": "MF",
+     "goals": 7,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "7 per ESPN/LaLiga (Yahoo Nov 1 had 5); status unverified"
+    }
+   ],
+   "sources": [
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
+    "https://www.ski-nordique.net/liga-20262027-classement-des-buteurs-apres-j12-raphinha-toujours-en-tete-mbappe-passe-a-13-buts.6751888-72348.html",
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_FC_Barcelona_season"
+   ]
+  },
+  {
+   "team": "Real Madrid",
+   "abbr": "RMA",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "mbappe-rma",
+     "name": "Kylian Mbappe",
+     "pos": "FW",
+     "goals": 13,
+     "pens": true,
+     "status": "active",
+     "note": "13 after J12 (Sports Infos/Wikipedia); Yahoo Nov 1 had 12 incl. 3 pens; status unverified. 2025-26: 25 La Liga goals (Pichichi), 31 apps / 2,604 min (Sofascore, SI)",
+     "prevG": 25,
+     "prevMins": 2604
+    },
+    {
+     "id": "bellingham-rma",
+     "name": "Jude Bellingham",
+     "pos": "AM",
+     "goals": 4,
+     "apps": 11,
+     "starts": 11,
+     "pens": false,
+     "status": "active",
+     "note": "4 goals, 3 assists, 11 starts per ESPN; status unverified"
+    },
+    {
+     "id": "diomande-rma",
+     "name": "Yan Diomande",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "3 goals per ESPN (listed at Real Madrid); status unverified"
+    },
+    {
+     "id": "guler-rma",
+     "name": "Arda Guler",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "3 goals per ESPN list; club not shown in snippet (assumed Real Madrid); status unverified"
+    }
+   ],
+   "sources": [
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
+    "https://www.ski-nordique.net/liga-20262027-classement-des-buteurs-apres-j12-raphinha-toujours-en-tete-mbappe-passe-a-13-buts.6751888-72348.html",
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Real_Madrid_CF_season",
+    "https://www.sofascore.com/news/kylian-mbappes-2025-26-season-52-goals-no-trophies"
+   ]
+  },
+  {
+   "team": "Atletico Madrid",
+   "abbr": "ATM",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "baena-atm",
+     "name": "Alex Baena",
+     "pos": "AM",
+     "goals": 5,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "simeone-atm",
+     "name": "Giuliano Simeone",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "grimaldo-atm",
+     "name": "Alejandro Grimaldo",
+     "pos": "DF",
+     "goals": 4,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "4 goals, 2 assists (ESPN/Yahoo); status unverified"
+    },
+    {
+     "id": "alvarez-atm",
+     "name": "Julian Alvarez",
+     "pos": "FW",
+     "goals": 0,
+     "pens": false,
+     "status": "active",
+     "note": "0 league goals in early-season snapshots (LaLiga/FotMob); low-confidence current tally; status unverified",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
+    "https://www.laliga.com/en-MX/player/julian-alvarez"
+   ],
+   "aliases": [
+    "Atletico de Madrid",
+    "Atlético Madrid",
+    "Atl. Madrid"
+   ]
+  },
+  {
+   "team": "Racing Santander",
+   "abbr": "RAC",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "zabiri-rac",
+     "name": "Yassir Zabiri",
+     "pos": "FW",
+     "goals": 9,
+     "pens": false,
+     "status": "active",
+     "note": "9 per ESPN/LaLiga & Sports Infos J12 (Yahoo Nov 1: 8 in 10, 0 pens); status unverified"
+    }
+   ],
+   "sources": [
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html",
+    "https://www.ski-nordique.net/liga-20262027-classement-des-buteurs-apres-j12-raphinha-toujours-en-tete-mbappe-passe-a-13-buts.6751888-72348.html",
+    "https://www.espn.com/soccer/stats/_/league/esp.1"
+   ]
+  },
+  {
+   "team": "Rayo Vallecano",
+   "abbr": "RVC",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "camello-rvc",
+     "name": "Sergio Camello",
+     "pos": "FW",
+     "goals": 7,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ]
+  },
+  {
+   "team": "CA Osasuna",
+   "abbr": "OSA",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "budimir-osa",
+     "name": "Ante Budimir",
+     "pos": "FW",
+     "goals": 8,
+     "pens": false,
+     "status": "active",
+     "note": "8 per ESPN/LaLiga (NBC/Yahoo Nov 1: 7); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ]
+  },
+  {
+   "team": "Espanyol Barcelona",
+   "abbr": "ESP",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "fernandez-esp",
+     "name": "Roberto Fernandez",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ],
+   "aliases": [
+    "Espanyol",
+    "RCD Espanyol"
+   ]
+  },
+  {
+   "team": "Elche CF",
+   "abbr": "ELC",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "nino-elc",
+     "name": "Fer Nino",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ]
+  },
+  {
+   "team": "Levante UD",
+   "abbr": "LEV",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "brugue-lev",
+     "name": "Roger Brugue",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "romero-lev",
+     "name": "Ivan Romero",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://www.sportsmole.co.uk/football/la-liga/top-goal-scorers.html"
+   ]
+  },
+  {
+   "team": "Deportivo Alaves",
+   "abbr": "ALA",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "boye-ala",
+     "name": "Lucas Boye",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "diaz-ala",
+     "name": "Mariano Diaz",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 4 in 12; LaLiga.com 3 in 9 (3G 3A); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://www.laliga.com/en-GB/player/mariano"
+   ]
+  },
+  {
+   "team": "RC Deportivo de A Coruna",
+   "abbr": "DEP",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "aubameyang-dep",
+     "name": "Pierre-Emerick Aubameyang",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 9,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://sports.yahoo.com/articles/la-liga-live-golden-boot-120833567.html"
+   ],
+   "aliases": [
+    "Deportivo La Coruna",
+    "Deportivo",
+    "Deportivo de La Coruna"
+   ]
+  },
+  {
+   "team": "Malaga CF",
+   "abbr": "MCF",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "nino-mcf",
+     "name": "Adrian Nino",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1"
+   ]
+  },
+  {
+   "team": "Athletic Bilbao",
+   "abbr": "ATH",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "berenguer-ath",
+     "name": "Alex Berenguer",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "williams-ath",
+     "name": "Inaki Williams",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "3 goals per ESPN list; club not shown in snippet (assumed Athletic); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1"
+   ],
+   "aliases": [
+    "Athletic Club",
+    "Athletic"
+   ]
+  },
+  {
+   "team": "Real Sociedad San Sebastian",
+   "abbr": "RSO",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "oskarsson-rso",
+     "name": "Orri Oskarsson",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 4; LaLiga.com earlier snapshot 1 in 6 apps; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://www.laliga.com/en-EG/player/orri-oskarsson"
+   ],
+   "aliases": [
+    "Real Sociedad"
+   ]
+  },
+  {
+   "team": "Getafe CF",
+   "abbr": "GET",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "satriano-get",
+     "name": "Martin Satriano",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "3 per ESPN; scored vs Sevilla Nov 1; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/esp.1",
+    "https://www.sportsmole.co.uk/football/la-liga/top-goal-scorers.html"
+   ]
+  },
+  {
+   "team": "Villarreal CF",
+   "abbr": "VIL",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "mikautadze-vil",
+     "name": "Georges Mikautadze",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 12,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "gueye-vil",
+     "name": "Pape Gueye",
+     "pos": "MF",
+     "goals": 3,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "moleiro-vil",
+     "name": "Alberto Moleiro",
+     "pos": "AM",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "moreno-vil",
+     "name": "Gerard Moreno",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "pepe-vil",
+     "name": "Nicolas Pepe",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/102/villarreal",
+    "https://www.espn.com/soccer/stats/_/league/esp.1"
+   ]
+  },
+  {
+   "team": "Real Betis Seville",
+   "abbr": "RBB",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "riquelme-rbb",
+     "name": "Rodrigo Riquelme",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "ezzalzouli-rbb",
+     "name": "Abde Ezzalzouli",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "bartra-rbb",
+     "name": "Marc Bartra",
+     "pos": "DF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "isco-rbb",
+     "name": "Isco",
+     "pos": "AM",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/244/real-betis"
+   ],
+   "aliases": [
+    "Real Betis",
+    "Betis"
+   ]
+  },
+  {
+   "team": "Sevilla FC",
+   "abbr": "SEV",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "romero-sev",
+     "name": "Isaac Romero",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 10,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "correia-sev",
+     "name": "Felix Correia",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "sierra-sev",
+     "name": "Miguel Sierra",
+     "pos": "MF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/243/sevilla"
+   ]
+  },
+  {
+   "team": "RC Celta de Vigo",
+   "abbr": "RCC",
+   "comp": [
+    "La Liga"
+   ],
+   "players": [
+    {
+     "id": "jutgla-rcc",
+     "name": "Ferran Jutgla",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 11,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "duran-rcc",
+     "name": "Pablo Duran",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "aspas-rcc",
+     "name": "Iago Aspas",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/85/celta-vigo"
+   ],
+   "aliases": [
+    "Celta Vigo",
+    "Celta"
+   ]
+  },
+  {
+   "team": "Paris FC",
+   "abbr": "PAR",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "sinayoko-par",
+     "name": "Lassine Sinayoko",
+     "pos": "FW",
+     "goals": 9,
+     "apps": 10,
+     "pens": true,
+     "status": "active",
+     "note": "9 goals incl. 3 pens after J10 (ESPN/Alsa'Sports/Sports Infos; Wikipedia says 8); status unverified"
+    },
+    {
+     "id": "lopez-par",
+     "name": "Maxime Lopez",
+     "pos": "MF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html",
+    "https://www.alsasports.fr/classement-ligue-1/"
+   ]
+  },
+  {
+   "team": "Olympique Marseille",
+   "abbr": "OLM",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "gouiri-olm",
+     "name": "Amine Gouiri",
+     "pos": "FW",
+     "goals": 7,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "harit-olm",
+     "name": "Amine Harit",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "abdelli-olm",
+     "name": "Himad Abdelli",
+     "pos": "MF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Marseille",
+    "Olympique de Marseille"
+   ]
+  },
+  {
+   "team": "Stade Rennais FC",
+   "abbr": "REN",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "lepaul-ren",
+     "name": "Esteban Lepaul",
+     "pos": "FW",
+     "goals": 7,
+     "pens": true,
+     "status": "doubtful",
+     "note": "ankle injury mid-Oct vs Paris FC; MRI 29 Oct; return unconfirmed (Maxifoot/Fantacalcio). Penalty hat-trick vs Paris FC (Rotowire). 2025-26 Ligue 1 top scorer, 21 goals (ligue1.com/maxifoot)",
+     "prevG": 21
+    },
+    {
+     "id": "dia-ren",
+     "name": "Boulaye Dia",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "szymanski-ren",
+     "name": "Sebastian Szymanski",
+     "pos": "AM",
+     "goals": 4,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html",
+    "https://www.alsasports.fr/classement-ligue-1/",
+    "https://www.maxifoot.fr/classement-buteur-ligue-1-france-2026.htm"
+   ],
+   "lastChecked": "2026-11-18",
+   "aliases": [
+    "Rennes",
+    "Stade Rennais"
+   ]
+  },
+  {
+   "team": "OGC Nice",
+   "abbr": "NIC",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "wahi-nic",
+     "name": "Elye Wahi",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 9,
+     "pens": true,
+     "status": "active",
+     "note": "6 goals incl. 2 pens; status unverified"
+    },
+    {
+     "id": "clauss-nic",
+     "name": "Jonathan Clauss",
+     "pos": "DF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ]
+  },
+  {
+   "team": "AJ Auxerre",
+   "abbr": "AUX",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "archer-aux",
+     "name": "Cameron Archer",
+     "pos": "FW",
+     "goals": 6,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN/TNT 6 in 8; Sports Mole 7; status unverified"
+    },
+    {
+     "id": "namaso-aux",
+     "name": "Danny Namaso",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ]
+  },
+  {
+   "team": "Stade Brest 29",
+   "abbr": "STB",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "ajorque-stb",
+     "name": "Ludovic Ajorque",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 10,
+     "pens": true,
+     "status": "active",
+     "note": "5 incl. 1 pen (pen taker not confirmed, inferred from 1 pen goal); status unverified"
+    },
+    {
+     "id": "doumbia-stb",
+     "name": "Kamory Doumbia",
+     "pos": "AM",
+     "goals": 4,
+     "apps": 10,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Brest",
+    "Stade Brestois",
+    "Stade Brestois 29"
+   ]
+  },
+  {
+   "team": "Racing Club De Lens",
+   "abbr": "RCL",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "thauvin-rcl",
+     "name": "Florian Thauvin",
+     "pos": "AM",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "5 goals, 7 assists (league assist leader); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ],
+   "aliases": [
+    "Lens",
+    "RC Lens"
+   ]
+  },
+  {
+   "team": "Toulouse FC",
+   "abbr": "TFC",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "tengstedt-tfc",
+     "name": "Casper Tengstedt",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "jorgensen-tfc",
+     "name": "Thomas Jorgensen",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.ski-nordique.net/ligue-1-20262027-classement-des-buteurs-apres-j10-sinayoko-creuse-lecart-double-de-gouiri-a-lens.6751886-72348.html"
+   ]
+  },
+  {
+   "team": "Strasbourg Alsace",
+   "abbr": "RCS",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "yassine-rcs",
+     "name": "Gessime Yassine",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "reyna-rcs",
+     "name": "Giovanni Reyna",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ],
+   "aliases": [
+    "Strasbourg",
+    "RC Strasbourg",
+    "RC Strasbourg Alsace"
+   ]
+  },
+  {
+   "team": "Le Mans FC",
+   "abbr": "MAN",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "mafouta-man",
+     "name": "Louis Mafouta",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "bourabaa-man",
+     "name": "Adil Bourabaa",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ]
+  },
+  {
+   "team": "Paris Saint-Germain",
+   "abbr": "PSG",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "torres-psg",
+     "name": "Ferran Torres",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "kvaratskhelia-psg",
+     "name": "Khvicha Kvaratskhelia",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "sources conflict: Sports Mole PSG list (to ~10 Oct) has 3, ESPN 1 in 7; conservative ESPN figure used"
+    },
+    {
+     "id": "hakimi-psg",
+     "name": "Achraf Hakimi",
+     "pos": "DF",
+     "goals": 3,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "tally unconfirmed: ESPN/AiScore snippets give 3, beIN 2 (Marquinhos); Hakimi absent from the Sports Mole list; status unverified",
+     "est": true
+    },
+    {
+     "id": "marquinhos-psg",
+     "name": "Marquinhos",
+     "pos": "DF",
+     "goals": 3,
+     "apps": 5,
+     "pens": false,
+     "status": "active",
+     "note": "tally unconfirmed: ESPN/AiScore snippets give 3, beIN 2 (Marquinhos); Hakimi absent from the Sports Mole list; status unverified",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://www.sportsmole.co.uk/football/psg/top-scorers.html",
+    "https://www.footballwebpages.co.uk/french-ligue-1/20261122"
+   ],
+   "teamGoals": 21,
+   "teamMatches": 9,
+   "teamGoalsNote": "21 goals in 9 league games per a Football Web Pages table snippet (dated early Nov 2026; snapshot date unclear); est",
+   "lastChecked": "2026-11-18",
+   "aliases": [
+    "PSG",
+    "Paris SG",
+    "Paris St-Germain",
+    "Paris St Germain"
+   ]
+  },
+  {
+   "team": "Le Havre AC",
+   "abbr": "HAC",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "maja-hac",
+     "name": "Josh Maja",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ]
+  },
+  {
+   "team": "Olympique Lyon",
+   "abbr": "OL",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "nuamah-ol",
+     "name": "Ernest Nuamah",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "athekame-ol",
+     "name": "Zachary Athekame",
+     "pos": "DF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Olympique_Lyonnais_season"
+   ],
+   "aliases": [
+    "Lyon",
+    "Olympique Lyonnais",
+    "OL Lyon"
+   ]
+  },
+  {
+   "team": "AS Monaco",
+   "abbr": "ASM",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "brunner-asm",
+     "name": "Paris Brunner",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ]
+  },
+  {
+   "team": "Lille OSC",
+   "abbr": "LIL",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "giroud-lil",
+     "name": "Olivier Giroud",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 9,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    },
+    {
+     "id": "ueda-lil",
+     "name": "Ayase Ueda",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "2 league goals per fr.wikipedia season page, likely stale (~mid-Sept); status unverified",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1",
+    "https://fr.wikipedia.org/wiki/Saison_2026-2027_du_LOSC_Lille"
+   ]
+  },
+  {
+   "team": "FC Lorient",
+   "abbr": "FCL",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "makengo-fcl",
+     "name": "Jean-Victor Makengo",
+     "pos": "MF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet of source table (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/fra.1"
+   ]
+  },
+  {
+   "team": "Angers SCO",
+   "abbr": "ANG",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "el-ouazzani-ang",
+     "name": "Amine El Ouazzani",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "2 goals in stale ~mid-Sept snapshot; current tally unknown",
+     "est": true
+    },
+    {
+     "id": "peter-ang",
+     "name": "Prosper Peter",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "2 goals in stale ~mid-Sept snapshot; current tally unknown",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.deux-zero.com/ligue-1/buteurs-epreuve/edition/2026-2027"
+   ]
+  },
+  {
+   "team": "ESTAC Troyes",
+   "abbr": "EST",
+   "comp": [
+    "Ligue 1"
+   ],
+   "players": [
+    {
+     "id": "le-douaron-est",
+     "name": "Jeremy Le Douaron",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "1-2 goals in stale ~matchday-4 snapshots (sources conflict); current tally unknown",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.deux-zero.com/ligue-1/buteurs-epreuve/edition/2026-2027"
+   ],
+   "aliases": [
+    "Troyes"
+   ]
+  },
+  {
+   "team": "FC Juarez",
+   "abbr": "JUA",
+   "comp": [
+    "Liga MX"
+   ],
+   "players": [
+    {
+     "id": "estupinan-jua",
+     "name": "Oscar Estupinan",
+     "pos": "FW",
+     "goals": 8,
+     "pens": false,
+     "status": "active",
+     "note": "8 Apertura 2026 goals after J16 (scored vs San Luis J16); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.tudn.com/futbol/liga-mx/liga-mx-tabla-goleo-apertura-2026-jornada-16",
+    "https://www.mediotiempo.com/futbol/liga-mx/estadisticas"
+   ]
+  },
+  {
+   "team": "Atlas",
+   "abbr": "ATS",
+   "comp": [
+    "Liga MX"
+   ],
+   "players": [
+    {
+     "id": "monzon-ats",
+     "name": "Florian Monzon",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "SI reported 4 goals with Atlas as of J14 (Oct 25); unclear if tournament total; current tally unknown",
+     "est": true
+    },
+    {
+     "id": "martin-ats",
+     "name": "Jose Martin",
+     "pos": "FW",
+     "pens": false,
+     "status": "active",
+     "note": "scored 2 vs Puebla J14; season total unknown"
+    }
+   ],
+   "sources": [
+    "https://www.si.com/mx/liga-mx/atlas-vence-4-3-al-puebla-y-escala-al-tercer-lugar-del-apertura-2026"
+   ]
+  },
+  {
+   "team": "Club Tijuana",
+   "abbr": "TIJ",
+   "comp": [
+    "Liga MX"
+   ],
+   "players": [
+    {
+     "id": "mora-tij",
+     "name": "Gilberto Mora",
+     "pos": "AM",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "4 goals as of J7 (TUDN); stale, current tally unknown",
+     "est": true
+    }
+   ],
+   "sources": [
+    "https://www.tudn.com/futbol/liga-mx/liga-mx-tabla-goleo-individual-apertura-2026-jornada-5"
+   ]
+  },
+  {
+   "team": "AC Monza",
+   "abbr": "MON",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "varela-mon",
+     "name": "Gustavo Varela",
+     "pos": "FW",
+     "goals": 9,
+     "pens": false,
+     "status": "active",
+     "note": "Serie A top scorer per DAZN/Sky/Wikipedia (~9 Nov); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.sky.it/calcio/serie-a/classifica-marcatori-serie-a-2026-2027",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Serie_A"
+   ]
+  },
+  {
+   "team": "AS Roma",
+   "abbr": "ROM",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "malen-rom",
+     "name": "Donyell Malen",
+     "pos": "FW",
+     "goals": 8,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN ~9 Nov (other sites 6-7); status unverified"
+    },
+    {
+     "id": "mora-rom",
+     "name": "Rodrigo Mora",
+     "pos": "AM",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.sky.it/calcio/serie-a/classifica-marcatori-serie-a-2026-2027"
+   ],
+   "aliases": [
+    "Roma"
+   ]
+  },
+  {
+   "team": "Frosinone Calcio",
+   "abbr": "FRO",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "raimondo-fro",
+     "name": "Antonio Raimondo",
+     "pos": "FW",
+     "goals": 8,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN/Virgilio ~9 Nov; status unverified"
+    },
+    {
+     "id": "calo-fro",
+     "name": "Giacomo Calo",
+     "pos": "MF",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/"
+   ]
+  },
+  {
+   "team": "Atalanta BC",
+   "abbr": "ATA",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "krstovic-ata",
+     "name": "Nikola Krstovic",
+     "pos": "FW",
+     "goals": 7,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN/Virgilio ~9 Nov (Sky/thefishy 6); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "Inter Milano",
+   "abbr": "INT",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "thuram-int",
+     "name": "Marcus Thuram",
+     "pos": "FW",
+     "goals": 6,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN lists 5 in one section, Virgilio 6; status unverified"
+    },
+    {
+     "id": "martinez-int",
+     "name": "Lautaro Martinez",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified. 2025-26: 17 Serie A goals, capocannoniere, missed 8 games (Sky Sport/Fantacalcio); apps derived",
+     "prevG": 17,
+     "prevApps": 30,
+     "prevEst": true
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/",
+    "https://sport.sky.it/calcio/serie-a/2026/05/26/serie-a-capocannoniere-meno-gol"
+   ],
+   "aliases": [
+    "Inter",
+    "Internazionale",
+    "Inter Milan",
+    "FC Internazionale Milano"
+   ]
+  },
+  {
+   "team": "AC Milan",
+   "abbr": "ACM",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "rabiot-acm",
+     "name": "Adrien Rabiot",
+     "pos": "MF",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN 5, Eurosport/one-versus-one 4; status unverified"
+    },
+    {
+     "id": "cisse-acm",
+     "name": "Alphadjo Cisse",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN 5, one-versus-one 4; status unverified"
+    },
+    {
+     "id": "pulisic-acm",
+     "name": "Christian Pulisic",
+     "pos": "AM",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "moreira-acm",
+     "name": "Diego Moreira",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN 4, other list 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://one-versus-one.com/en/rankings/serie-a/top-scorers",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "SSC Napoli",
+   "abbr": "NAP",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "de-bruyne-nap",
+     "name": "Kevin De Bruyne",
+     "pos": "AM",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "hojlund-nap",
+     "name": "Rasmus Hojlund",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://sport.virgilio.it/calcio/serie-a/classifica/marcatori/",
+    "https://one-versus-one.com/en/rankings/serie-a/top-scorers"
+   ],
+   "aliases": [
+    "Napoli"
+   ]
+  },
+  {
+   "team": "Lazio Rome",
+   "abbr": "LAZ",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "noslin-laz",
+     "name": "Tijjani Noslin",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "isaksen-laz",
+     "name": "Gustav Isaksen",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "frattesi-laz",
+     "name": "Davide Frattesi",
+     "pos": "MF",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN 4, Topmarcatori/Vavel 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://one-versus-one.com/en/rankings/serie-a/top-scorers",
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
+   ],
+   "aliases": [
+    "Lazio",
+    "SS Lazio"
+   ]
+  },
+  {
+   "team": "Como 1907",
+   "abbr": "COM",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "douvikas-com",
+     "name": "Anastasios Douvikas",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://thefishy.co.uk/top-scorers.php?table=33",
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Como_1907_season"
+   ]
+  },
+  {
+   "team": "Cagliari Calcio",
+   "abbr": "CAG",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "maldini-cag",
+     "name": "Daniel Maldini",
+     "pos": "AM",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN/ESPN 5, Eurosport/TNT 4; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://www.espn.ph/football/stats/_/league/ita.1",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "Torino FC",
+   "abbr": "TOR",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "adams-tor",
+     "name": "Che Adams",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "DAZN/ESPN 4, TNT 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.dazn.com/it-IT/news/calcio/capocannonieri-serie-a-classifica-marcatori-aggiornata/1sk4dtns3wmef1l94kdidtcn4c",
+    "https://www.espn.ph/football/stats/_/league/ita.1",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "Genoa CFC",
+   "abbr": "GEN",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "osmajic-gen",
+     "name": "Milutin Osmajic",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN/thefishy 4, TNT 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.ph/football/stats/_/league/ita.1",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "ACF Fiorentina",
+   "abbr": "FIO",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "mastantuono-fio",
+     "name": "Franco Mastantuono",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "Vavel 3, thefishy 4; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats",
+    "https://thefishy.co.uk/top-scorers.php?table=33"
+   ]
+  },
+  {
+   "team": "Bologna FC",
+   "abbr": "BFC",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "bernardeschi-bfc",
+     "name": "Federico Bernardeschi",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "thefishy only; status unverified"
+    },
+    {
+     "id": "dovbyk-bfc",
+     "name": "Artem Dovbyk",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "gambling.com Sep snapshot; early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "piccoli-bfc",
+     "name": "Roberto Piccoli",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "gambling.com Sep snapshot; early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    }
+   ],
+   "sources": [
+    "https://thefishy.co.uk/top-scorers.php?table=33",
+    "https://www.gambling.com/betbuilderai/leagues/team/bologna"
+   ]
+  },
+  {
+   "team": "Udinese Calcio",
+   "abbr": "UDI",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "ekkelenkamp-udi",
+     "name": "Jurgen Ekkelenkamp",
+     "pos": "MF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "kamara-udi",
+     "name": "Hassane Kamara",
+     "pos": "DF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.ph/football/stats/_/league/ita.1",
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
+   ]
+  },
+  {
+   "team": "Sassuolo Calcio",
+   "abbr": "SAS",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "adzic-sas",
+     "name": "Vasilije Adzic",
+     "pos": "MF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
+   ]
+  },
+  {
+   "team": "Parma Calcio",
+   "abbr": "PAR",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "lontani-par",
+     "name": "Simone Lontani",
+     "pos": "MF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN only; position unverified; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.ph/football/stats/_/league/ita.1"
+   ]
+  },
+  {
+   "team": "Juventus Turin",
+   "abbr": "JUV",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "vlahovic-juv",
+     "name": "Dusan Vlahovic",
+     "pos": "FW",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "statz.ai only (min-20-minute games); sources conflict; status unverified"
+    },
+    {
+     "id": "bremer-juv",
+     "name": "Gleison Bremer",
+     "pos": "DF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "thefishy 2, Wikipedia 3; status unverified"
+    },
+    {
+     "id": "zhegrova-juv",
+     "name": "Edon Zhegrova",
+     "pos": "AM",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "FotMob/xgstats/Vavel; status unverified"
+    }
+   ],
+   "sources": [
+    "https://en.wikipedia.org/wiki/2026%E2%80%9327_Juventus_FC_season",
+    "https://fbref.com/en/squads/e0652b02/Juventus-Stats",
+    "https://xgstats.com/teams/juventus",
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats"
+   ],
+   "teamGoals": 15,
+   "teamMatches": 11,
+   "aliases": [
+    "Juventus"
+   ]
+  },
+  {
+   "team": "US Lecce",
+   "abbr": "LEC",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "coulibaly-lec",
+     "name": "Lassana Coulibaly",
+     "pos": "MF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "gabriel-lec",
+     "name": "Tiago Gabriel",
+     "pos": "DF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.vavel.com/en-us/data/serie-a-calcio/stats",
+    "https://www.gambling.com/betbuilderai/leagues/team/lecce"
+   ]
+  },
+  {
+   "team": "Venezia FC",
+   "abbr": "VEN",
+   "comp": [
+    "Serie A"
+   ],
+   "players": [
+    {
+     "id": "yeboah-ven",
+     "name": "John Yeboah",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "adams-ven",
+     "name": "Akor Adams",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "sagrado-ven",
+     "name": "Richie Sagrado",
+     "pos": "DF",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "hainaut-ven",
+     "name": "Antoine Hainaut",
+     "pos": "DF",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    }
+   ],
+   "sources": [
+    "https://beinsports.com.tr/takim/venezia/istatistikler",
+    "https://www.gambling.com/betbuilderai/leagues/team/venezia"
+   ]
+  },
+  {
+   "team": "Werder Bremen",
+   "abbr": "SVW",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "fullkrug-svw",
+     "name": "Niclas Fullkrug",
+     "pos": "FW",
+     "goals": 9,
+     "apps": 9,
+     "pens": true,
+     "status": "active",
+     "note": "league top scorer, 3 pens (fussballdaten/Sportschau ~9 games; DFB shows 8); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "SV Werder Bremen",
+    "Bremen"
+   ]
+  },
+  {
+   "team": "Bayer Leverkusen",
+   "abbr": "LEV",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "schick-lev",
+     "name": "Patrik Schick",
+     "pos": "FW",
+     "goals": 8,
+     "pens": false,
+     "status": "active",
+     "note": "fussballdaten/Sportschau 8, DFB 6; status unverified"
+    },
+    {
+     "id": "maza-lev",
+     "name": "Ibrahim Maza",
+     "pos": "AM",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "DFB list; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Leverkusen",
+    "Bayer 04 Leverkusen"
+   ]
+  },
+  {
+   "team": "Bayern Munich",
+   "abbr": "BMU",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "olise-bmu",
+     "name": "Michael Olise",
+     "pos": "AM",
+     "goals": 6,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    },
+    {
+     "id": "kane-bmu",
+     "name": "Harry Kane",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 9,
+     "pens": true,
+     "status": "active",
+     "note": "4 goals in 9 games (ESPN/fussballdaten/DFB); regular penalty taker; status unverified. 2025-26: 36 Bundesliga goals in 31 apps (bundesliga.com)",
+     "prevG": 36,
+     "prevApps": 31
+    },
+    {
+     "id": "diaz-bmu",
+     "name": "Luis Diaz",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 6,
+     "pens": false,
+     "status": "active",
+     "note": "4 in 6 games per one list; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer",
+    "https://www.espn.com/soccer/stats/_/league/ger.1",
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://www.bundesliga.com/en/bundesliga/news/harry-kane-2025-26-numbers-england-bauern-munich-goals-records-messi-38301",
+    "https://fcbayern.com/en/news/2026/05/harry-kane-crowned-bundesliga-top-scorer-for-third-year-running"
+   ],
+   "prevTeamGoals": 122,
+   "prevTeamMatches": 34,
+   "prevTeamNote": "122 Bundesliga goals in 2025-26, a league record (fcbayern.com)",
+   "aliases": [
+    "Bayern Munchen",
+    "FC Bayern Munchen",
+    "Bayern",
+    "FC Bayern"
+   ]
+  },
+  {
+   "team": "Eintracht Frankfurt",
+   "abbr": "SGE",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "ebnoutalib-sge",
+     "name": "Younes Ebnoutalib",
+     "pos": "FW",
+     "goals": 6,
+     "pens": false,
+     "status": "active",
+     "note": "fussballdaten/Sportschau 6, DFB 5; status unverified"
+    },
+    {
+     "id": "burkardt-sge",
+     "name": "Jonathan Burkardt",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Frankfurt"
+   ]
+  },
+  {
+   "team": "FSV Mainz",
+   "abbr": "M05",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "tietz-m05",
+     "name": "Phillip Tietz",
+     "pos": "FW",
+     "goals": 6,
+     "pens": false,
+     "status": "active",
+     "note": "fussballdaten/Sportschau 6, DFB 5; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://www.sportschau.de/live-und-ergebnisse/fussball/deutschland-bundesliga/statistik-torjaeger",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Mainz",
+    "Mainz 05",
+    "1. FSV Mainz 05"
+   ]
+  },
+  {
+   "team": "RB Leipzig",
+   "abbr": "RBL",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "romulo-rbl",
+     "name": "Romulo",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 7-game snapshot; status unverified"
+    },
+    {
+     "id": "nusa-rbl",
+     "name": "Antonio Nusa",
+     "pos": "FW",
+     "goals": 4,
+     "apps": 9,
+     "pens": false,
+     "status": "active",
+     "note": "4 goals in 9 games; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/ger.1",
+    "https://www.fussballdaten.de/bundesliga/tore/"
+   ]
+  },
+  {
+   "team": "VfB Stuttgart",
+   "abbr": "VFB",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "demirovic-vfb",
+     "name": "Ermedin Demirovic",
+     "pos": "FW",
+     "goals": 5,
+     "apps": 9,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN/fussballdaten 5 in 9 games, DFB 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/ger.1",
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ]
+  },
+  {
+   "team": "SC Freiburg",
+   "abbr": "SCF",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "suzuki-scf",
+     "name": "Yuito Suzuki",
+     "pos": "AM",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 5, other list 4; status unverified"
+    },
+    {
+     "id": "matanovic-scf",
+     "name": "Igor Matanovic",
+     "pos": "FW",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 4, DFB 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/ger.1",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ]
+  },
+  {
+   "team": "FC Augsburg",
+   "abbr": "FCA",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "gregoritsch-fca",
+     "name": "Michael Gregoritsch",
+     "pos": "FW",
+     "goals": 5,
+     "pens": false,
+     "status": "active",
+     "note": "fussballdaten 5, DFB 4; status unverified"
+    },
+    {
+     "id": "fellhauer-fca",
+     "name": "Robin Fellhauer",
+     "pos": "MF",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "from search-result snippet (page fetch blocked); status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ]
+  },
+  {
+   "team": "Borussia Monchengladbach",
+   "abbr": "BMG",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "scally-bmg",
+     "name": "Joe Scally",
+     "pos": "DF",
+     "goals": 4,
+     "pens": false,
+     "status": "active",
+     "note": "fussballdaten 4, DFB 3; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.fussballdaten.de/bundesliga/tore/",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ],
+   "aliases": [
+    "Gladbach",
+    "Borussia M'gladbach",
+    "Monchengladbach"
+   ]
+  },
+  {
+   "team": "Borussia Dortmund",
+   "abbr": "BVB",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "guirassy-bvb",
+     "name": "Serhou Guirassy",
+     "pos": "FW",
+     "goals": 3,
+     "apps": 8,
+     "pens": false,
+     "status": "active",
+     "note": "ESPN 3 in 8 games, another list 2; status unverified"
+    },
+    {
+     "id": "nmecha-bvb",
+     "name": "Felix Nmecha",
+     "pos": "MF",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "note": "DFB list; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/ger.1",
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer"
+   ]
+  },
+  {
+   "team": "SV 07 Elversberg",
+   "abbr": "SVE",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "krattenmacher-sve",
+     "name": "Maurice Krattenmacher",
+     "pos": "AM",
+     "goals": 3,
+     "pens": false,
+     "status": "active",
+     "note": "DFB list; status unverified"
+    }
+   ],
+   "sources": [
+    "https://datencenter.dfb.de/competitions/12/seasons/current/top_scorer",
+    "https://www.vavel.com/en/data/sv-elversberg/"
+   ]
+  },
+  {
+   "team": "TSG Hoffenheim",
+   "abbr": "TSG",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "daghim-tsg",
+     "name": "Ahmed Daghim",
+     "pos": "FW",
+     "goals": 2,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "single list only, low confidence; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/stats/_/league/ger.1"
+   ],
+   "aliases": [
+    "Hoffenheim",
+    "TSG 1899 Hoffenheim"
+   ]
+  },
+  {
+   "team": "Hamburger SV",
+   "abbr": "HSV",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "poulsen-hsv",
+     "name": "Yussuf Poulsen",
+     "pos": "FW",
+     "goals": 2,
+     "apps": 4,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "2 in 4 games, Sep snapshot; early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.soccerpunter.com/team/away/28321/2708/Hamburger-SV-in-Germany-Bundesliga-2026-2027",
+    "https://www.espn.co.uk/football/team/stats/_/id/127/scoring"
+   ],
+   "aliases": [
+    "Hamburg"
+   ]
+  },
+  {
+   "team": "SC Paderborn 07",
+   "abbr": "PAD",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "castaneda-pad",
+     "name": "Santiago Castaneda",
+     "pos": "MF",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "tigges-pad",
+     "name": "Steffen Tigges",
+     "pos": "FW",
+     "goals": 1,
+     "pens": false,
+     "status": "active",
+     "est": true,
+     "note": "early-season snapshot (~Sep/Oct 2026), current total likely higher; status unverified"
+    },
+    {
+     "id": "philippe-pad",
+     "name": "Rayan Philippe",
+     "pos": "FW",
+     "pens": false,
+     "status": "active",
+     "note": "scored late winner vs HSV (LigaInsider); season total unknown; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.gambling.com/betbuilderai/leagues/team/sc-paderborn-07",
+    "https://www.ligainsider.de/bundesliga/team/sc-paderborn-07/1249/saison-2026-2027/186874"
+   ]
+  },
+  {
+   "team": "1. FC Cologne",
+   "abbr": "KOE",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "dallinga-koe",
+     "name": "Thijs Dallinga",
+     "pos": "FW",
+     "pens": false,
+     "status": "active",
+     "note": "named Koln's 2026-27 leading scorer, goal count not visible; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.gambling.com/betbuilderai/leagues/team/1-fc-koln"
+   ],
+   "aliases": [
+    "FC Koln",
+    "1. FC Koln",
+    "Koln",
+    "Cologne",
+    "FC Cologne",
+    "1. FC Köln",
+    "FC Köln",
+    "Köln"
+   ]
+  },
+  {
+   "team": "Union Berlin",
+   "abbr": "UNI",
+   "comp": [
+    "Bundesliga"
+   ],
+   "players": [
+    {
+     "id": "haberer-uni",
+     "name": "Janik Haberer",
+     "pos": "MF",
+     "pens": false,
+     "status": "active",
+     "note": "appears to share team lead (possibly 2) in ESPN table, unconfirmed; status unverified"
+    },
+    {
+     "id": "skarke-uni",
+     "name": "Tim Skarke",
+     "pos": "FW",
+     "pens": false,
+     "status": "active",
+     "note": "appears to share team lead (possibly 2), unconfirmed; status unverified"
+    }
+   ],
+   "sources": [
+    "https://www.espn.com/soccer/team/stats/_/id/598"
+   ],
+   "aliases": [
+    "1. FC Union Berlin"
+   ]
+  },
+  {
+   "team": "Valencia CF",
+   "abbr": "VCF",
+   "comp": [
+    "La Liga"
+   ],
+   "aliases": [
+    "Valencia"
+   ],
+   "lastChecked": "2026-11-18",
+   "players": [
+    {
+     "id": "sadiq-vcf",
+     "name": "Umar Sadiq",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "club goal leader per LaLiga MD9 page; tally unverified"
+    },
+    {
+     "id": "duro-vcf",
+     "name": "Hugo Duro",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "squad striker; tally unverified"
+    }
+   ],
+   "sources": [
+    "https://www.laliga.com/en-GB/laliga-easports"
+   ]
+  },
+  {
+   "team": "Schalke 04",
+   "abbr": "SCH",
+   "comp": [
+    "Bundesliga"
+   ],
+   "aliases": [
+    "FC Schalke 04",
+    "Schalke"
+   ],
+   "lastChecked": "2026-11-18",
+   "players": [
+    {
+     "id": "karaman-sch",
+     "name": "Kenan Karaman",
+     "pos": "FW",
+     "status": "active",
+     "est": true,
+     "note": "14 goals in the 2025-26 2. Bundesliga promotion season; 2026-27 tally unverified"
+    }
+   ],
+   "sources": [
+    "https://www.bundesliga.com/en/bundesliga"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "group": "epl-cl-mls",
+   "file": "scorers-epl-cl-mls.json",
+   "updated": "2026-11-18T05:09:00Z",
+   "teams": 43,
+   "teamsMissing": [
+    "AEK Athens",
+    "SK Slovan Bratislava"
+   ],
+   "notes": ""
+  },
+  {
+   "group": "liga-l1-mx",
+   "file": "scorers-liga-l1-mx.json",
+   "updated": "2026-11-18T05:13:19Z",
+   "teams": 40,
+   "teamsMissing": [
+    "Puebla",
+    "Atletico de San Luis",
+    "Atlante"
+   ],
+   "notes": "WebFetch/curl blocked in this session; all figures taken from web-search result snippets of ESPN/Yahoo/Sports Infos/LaLiga/TUDN tables dated ~Nov 1-9 2026 (La Liga ~J12, Ligue 1 ~J10, Liga MX J16). No injury reports seen; all status active/unverified. teamGoals/teamMatches not found."
+  },
+  {
+   "group": "seriea-bund",
+   "file": "scorers-seriea-bund.json",
+   "updated": "2026-11-18T05:16:50Z",
+   "teams": 37,
+   "teamsMissing": [],
+   "notes": "WebFetch blocked by network policy; all figures come from web-search result snippets (DAZN/Sky/Virgilio ~9 Nov 2026 for Serie A; fussballdaten/Sportschau/DFB ~matchday 9-10 for Bundesliga). Sources often disagree by 1-2 goals. No injury reports checked; all status active/unverified."
+  }
+ ]
+}

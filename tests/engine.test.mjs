@@ -1,6 +1,7 @@
 // Engine & odds tests for Safe Bets (index.html). Run: node tests/engine.test.mjs
 // Starts its own static server on a free port, drives the page with Playwright, prints PASS/FAIL lines,
-// exits non-zero on any failure.
+// exits non-zero on any failure. Runs on a saved slate (tests/fixtures/data-2026-11-18.json) and saved copies of the side files
+// of the same days, with the clock fixed that evening, so the checks don't depend on what today's board holds.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +15,16 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 // module files owned by other engineers may not exist yet: their 404s are expected, not app errors
 const OPTIONAL = /\/(soccer\.js|sim\.js|scorers\.json)$/;
 const RENDER_BUDGET_MS = 1500;
+const FIX = f => fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8');
+const NOW = '2026-11-18T21:50:00Z';  // evening of the saved slate: NBA, NHL, NFL, college and soccer games still to play
+// every live file the page loads at boot -> its saved copy (firsttd.js adds ?t=..., so match on the path only)
+const FEEDS = { 'data.json': FIX('data-2026-11-18.json'), 'props.json': FIX('props-2026-11-18.json'), 'scorers.json': FIX('scorers-2026-11-18.json'),
+  'nbaroles.json': FIX('nbaroles-2026-11-18.json'), 'injuries.json': FIX('injuries-2026-11-18.json'), 'firstbasket.json': FIX('firstbasket-2026-11-18.json'),
+  'firsttd.json': FIX('firsttd-2026-11-19.json'), 'polymarket.json': FIX('pm-2026-11-18.json'), 'ufc.json': FIX('ufc-2026-11-19.json') };
+async function pinFeeds(page) {
+  await page.clock.setFixedTime(new Date(NOW));
+  for (const [f, body] of Object.entries(FEEDS)) await page.route(new RegExp('/' + f.replace('.', '\\.') + '(\\?|$)'), r => r.fulfill({ status: 200, contentType: 'application/json', body }));
+}
 
 const server = http.createServer((req, res) => {
   const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -35,6 +46,7 @@ async function openPage({ tab = 'trending', fmt = null, w = 390, h = 844 } = {})
   const errors = [];
   page.on('console', m => { if (m.type() === 'error' && !OPTIONAL.test(m.location().url || '')) errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  await pinFeeds(page);
   await page.addInitScript(([t, f]) => { localStorage.setItem('fm2.tab', JSON.stringify(t)); if (f) localStorage.setItem('fm2.oddsFmt', JSON.stringify(f)); }, [tab, fmt]);
   await page.goto(BASE);
   await page.waitForFunction(() => window.SB && SB.firstRender, null, { timeout: 30000 });
@@ -369,7 +381,8 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }), page = await ctx.newPage(), errs = [];
     page.on('pageerror', e => errs.push(e.message));
     let mode = 'ok';
-    const real = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+    await pinFeeds(page);  // the data.json route below is registered later, so it wins
+    const real = JSON.parse(FEEDS['data.json']);
     const g0 = real.games.find(g => g.sport === 'soccer' && g.status === 'scheduled');
     const fed = { ...real, updated: '2026-11-18T09:00:00Z', games: [...real.games.map(g => ({ ...g })),
       { ...g0, id: 'soccer-TST-PPD-2099-01-01', status: 'postponed', start: '2099-01-01T12:00:00Z', home: { abbr: 'TST', name: 'Test FC' }, away: { abbr: 'PPD', name: 'Postponed FC' } },
@@ -425,7 +438,7 @@ try {
     const l1 = await page.evaluate(() => ({ tags: [...document.querySelectorAll('#main .pc .hit')].map(x => x.textContent).join(','), txt: document.getElementById('main').textContent, res: JSON.parse(localStorage.getItem('fm2.saved'))[0].res }));
     check('ledger: saves final scores and shows Won / Lost, P/L and ROI', !!l1.res && /Won/.test(l1.tags) && /Lost/.test(l1.tags) && /\$5\.00/.test(l1.txt) && /\+25\.0%/.test(l1.txt), l1.txt.slice(0, 200));
     // the game drops out of the feed: the parlay still grades from the stored result
-    await page.route('**/data.json', async r => { const d = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8')); d.games = d.games.filter(g => g.id !== lg.id); r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(d) }); });
+    await page.route('**/data.json', async r => { const d = JSON.parse(FEEDS['data.json']); d.games = d.games.filter(g => g.id !== lg.id); r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(d) }); });
     await page.evaluate(() => window.__fm2.refreshTick()); await page.evaluate(() => SB.goTab('mine'));
     const l2 = await page.evaluate(() => [...document.querySelectorAll('#main .pc .hit')].map(x => x.textContent).join(','));
     check('ledger: a parlay still grades after its game leaves the feed', /Won/.test(l2) && /Lost/.test(l2), l2);
@@ -438,7 +451,8 @@ try {
   // ---- boot: module tabs present while the feed is still loading, loading text shown (ux-15); 360px header (ux-14/16) ----
   {
     const ctx = await browser.newContext({ viewport: { width: 360, height: 740 } }), page = await ctx.newPage();
-    await page.route('**/*.json', async r => { await new Promise(x => setTimeout(x, 1500)); r.continue(); });
+    await pinFeeds(page);  // every .json is held 1.5 s, then served by the saved-copy routes (fallback) or the server
+    await page.route('**/*.json', async r => { await new Promise(x => setTimeout(x, 1500)); r.fallback(); });
     await page.goto(BASE); await page.waitForFunction(() => window.SB && window.__soccer);
     const b0 = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabs .tab')].map(b => b.dataset.t).join(','), main: document.getElementById('main').textContent }));
     await page.waitForFunction(() => SB.firstRender, null, { timeout: 30000 });

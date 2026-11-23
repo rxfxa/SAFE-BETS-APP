@@ -1,6 +1,7 @@
 // Soccer Parlays tests (soccer.js + scorers.json). Run: node tests/soccer.test.mjs
 // Starts its own static server on a free port, drives the page with Playwright, prints PASS/FAIL lines,
-// exits non-zero on any failure.
+// exits non-zero on any failure. The page runs on a saved slate (tests/fixtures/data-2026-11-18.json, the feed the checks
+// below were written against) and the scorer file of that day, with the clock fixed that evening, so today's board doesn't matter.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,6 +19,13 @@ const SWITCH_BUDGET_MS = 300;
 const LEAGUE_ORDER = [['ucl', 'Champions League'], ['epl', 'Premier League'], ['laliga', 'La Liga'], ['seriea', 'Serie A'], ['bundesliga', 'Bundesliga'],
   ['ligue1', 'Ligue 1'], ['uel', 'Europa League'], ['eredivisie', 'Eredivisie'], ['primeira', 'Primeira Liga'], ['mls', 'MLS']];
 const SECTIONS = ['overs', 'unders', 'exact', 'scorers', 'btts', 'results', 'mega'];
+const FIX = f => fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8');
+const NOW = '2026-11-18T21:50:00Z';  // evening of the saved slate: every soccer fixture in it (20-25 Nov) is still to play, within 7 days
+const FEEDS = { 'data.json': FIX('data-2026-11-18.json'), 'scorers.json': FIX('scorers-2026-11-18.json') };
+async function pinFeeds(page) {
+  await page.clock.setFixedTime(new Date(NOW));
+  for (const [f, body] of Object.entries(FEEDS)) await page.route(new RegExp('/' + f.replace('.', '\\.') + '(\\?|$)'), r => r.fulfill({ status: 200, contentType: 'application/json', body }));
+}
 
 const server = http.createServer((req, res) => {
   const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -50,6 +58,7 @@ async function openPage({ tab = 'soccerparlays', socp = null, w = 390, h = 844, 
   const errors = [];
   page.on('console', m => { if (m.type() === 'error' && !(OPTIONAL && OPTIONAL.test(m.location().url || ''))) errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  await pinFeeds(page);
   if (NO_SIM) await page.route('**/sim.js', r => r.fulfill({ status: 404, body: '' }));
   await page.addInitScript(([t, s, th]) => { localStorage.setItem('fm2.tab', JSON.stringify(t)); localStorage.setItem('fm2.theme', JSON.stringify(th)); if (s) localStorage.setItem('fm2.socp', JSON.stringify(s)); }, [tab, socp, theme]);
   await page.goto(BASE);
@@ -348,6 +357,7 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage(); const errors = [];
     page.on('pageerror', e => errors.push(e.message));
+    await pinFeeds(page);  // registered first, so the 404 below wins for scorers.json
     if (NO_SIM) await page.route('**/sim.js', r => r.fulfill({ status: 404, body: '' }));
     await page.route('**/scorers.json', r => r.fulfill({ status: 404, body: 'nope' }));
     await page.addInitScript(() => { localStorage.setItem('fm2.tab', JSON.stringify('soccerparlays')); localStorage.setItem('fm2.socp', JSON.stringify({ lg: 'epl', sec: 'scorers' })); });

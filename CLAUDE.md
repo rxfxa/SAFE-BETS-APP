@@ -134,6 +134,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Missing soccer leagues:** Europa League, Eredivisie and Primeira Liga aren't in data.json (the hourly feed), so the Soccer tabs can't price them.
 - **pattern.json:** results come only from the CSVs (finished games in data.json carry no pre-match chance), so it lags until football-data.co.uk updates.
 - **Keyboard access:** a user needs about 41 Tab presses to reach the first game. A skip link would fix that.
+- **tests/sim.test.mjs:** failed once in a full-suite run on 2026-11-23, then passed 5 times in a row on its own. It looks like a timing problem; if it fails again, capture which check fails.
 
 ## Change log
 - 2026-11-22:

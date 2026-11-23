@@ -104,6 +104,19 @@ try {
     out.msg = /Prices for the big favourites still to play are not posted yet/.test(document.querySelector('#main').textContent);
     for (const [g, k, v] of keep.reverse()) g[k] = v; SB.render(); return out; });
   check('the runs card skips unpriced games; a favourite now under 75% loses its "huge favourite" chip; a missing card says why', mx.runsOk && mx.huge === false && mx.msg, JSON.stringify(mx));
+  const mx2 = await page.evaluate(() => { const R = __pattern.PT.research, keep = [];
+    // only some favourites priced: the message says so
+    const ids = [...new Set([...R.forecast.legs.map(l => l.gid), ...R.runsNow.map(r => r.gid)])].filter(id => id !== R.forecast.legs[0].gid);
+    for (const id of ids) { const g = SB.gameById(id); if (g) { keep.push([g, g.prob]); g.prob = null; } } SB.render();
+    const t = document.querySelector('#main').textContent; for (const [g, p] of keep) g.prob = p;
+    // if 'huge' ever held, the estimate follows today's price the same way the chip does
+    const causes = R.model.causes; R.model.causes = { huge: .5 };
+    const H = R.forecast.legs.find(l => l.flags.includes('huge')), g = SB.gameById(H.gid), p0 = g.prob;
+    g.prob = H.favSide === 'home' ? { home: .62, draw: .2, away: .18 } : { home: .18, draw: .2, away: .62 };
+    const x = __pattern.forecast(), l = x.legs.find(y => y.gid === H.gid), want = __pattern.modelQ(R, .62, H.flags.filter(f => f !== 'huge'));
+    g.prob = p0; R.model.causes = causes; SB.render();
+    return { partial: /Only 1 of the \d+ big favourites still to play has prices posted/.test(t), q: l.q, want, flags: l.flagsNow }; });
+  check('partly priced: the message says how many have prices; a favourite now under 75% is estimated without the "huge" cause', mx2.partial && Math.abs(mx2.q - mx2.want) < 1e-12 && !mx2.flags.includes('huge'), JSON.stringify(mx2));
   const cr = await page.evaluate(() => { const x = __pattern.forecast(), C = __pattern.nextCards(x), by = Object.fromEntries(C.map(c => [c.id, c.legs.map(l => l.gid)])), open = x.legs.filter(l => !l.done).length;
     return { open, c3: by['pt-crazy3'] || null, c5: by['pt-crazy5'] || null, st: by['pt-steady'] || [] }; });
   check('card rules: 3 upsets only with 3+ open favourites, 5 only with 5+, steady never on the 3-upset games', (cr.open >= 3 ? cr.c3 && cr.c3.length === 3 : !cr.c3) && (cr.open >= 5 ? cr.c5 && cr.c5.length === 5 : !cr.c5) && !(cr.c3 || []).some(g => cr.st.includes(g)), JSON.stringify(cr));

@@ -92,6 +92,26 @@ try {
   const R8 = run(feed8, '2027-08-19T12:00:00Z', path.join(T, 'aug.json')), F8 = R8.forecast;
   check('opening weekend: favourites are "start of season", never "end of season", and no runs carry over from last season', F8 && F8.legs.length > 0 && F8.legs.every(l => l.flags.includes('early') && !l.flags.includes('late')) && R8.runsNow.length === 0, JSON.stringify(F8 && F8.legs.map(l => l.flags)));
 
+  // three opening weekends in a row (Aug 14, 21, 28): the 3rd game is still 'start of season' when the 2nd is finished but
+  // still listed and the 1st has left the feed (kept results) - each game counted once
+  const base = JSON.parse(fs.readFileSync(feed1, 'utf8')).games.filter(g => g.sport === 'soccer' && Date.parse(g.start) >= Date.parse('2026-11-27T00:00:00Z') && Date.parse(g.start) < Date.parse('2026-12-01T12:00:00Z'));
+  const wk = w => base.map(g => ({ ...g, id: g.id + '-w' + w, start: new Date(Date.parse(g.start) + Date.parse('2027-08-14T00:00:00Z') - Date.parse('2026-11-28T00:00:00Z') + w * 7 * 864e5).toISOString().replace(/\.\d+Z$/, 'Z') }));
+  const closed = gs => gs.map(g => ({ ...g, status: 'closed', prob: null, score: { home: 1, away: 1 } }));
+  const fA = path.join(T, 'feed-aug-a.json'), fB = path.join(T, 'feed-aug-b.json'), pA = path.join(T, 'p-aug.json');
+  fs.writeFileSync(fA, JSON.stringify({ games: [...closed(wk(0)), ...wk(1), ...wk(2)] }));
+  run(fA, '2027-08-17T12:00:00Z', pA);
+  fs.writeFileSync(fB, JSON.stringify({ games: [...closed(wk(1)), ...wk(2)] }));
+  const RB = run(fB, '2027-08-24T12:00:00Z', pA), FB = RB.forecast;
+  check('3rd game of the season: still "start of season" (each finished game counted once)', FB && FB.legs.length > 0 && FB.legs.every(l => l.flags.includes('early')), JSON.stringify(FB && FB.legs.map(l => l.flags)));
+
+  // the Eredivisie and Primeira Liga start first: their new-season files must not stop the big five from matching their teams
+  const csv2 = path.join(T, 'csv2'); fs.mkdirSync(csv2);
+  for (const f of fs.readdirSync(csv)) fs.copyFileSync(path.join(csv, f), path.join(csv2, f));
+  for (const L of ['N1', 'P1']) { const lines = fs.readFileSync(path.join(ROOT, 'tests/fixtures/fd', L + '.csv'), 'utf8').split(/\r?\n/); fs.writeFileSync(path.join(csv2, `2728_${L}.csv`), [lines[0], ...lines.slice(1, 4).map(x => x.replace(/\d\d\/\d\d\/\d{2,4}/, '07/08/2027'))].join('\n') + '\n'); }
+  py(['tools/weekend_research.py', csv2, '--feed', feed8, '--pattern', path.join(T, 'aug2.json'), '--now', '2027-08-19T12:00:00Z', '--min', '300', '--sims', '200']);
+  const R9 = JSON.parse(fs.readFileSync(path.join(T, 'aug2.json'), 'utf8')).research, F9 = R9.forecast;
+  check('new-season rows for two leagues only: the big five still match their teams and get "start of season"', R9.unmatchedFeedNames.length === 0 && F9 && F9.legs.length > 0 && F9.legs.every(l => l.matched && l.flags.includes('early')), JSON.stringify({ unmatched: R9.unmatchedFeedNames.length, legs: F9 && F9.legs.map(l => [l.matched, l.flags]) }));
+
   // weekend_pattern.py (run first each morning) keeps the research block
   py(['tools/weekend_pattern.py', path.join(ROOT, 'tests/fixtures/fd'), '--days', '90', '--end', '2026-11-23', '--feed', feed1, '--sims', '200', '--out', P]);
   const after = JSON.parse(fs.readFileSync(P, 'utf8'));

@@ -56,9 +56,10 @@
       // finished games count as they ended (the feed's finished games carry no prices, so read the score first)
       if (g && SB.isFinal(g) && g.score) { const h = g.score.home, a = g.score.away, r = h > a ? 'home' : h < a ? 'away' : 'draw'; res = r !== L.favSide; }
       // games still to start follow today's prices; games under way keep their pre-match chance
-      else if (res == null && g && g.prob && !SB.started(g)) { const q = probs(g); if (q) { const pf = L.favSide === 'home' ? q.h : q.a; priced = 1 - pf; model = modelQ(R, pf, L.flags); } }
+      let flags = L.flags || [];
+      if (res == null && g && g.prob && !SB.started(g)) { const q = probs(g); if (q) { const pf = L.favSide === 'home' ? q.h : q.a; flags = flags.filter(f => f !== 'huge').concat(pf >= .75 ? ['huge'] : []); priced = 1 - pf; model = modelQ(R, pf, flags); } }
       const done = res != null;
-      legs.push({ ...L, g, done, res, priced, model, q: res == null ? model : res ? 1 : 0, q0: res == null ? priced : res ? 1 : 0 });
+      legs.push({ ...L, flagsNow: flags, g, done, res, priced, model, q: res == null ? model : res ? 1 : 0, q0: res == null ? priced : res ? 1 : 0 });
     }
     if (!legs.length) return null;
     const n = legs.length, need = Math.ceil(R.rounds.threshold * n - 1e-9), dist = failDist(legs.map(l => l.q)), dist0 = failDist(legs.map(l => l.q0));
@@ -112,7 +113,8 @@
       <h2>Likeliest to slip <small>big favourites, research estimate of dropping points</small></h2>
       <div class="panel" style="padding:2px 14px">${X.legs.slice().sort((a, b) => b.q - a.q).map(l => {
         const key = l.favSide === 'home' ? 'DCX2' : 'DC1X', p = !l.done && l.g && SB.openG(l.g) ? SB.p1(l.g, key) : null;
-        const chips = l.reasons.filter(r => !(r.key === 'huge' && 1 - l.priced < .75)).map(r => { const c = causeOf(r.key), [cls, v] = verdictOf(c); return `<span class="ptchip ${cls}" title="${c ? `odds ratio ${c.or} vs similar-priced favourites, p ${pv(c.pReg)}` : ''}">${esc(r.text)} · ${esc(v)}</span>`; }).join('');
+        const rs = l.reasons.filter(r => r.key !== 'huge' || l.flagsNow.includes('huge')).concat(l.flagsNow.includes('huge') && !l.reasons.some(r => r.key === 'huge') ? [{ key: 'huge', text: 'huge favourite' }] : []);
+        const chips = rs.map(r => { const c = causeOf(r.key), [cls, v] = verdictOf(c); return `<span class="ptchip ${cls}" title="${c ? `odds ratio ${c.or} vs similar-priced favourites, p ${pv(c.pReg)}` : ''}">${esc(r.text)} · ${esc(v)}</span>`; }).join('');
         return `<div class="mrow"><div class="lbl">${esc(l.fav)} vs ${esc(l.dog)}<small>${esc(l.comp)}${l.g ? ' · ' + esc(SB.when(l.g)) : ''} · ${l.favSide === 'home' ? 'at home' : 'away'} · priced ${P(1 - l.priced)} to win ${formHTML(l.form)}</small>${chips ? `<span class="ptchips">${chips}</span>` : ''}</div>
           <span class="mono" style="font-weight:800" title="research estimate (prices alone: ${P(l.priced)})">${l.done ? (l.res ? '✗ slipped' : '✓ won') : P(l.q)}</span><span></span>${p ? `<button class="yes ${SB.inSlip(l.gid, key) ? 'in' : ''}" data-leg="${esc(l.gid)}|${key}" aria-label="${esc(l.dog)} or draw at ${esc(SB.fmtOdds(p))}">${esc(SB.fmtOdds(p))}</button>` : '<span></span>'}</div>`;
       }).join('')}</div>
@@ -122,7 +124,7 @@
         <span class="mono" style="font-weight:800">${runEnd(r) || (SB.started(r.g) ? 'under way' : P(r.pLoseHist != null ? r.pLoseHist : r.pLose))}</span><span></span>${p ? `<button class="yes ${SB.inSlip(r.gid, k) ? 'in' : ''}" data-leg="${esc(r.gid)}|${k}" aria-label="${esc(r.opp)} to win at ${esc(SB.fmtOdds(p))}">${esc(SB.fmtOdds(p))}</button>` : '<span></span>'}</div>`; }).join('')}</div>
       <div class="note">${(() => { const L = (R.unbeatenRuns || []).filter(x => x.lo >= 10), e = L.reduce((a, x) => a + x.ended, 0), x = L.reduce((a, y) => a + y.expected, 0); return L.length ? `Over 6 seasons, runs of 10+ games ended ${N0(e)} times where the prices expected ${Math.round(x)}: long runs are not "due" to end.` : ''; })()} The button adds the opponent to win.</div>` : ''}
       <h2>Parlays for this weekend <small>every leg can be swapped (⇄) · 500,000-run sims</small></h2>
-      ${cards.length ? `<div class="grid">${cards.map(c => SB.ticketCard(c.id, esc(c.title), { legs: c.legs, p: SB.parlayProb(c.legs).p, n: c.legs.length }, esc(c.sub))).join('')}</div>` : `<div class="pc"><div class="why">${(() => { const left = X.legs.filter(l => l.g && !l.done && !SB.started(l.g)); return !left.length ? 'The games of this round have started.' : !left.some(l => SB.priced(l.g)) ? 'Prices for the big favourites still to play are not posted yet.' : `Only ${left.length} big favourite${left.length === 1 ? ' is' : 's are'} still to play: too few for these cards.`; })()}</div></div>`}
+      ${cards.length ? `<div class="grid">${cards.map(c => SB.ticketCard(c.id, esc(c.title), { legs: c.legs, p: SB.parlayProb(c.legs).p, n: c.legs.length }, esc(c.sub))).join('')}</div>` : `<div class="pc"><div class="why">${(() => { const left = X.legs.filter(l => l.g && !l.done && !SB.started(l.g)); return !left.length ? 'The games of this round have started.' : (pr => !pr ? 'Prices for the big favourites still to play are not posted yet.' : pr < left.length ? `Only ${pr} of the ${left.length} big favourites still to play ${pr === 1 ? 'has' : 'have'} prices posted: too few for these cards.` : `Only ${left.length} big favourite${left.length === 1 ? ' is' : 's are'} still to play: too few for these cards.`)(left.filter(l => SB.priced(l.g)).length); })()}</div></div>`}
       <div class="note">Estimates, not promises. Research from ${N0(R.games)} games, updated ${esc(String(R.updated).slice(0, 10))}; results through ${esc(R.resultsThrough)}${R.feedResultsAdded ? ' plus the app\'s results feed' : ''}.</div>`;
   }
 

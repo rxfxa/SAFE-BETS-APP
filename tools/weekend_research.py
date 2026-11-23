@@ -87,6 +87,8 @@ games.sort(key=lambda g: (g['date'], g['lg']))
 if len(games) < MIN_GAMES:
     sys.exit(f'only {len(games)} games: download more seasons first')
 CUR = max(g['season'] for g in games)
+# each league's own latest season (leagues start on different weeks: the Eredivisie and Primeira Liga a week or two first)
+CURL = {lg: max((g['season'] for g in games if g['lg'] == lg), default=CUR) for lg in NAMES}
 teams_by_lg = defaultdict(set)
 for g in games:
     teams_by_lg[(g['season'], g['lg'])].update((g['home'], g['away']))
@@ -348,7 +350,7 @@ try:
     feed = json.load(open(FEED))
 except (OSError, ValueError):
     feed = {'games': []}
-cur_teams = {lg: teams_by_lg[(CUR, lg)] for lg in NAMES}
+cur_teams = {lg: teams_by_lg[(CURL[lg], lg)] for lg in NAMES}
 fmatch = {}
 
 
@@ -361,7 +363,7 @@ def ft(comp, name):
 
 last_csv = defaultdict(lambda: None)
 for g in games:
-    if g['season'] == CUR:
+    if g['season'] == CURL[g['lg']]:
         last_csv[g['lg']] = max(last_csv[g['lg']] or g['date'], g['date'])
 fd_games = [g for g in feed.get('games', []) if g.get('sport') == 'soccer' and g.get('comp') in LG]
 sdate = lambda g: datetime.fromisoformat(g['start'].replace('Z', '+00:00'))
@@ -384,20 +386,23 @@ for r in sorted(fres.values(), key=lambda r: (r['date'], r['gid'])):
     h, a = ft(r['comp'], r['home']), ft(r['comp'], r['away'])
     hg, ag = r['hg'], r['ag']
     if h:
-        play((CUR, lg, h), 'W' if hg > ag else 'D' if hg == ag else 'L', d)
+        play((CURL[lg], lg, h), 'W' if hg > ag else 'D' if hg == ag else 'L', d)
     if a:
-        play((CUR, lg, a), 'W' if ag > hg else 'D' if hg == ag else 'L', d)
+        play((CURL[lg], lg, a), 'W' if ag > hg else 'D' if hg == ag else 'L', d)
     added += 1
 # every league fixture in the feed (any status), so rest counts a game still to be played before the forecast game
-fixt = defaultdict(list)
+fixt, fseen = defaultdict(list), set()
 for g in fd_games:
     if isvoid(g):
         continue
+    fseen.add(g['id'])
     for s in ('home', 'away'):
         t = ft(g['comp'], g[s]['name'])
         if t:
             fixt[(LG[g['comp']], t)].append(sdate(g).date())
 for r in fres.values():
+    if r['gid'] in fseen:  # already counted from the feed
+        continue
     for nm in (r['home'], r['away']):
         t = ft(r['comp'], nm)
         if t:
@@ -416,7 +421,7 @@ def dist_of(qs):
         d = np.concatenate([d * (1 - q), [0.0]]) + np.concatenate([[0.0], d * q])
     return d
 seasonOf = lambda d: (lambda y: f'{y % 100:02d}{(y + 1) % 100:02d}')(d.year if d.month >= 7 else d.year - 1)
-cur = lambda lg, team, d=None: state.get((CUR, lg, team)) if d is None or seasonOf(d) == CUR else None  # league games THIS season
+cur = lambda lg, team, d=None: state.get((CURL[lg], lg, team)) if d is None or seasonOf(d) == CURL[lg] else None  # league games THIS season
 
 # ---------- forecast: the next full round in the feed ----------
 # The round is every Friday-Monday feed game of these leagues (finished ones too), chosen while any of its games is still to
@@ -497,7 +502,7 @@ if rk:
         sstart = date(st.year if st.month >= 7 else st.year - 1, 7, 1)
         gnum = ((fst['gp'] if fst else 0) + 1 + sum(1 for d in fixt.get((LG[g['comp']], fk), []) if d >= sstart and (not fst or not fst['last'] or d > fst['last']) and d < st)) if fk else None
         x = {'postBreak': (rest or 0) >= 12 and not inr(eb, 1, 11), 'shortRest': inr(rest, 1, 3), 'euroBefore': inr(eb, 1, 4), 'euroAfter': inr(ea, 1, 4),
-             'dogEuroBefore': inr(deb, 1, 4), 'christmas': xmas(st), 'early': bool(gnum and gnum <= 3), 'late': bool(gnum and seasonOf(st) == CUR and 0 <= sched(CUR, LG[g['comp']]) - gnum <= 3),
+             'dogEuroBefore': inr(deb, 1, 4), 'christmas': xmas(st), 'early': bool(gnum and gnum <= 3), 'late': bool(gnum and seasonOf(st) == CURL[LG[g['comp']]] and 0 <= sched(CURL[LG[g['comp']]], LG[g['comp']]) - gnum <= 3),
              'favUnbeaten10': bool(fst and fst['unb'] >= 10), 'favWin5': bool(fst and fst['win'] >= 5), 'favLost2': bool(fst and fst['loss'] >= 2),
              'dogUnbeaten5': bool(dst and dst['unb'] >= 5), 'dogLost4': bool(dst and dst['loss'] >= 4), 'favAway': fs == 'away', 'huge': pf >= .75}
         flags = [k for k, v in x.items() if v]

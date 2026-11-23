@@ -83,6 +83,14 @@ try {
     return { err, done: x1 && x1.done, failed: x1 && x1.failed, q: l1 && l1.q, up: x1 && x1.pCrazy > x0.pCrazy, page: /Crazy weekend meter/.test(txt) && /So far 1 of 1 finished have dropped points/.test(txt) && /✗ slipped/.test(txt), inCards: cards.some(c => c.gids.includes(L.gid)) }; });
   check('a finished favourite with no prices left (as the feed sends it) counts as a fail, the meter goes up and the page still renders', !fin.err && fin.done === 1 && fin.failed === 1 && fin.q === 1 && fin.up && fin.page, JSON.stringify(fin));
   check('a finished game is never offered in a parlay card', fin.inCards === false);
+  // a run on the line that ended, and a favourite postponed since this morning
+  const fx = await page.evaluate(() => { const R = __pattern.PT.research, r = R.runsNow[0], g = SB.gameById(r.gid), keep = { status: g.status, score: g.score, prob: g.prob };
+    g.status = 'closed'; g.prob = null; g.score = r.side === 'home' ? { home: 0, away: 2 } : { home: 2, away: 0 }; SB.render(); const t1 = document.querySelector('#main').textContent;
+    Object.assign(g, keep); if (!keep.score) delete g.score;
+    const L = R.forecast.legs.find(l => l.gid !== r.gid), g2 = SB.gameById(L.gid), k2 = g2.status; g2.status = 'postponed'; SB.render(); const t2 = document.querySelector('#main').textContent, x = __pattern.forecast();
+    g2.status = k2; SB.render();
+    return { ended: t1.includes('✗ run ended'), off: /1 of this morning's \d+ big favourites is off/.test(t2), noVerdict: !/(About a normal|Wilder than a normal|Quieter than a normal) weekend/.test(t2), n: x.n, favs: R.forecast.favs, typicalFor: t2.includes(`with ${R.forecast.favs} big favourites has a`) }; });
+  check('a run on the line whose team lost shows "run ended"; a favourite postponed since the morning run is called out, with no normal/wilder verdict', fx.ended && fx.off && fx.noVerdict && fx.n === fx.favs - 1 && fx.typicalFor, JSON.stringify(fx));
   const cr = await page.evaluate(() => { const x = __pattern.forecast(), C = __pattern.nextCards(x), by = Object.fromEntries(C.map(c => [c.id, c.legs.map(l => l.gid)])), open = x.legs.filter(l => !l.done).length;
     return { open, c3: by['pt-crazy3'] || null, c5: by['pt-crazy5'] || null, st: by['pt-steady'] || [] }; });
   check('card rules: 3 upsets only with 3+ open favourites, 5 only with 5+, steady never on the 3-upset games', (cr.open >= 3 ? cr.c3 && cr.c3.length === 3 : !cr.c3) && (cr.open >= 5 ? cr.c5 && cr.c5.length === 5 : !cr.c5) && !(cr.c3 || []).some(g => cr.st.includes(g)), JSON.stringify(cr));

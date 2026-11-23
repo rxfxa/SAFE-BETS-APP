@@ -56,7 +56,7 @@
       // finished games count as they ended (the feed's finished games carry no prices, so read the score first)
       if (g && SB.isFinal(g) && g.score) { const h = g.score.home, a = g.score.away, r = h > a ? 'home' : h < a ? 'away' : 'draw'; res = r !== L.favSide; }
       // games still to start follow today's prices; games under way keep their pre-match chance
-      else if (res == null && g && g.prob && !SB.started(g)) { const f = favOf(g); if (f && (f.side === 'H') === (L.favSide === 'home')) { priced = 1 - f.p; model = modelQ(R, f.p, L.flags); } }
+      else if (res == null && g && g.prob && !SB.started(g)) { const q = probs(g); if (q) { const pf = L.favSide === 'home' ? q.h : q.a; priced = 1 - pf; model = modelQ(R, pf, L.flags); } }
       const done = res != null;
       legs.push({ ...L, g, done, res, priced, model, q: res == null ? model : res ? 1 : 0, q0: res == null ? priced : res ? 1 : 0 });
     }
@@ -71,21 +71,22 @@
   const swapSide = s => (s === 'home' ? 'away' : 'home');
   function nextCards(X) {
     if (!X) return [];
-    const open = X.legs.filter(l => l.g && !l.done && SB.openG(l.g));
+    const open = X.legs.filter(l => l.g && !l.done && SB.priced(l.g) && SB.p1(l.g, l.favSide === 'home' ? 'DCX2' : 'DC1X') > 0);
     const card = (id, title, legs, sub) => { legs = legs.filter(l => l.p > 0); return legs.length >= 2 ? { id, title, sub, legs } : null; };
     const against = l => leg(l.g, l.favSide === 'home' ? 'DCX2' : 'DC1X', `${l.dog} or draw (vs ${l.fav})`);
     const slip = [...open].sort((a, b) => b.model - a.model), up3 = slip.length >= 3 ? slip.slice(0, 3) : [];
-    const steady = open.filter(l => !up3.includes(l)).sort((a, b) => a.model - b.model);  // never the same games as the 3-upset lotto
+    const med = [...open].map(l => l.model).sort((a, b) => a - b)[Math.floor((open.length - 1) / 2)];
+    const steady = open.filter(l => !up3.includes(l) && l.model <= med).sort((a, b) => a.model - b.model).slice(0, 4);  // the surer half, never the 3-upset games
     const R = PT.research, runs = (R.runsNow || []).filter(r => { const g = SB.gameById(r.gid); return g && SB.openG(g); });
     const seen = new Set(), runLegs = [];
     for (const r of runs) { if (runLegs.length >= 3 || seen.has(r.gid)) continue; seen.add(r.gid); const g = SB.gameById(r.gid); runLegs.push(leg(g, r.side === 'home' ? 'A' : 'H', `${g[swapSide(r.side)].name} beat ${r.team} (unbeaten in ${r.unbeaten})`)); }
     const roi = R.overall ? sgn(R.overall.favRoi) : '', F = R.forecast || {};
-    const wild = F.typicalReal > 0 && F.typicalRounds ? `In ${F.typicalRounds} past rounds of these leagues with about ${X.n} big favourites, ${P(F.typicalReal)} were this wild (about 1 in ${Math.round(1 / F.typicalReal)}).` : 'Rounds this wild are rare.';
+    const wild = F.typicalReal > 0 && F.typicalRounds ? `In ${F.typicalRounds} past rounds of these leagues with ${F.typicalWindow ? `about ${F.favs}` : F.favs} big favourites, ${P(F.typicalReal)} were this wild (about 1 in ${Math.round(1 / F.typicalReal)}).` : 'Rounds this wild are rare.';
     return [
       up3.length ? card('pt-crazy3', 'Crazy weekend lotto · 3 upsets', up3.map(against), 'The three big favourites the research rates likeliest to drop points: each underdog only has to avoid losing. A long shot: big favourites usually come through.') : null,
       slip.length >= 5 ? card('pt-crazy5', 'Full chaos · 5 favourites slip', slip.slice(0, 5).map(against), `What a crazy weekend looks like on a slip. ${wild}`) : null,
       card('pt-runs', 'Unbeaten runs end', runLegs, 'The longest unbeaten runs on the line this round, each one ending in a loss. History says long runs end a little less often than their prices suggest, so this is a lotto.'),
-      card('pt-steady', 'The steady weekend', steady.slice(0, 4).map(l => leg(l.g, l.favSide === 'home' ? 'H' : 'A', `${l.fav} to win`)), `The four big favourites the research is surest about. Backing every big favourite at closing odds over 6 seasons returned ${roi}: no edge to speak of, but it is the side history supports.`),
+      steady.length >= 2 ? card('pt-steady', 'The steady weekend', steady.map(l => leg(l.g, l.favSide === 'home' ? 'H' : 'A', `${l.fav} to win`)), `The ${steady.length} big favourites the research is surest about. Backing every big favourite at closing odds over 6 seasons returned ${roi}: no edge to speak of, but it is the side history supports.`) : null,
     ].filter(Boolean);
   }
   const formHTML = f => (f ? `<span class="ptform">${[...f.slice(-5)].map(c => `<i class="f${c}">${c}</i>`).join('')}</span>` : '');
@@ -94,17 +95,18 @@
     if (!R) return '<div class="pc"><div class="why">The research file is not available right now.</div></div>';
     const X = forecast();
     if (!X) return `<div class="pc"><div class="why">No big favourites (priced ${Math.round(R.favThreshold * 100)}%+) are listed for the next round yet. The research runs every morning.</div></div>`;
-    const F = X.F, ratio = X.pCrazy / Math.max(.01, F.typical);
-    const word = ratio >= 1.25 ? 'Wilder than a normal weekend' : ratio <= .8 ? 'Quieter than a normal weekend' : 'About a normal weekend';
+    const F = X.F, ratio = X.pCrazy / Math.max(.01, F.typical), same = X.n === F.favs;
+    const word = !same ? `${F.favs - X.n} of this morning's ${F.favs} big favourites ${F.favs - X.n === 1 ? 'is' : 'are'} off (postponed or called off)` : ratio >= 1.25 ? 'Wilder than a normal weekend' : ratio <= .8 ? 'Quieter than a normal weekend' : 'About a normal weekend';
     const mx = Math.max(...X.dist), wkd = dateLbl(F.round).replace(/, \d{4}$/, '');
     const cards = nextCards(X);
-    const runs = (R.runsNow || []).map(r => ({ ...r, g: SB.gameById(r.gid) })).filter(r => r.g);
+    const runs = (R.runsNow || []).map(r => ({ ...r, g: SB.gameById(r.gid) })).filter(r => r.g && !(SB.isVoid && SB.isVoid(r.g)));
+    const runEnd = r => { if (!SB.isFinal(r.g) || !r.g.score) return null; const h = r.g.score.home, a = r.g.score.away; return (r.side === 'home' ? h < a : a < h) ? '✗ run ended' : '✓ run goes on'; };
     return `<div class="pc ptmeter"><div class="pchead"><span class="pctitle">Crazy weekend meter · weekend of ${esc(wkd)}</span></div>
         <div class="ptbig"><b class="mono">${P(X.pCrazy)}</b><span>chance that ${X.need}+ of the ${X.n} big favourites drop points (a "crazy" round: ${Math.round(R.rounds.threshold * 100)}%+ of them)</span></div>
-        <div class="ptgauge" role="img" aria-label="${P(X.pCrazy)} this round vs ${P(F.typical)} in a typical round"><span class="fill" style="width:${Math.min(100, X.pCrazy * 100 * 2).toFixed(1)}%"></span><span class="mark" style="left:${Math.min(100, F.typical * 100 * 2).toFixed(1)}%"></span></div>
-        <div class="ptscale"><span>0%</span><span>typical ${P(F.typical)}</span><span>50%+</span></div>
+        <div class="ptgauge" role="img" aria-label="${P(X.pCrazy)} this round vs ${P(F.typical)} in a typical round"><span class="fill" style="width:${Math.min(100, X.pCrazy * 100 * 2).toFixed(1)}%"></span>${same ? `<span class="mark" style="left:${Math.min(100, F.typical * 100 * 2).toFixed(1)}%"></span>` : ''}</div>
+        <div class="ptscale"><span>0%</span><span>${same ? `typical ${P(F.typical)}` : ''}</span><span>50%+</span></div>
         <div class="ptlead">${word}.</div>
-        <div class="why">The research expects ${X.exp.toFixed(1)} of the ${X.n} big favourites (${esc(F.leagues.join(', '))}) to drop points; the prices alone say ${X.exp0.toFixed(1)}. A typical round of these leagues with ${X.n} big favourites has a ${P(F.typical)} chance by the same research estimate${F.typicalPriced != null ? ` (${P(F.typicalPriced)} at the prices alone)` : ''}${F.typicalReal != null ? `, and ${P(F.typicalReal)} of ${N0(F.typicalRounds)} past rounds that size actually went crazy` : ''}. Every big favourite winning: ${P(X.dist[0])}.${X.done ? ` So far ${X.failed} of ${X.done} finished have dropped points.` : ''}</div>
+        <div class="why">The research expects ${X.exp.toFixed(1)} of the ${X.n} big favourites (${esc(F.leagues.join(', '))}) to drop points; the prices alone say ${X.exp0.toFixed(1)}. A typical round of these leagues with ${F.favs} big favourites has a ${P(F.typical)} chance by the same research estimate${F.typicalPriced != null ? ` (${P(F.typicalPriced)} at the prices alone)` : ''}${F.typicalReal != null ? `, and ${P(F.typicalReal)} of ${N0(F.typicalRounds)} past rounds ${F.typicalWindow ? `with ${F.favs - F.typicalWindow} to ${F.favs + F.typicalWindow}` : `with ${F.favs}`} actually went crazy` : ''}. Every big favourite winning: ${P(X.dist[0])}.${X.done ? ` So far ${X.failed} of ${X.done} finished have dropped points.` : ''}</div>
         <div class="pthist" aria-label="Chance of each number of big favourites dropping points">${X.dist.map((p, i) => `<div class="${i >= X.need ? 'hot' : ''}"><span style="height:${Math.max(2, p / mx * 100).toFixed(0)}%"></span><small>${i}</small></div>`).join('')}</div>
         <div class="note" style="margin:4px 0 0">How many of the ${X.n} drop points (red = crazy). Each game counted on its own: 6 seasons found no sign that upsets come in clusters.</div></div>
       <h2>Likeliest to slip <small>big favourites, research estimate of dropping points</small></h2>
@@ -117,7 +119,7 @@
       <div class="note">Percent = the research estimate that the favourite fails to win (draw or loss): today's price, corrected by how 6 seasons of big favourites did at their prices. The chips are this game's situations, with what the research found about each (see 6 seasons). The button adds "underdog or draw".</div>
       ${runs.length ? `<h2>Unbeaten runs on the line <small>league games, this round</small></h2>
       <div class="panel" style="padding:2px 14px">${runs.map(r => { const k = r.side === 'home' ? 'A' : 'H', p = SB.openG(r.g) ? SB.p1(r.g, k) : null; return `<div class="mrow"><div class="lbl">${esc(r.team)} · unbeaten in ${r.unbeaten}<small>${r.side === 'home' ? 'home to' : 'away at'} ${esc(r.opp)} · ${esc(r.comp)} · ${esc(SB.when(r.g))} ${formHTML(r.form)}</small><small>Run ends (a loss): ${P(r.pLose)} priced${r.pLoseHist != null ? ` · ${P(r.pLoseHist)} adjusted for how runs this long have ended` : ''}</small></div>
-        <span class="mono" style="font-weight:800">${P(r.pLoseHist != null ? r.pLoseHist : r.pLose)}</span><span></span>${p ? `<button class="yes ${SB.inSlip(r.gid, k) ? 'in' : ''}" data-leg="${esc(r.gid)}|${k}" aria-label="${esc(r.opp)} to win at ${esc(SB.fmtOdds(p))}">${esc(SB.fmtOdds(p))}</button>` : '<span></span>'}</div>`; }).join('')}</div>
+        <span class="mono" style="font-weight:800">${runEnd(r) || (SB.started(r.g) ? 'under way' : P(r.pLoseHist != null ? r.pLoseHist : r.pLose))}</span><span></span>${p ? `<button class="yes ${SB.inSlip(r.gid, k) ? 'in' : ''}" data-leg="${esc(r.gid)}|${k}" aria-label="${esc(r.opp)} to win at ${esc(SB.fmtOdds(p))}">${esc(SB.fmtOdds(p))}</button>` : '<span></span>'}</div>`; }).join('')}</div>
       <div class="note">${(() => { const L = (R.unbeatenRuns || []).filter(x => x.lo >= 10), e = L.reduce((a, x) => a + x.ended, 0), x = L.reduce((a, y) => a + y.expected, 0); return L.length ? `Over 6 seasons, runs of 10+ games ended ${N0(e)} times where the prices expected ${Math.round(x)}: long runs are not "due" to end.` : ''; })()} The button adds the opponent to win.</div>` : ''}
       <h2>Parlays for this weekend <small>every leg can be swapped (⇄) · 500,000-run sims</small></h2>
       ${cards.length ? `<div class="grid">${cards.map(c => SB.ticketCard(c.id, esc(c.title), { legs: c.legs, p: SB.parlayProb(c.legs).p, n: c.legs.length }, esc(c.sub))).join('')}</div>` : '<div class="pc"><div class="why">The games of this round have started.</div></div>'}

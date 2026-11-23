@@ -84,8 +84,8 @@ try {
   await page.click('#ptSeg [data-v="research"]');
   await page.waitForFunction(() => /What makes a big favourite slip/.test(document.querySelector('#main').textContent));
   txt = await page.textContent('#main');
-  check('6 seasons: the honest answer up top', /Can you predict a crazy weekend\?/.test(txt) && (R.causes.some(c => c.holds) ? /What held up/.test(txt) : /not beyond the odds/.test(txt)));
-  check('6 seasons: favourites vs prices, ROI at real closing odds, crazy rounds vs chance, long runs ending', txt.includes(R.overall.fails.toLocaleString()) && /backing every big favourite at the real closing odds/.test(txt) && txt.includes(`${R.rounds.crazyRounds} / ${R.rounds.rounds}`) && /unbeaten runs of 10\+ games/.test(txt));
+  check('6 seasons: the honest answer up top', /Can you predict a crazy weekend\?/.test(txt) && (R.causes.some(c => c.holds) ? /held up\./.test(txt) : /Not beyond the odds\./.test(txt) && /None of the \d+ suspected causes/.test(txt)));
+  check('6 seasons: favourites vs prices, ROI at real closing odds, crazy rounds vs chance, long runs ending', txt.includes(R.overall.fails.toLocaleString()) && /backing every big favourite at the real closing odds/.test(txt) && txt.includes(`${R.rounds.crazyRounds} / ${R.rounds.rounds}`) && /unbeaten runs of 10\+ that ended next game/.test(txt));
   check('6 seasons: every cause listed with its verdict', R.causes.every(c => txt.includes(c.desc)) && (txt.match(/no proven effect|a hint, not proven|held up/g) || []).length >= R.causes.length);
   check('6 seasons: prices vs results, runs, months, craziest rounds with real scorelines', /Prices vs results/.test(txt) && /Unbeaten runs: how often they end/.test(txt) && /By month/.test(txt) && txt.includes(R.craziest[0].examples[0]));
   check('6 seasons at 390px: no horizontal scroll', (await noScroll(page)) <= 0, `${await noScroll(page)}px`);

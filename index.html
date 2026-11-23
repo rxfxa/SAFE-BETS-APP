@@ -193,6 +193,7 @@ h2 a{font-size:14px;color:var(--blue);cursor:pointer;font-weight:700}
 .steps{display:flex;align-items:flex-end;gap:6px;height:90px;margin-top:18px}
 .steps div{flex:1;border-radius:2px 2px 0 0;background:linear-gradient(180deg,var(--cyan),var(--blue-fill));box-shadow:0 0 10px color-mix(in srgb,var(--glow) 40%,transparent);position:relative;min-height:4px}
 .steps div span{position:absolute;top:-19px;left:0;right:0;text-align:center;font-size:11.5px;font-weight:800;font-style:italic;color:var(--text);font-variant-numeric:tabular-nums}
+.subrec{background:color-mix(in srgb,var(--yes) 8%,transparent);border-radius:8px}.subwhy{display:block;color:var(--text);opacity:.85;margin-top:2px}.subbtn.rec{font-size:12px;font-weight:800;padding:0 8px}
 .subbtn{flex:none;min-width:34px;min-height:34px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--text);font-size:15px;cursor:pointer}.subbtn:hover{border-color:var(--yes)}.ctxn{display:block;font-size:11.5px;color:var(--mute);margin-top:2px}
 .reclegs{display:flex;flex-direction:column;gap:3px;margin-top:6px;font-size:13px}.rok{color:var(--yes)}.rno{color:var(--no)}.rmid{color:var(--mute)}
 .steplbl{display:flex;gap:6px;margin-top:5px}.steplbl span{flex:1;min-width:0;overflow:hidden;text-align:center;font-size:11px;color:var(--dim);font-weight:600}
@@ -1371,6 +1372,14 @@ const SIM5={};
 const legSig=L=>L.gid+'|'+L.key;
 function applySubs(id,legs){const S=SUBS.c[id];if(!S)return legs;return legs.map(L=>{const n=S[legSig(L)],g=n&&gameById(n.gid);return n&&g?{...n,sport:g.sport,comp:g.comp,home:g.home.abbr,away:g.away.abbr,start:g.start,from:L}:L;});}
 function saveSubs(){SUBS.day=dayOf(now());store.set('subs',SUBS);}
+// the kind of a leg, for lessons ("rebounds legs have been missing")
+function legKind(L){const k=String(L.key);if(/^[PU]:/.test(k)){const i=pLegInfo(k);const st=i?i.pl.stat:(L.player&&L.player.stat);return 'player '+(STATN[st]||st||'prop')+(k[0]==='U'?' (under)':'');}
+  return /^CS/.test(k)?'exact score':/^[HA]$/.test(k)?'moneyline':/^[HA]\+1\.5$/.test(k)?'+1.5 handicap':/^DC/.test(k)?'double chance':/^[HA]2$|^[HA]\d/.test(k)?'win by margin':/^[OU]\d/.test(k)?(k[0]==='O'?'over':'under')+' total':/^D$/.test(k)?'draw':/^BTTS/.test(k)?'both teams score':'other';}
+let LESS=null,LESSD=null;
+function lessons(){if(LESSD===DATA.recs)return LESS;LESSD=DATA.recs;const m=new Map();
+  for(const d of (DATA.recs&&DATA.recs.days)||[])for(const P of d.parlays||[])for(const L of P.legs||[]){if(L.res!==true&&L.res!==false)continue;const k=legKind(L),x=m.get(k)||{k,n:0,w:0,exp:0};x.n++;if(L.res)x.w++;x.exp+=+L.p||0;m.set(k,x);}
+  return LESS=[...m.values()].map(x=>({...x,rate:x.w/x.n,expRate:x.exp/x.n,gap:x.w/x.n-x.exp/x.n})).sort((a,b)=>a.gap-b.gap);}
+const lessonOf=L=>{const x=(lessons()||[]).find(y=>y.k===legKind(L));return x&&x.n>=4?x:null;};
 function legInfoOf(L){if(isP(L.key)){const i=pLegInfo(L.key);return i?{player:i.pl,under:!!i.under}:null;}return null;}
 function clashes(x,others){
   const xi=legInfoOf(x);
@@ -1402,8 +1411,26 @@ function subCands(legs,i,cardId){
         const p=p1(g,m.key);if(!(p>0))continue;const k=csOnly?'cs':m.group;if(!best[k]||Math.abs(p-Lp)<Math.abs(best[k].p-Lp))best[k]={gid:g.id,key:m.key,label:csOnly?`${m.label} (exact score)`:dog?`${(m.key==='H'?g.home:g.away).name} moneyline (underdog)`:m.label,p};}
       Object.values(best).forEach(take);}}
   out.sort((a,b)=>a.d-b.d);
-  const close=out.filter(x=>Math.abs(x.p-Lp)<=.06);return (close.length>=3?close:out).slice(0,6);}
-function subLegHTML(id,L,i){return `<button type="button" class="subbtn" data-sub="${esc(id)}|${i}" aria-label="Swap ${esc(L.label)}">⇄</button>${L.from?`<button type="button" class="subbtn" data-unsub="${esc(id)}|${i}" title="Back to ${esc(L.from.label)}" aria-label="Undo swap">↺</button>`:''}`;}
+  const close=out.filter(x=>Math.abs(x.p-Lp)<=.06),pickd=(close.length>=3?close:out).slice(0,8);
+  // why each one: value, how it fits the rest of the card, the opponent / game, recent form, and what has been losing lately
+  for(const x of pickd){const why=[],g=gameById(x.gid);let sc=Math.abs(x.p-Lp);
+    const dp=Math.round((x.p-Lp)*100);why.push(Math.abs(dp)<=2?'same chance':dp>0?`${dp} pts likelier`:`${-dp} pts longer`);
+    if(isP(x.key)){const i=pLegInfo(x.key),pl=i&&i.pl;
+      if(pl){for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid)continue;
+          if(pl.stat==='ast'&&oi.pl.stat==='pts'){why.push(`his assists feed ${oi.pl.name}'s points`);sc-=.03;}
+          else if(pl.stat==='pts'&&oi.pl.stat==='ast'){why.push(`${oi.pl.name}'s assists feed his points`);sc-=.03;}
+          else if(pl.stat!==oi.pl.stat){why.push(`doesn't compete with ${oi.pl.name} (${STATN[oi.pl.stat]})`);sc-=.01;}}
+        const c=g&&closeOf(g);if(c&&c.p>=.45){why.push(`close game (${pct(c.p)} within 8): starters play`);sc-=.015;}
+        const M=playerMeans(pl);if(M.c&&M.c.pb>=.25){why.push(`blowout risk ${pct(M.c.pb)}: may sit late`);sc+=.02;}
+        const l4=last4Of(pl.team,pl.name),th=+x.key.split(':')[2];if(l4){const v=l4.rows.filter(r=>!r.dnp&&r[pl.stat]!=null).map(r=>r[pl.stat]);if(v.length){const h=v.filter(z=>z>=th).length;why.push(`cleared ${h}/${v.length} recent games`);sc-=.02*(h/v.length-.5);}}
+        else if(M.rf)why.push(`last ${M.rf.last5.length}: ${M.rf.last5.join(', ')}`);}
+    } else if(g){const Lg=gameById(L.gid);if(Lg&&Lg.comp===g.comp)why.push('same league');if(x.gid!==L.gid)why.push(`${g.away.abbr} @ ${g.home.abbr}`);}
+    const ls=lessonOf(x);if(ls&&ls.gap<-.15){why.push(`⚠ ${ls.k} legs hit ${ls.w}/${ls.n} lately vs ${pct(ls.expRate)} expected`);sc+=.03;}
+    else if(ls&&ls.gap>.1)why.push(`${ls.k} legs hit ${ls.w}/${ls.n} lately`);
+    x.why=why;x.sc=sc;}
+  pickd.sort((a,b)=>a.sc-b.sc);if(pickd[0])pickd[0].rec=true;
+  return pickd.slice(0,6);}
+function subLegHTML(id,L,i){return `<button type="button" class="subbtn rec" data-subrec="${esc(id)}|${i}" title="Recommended swap, with reasons" aria-label="Recommended swap for ${esc(L.label)}">★ Rec</button><button type="button" class="subbtn" data-sub="${esc(id)}|${i}" aria-label="Swap ${esc(L.label)}">⇄</button>${L.from?`<button type="button" class="subbtn" data-unsub="${esc(id)}|${i}" title="Back to ${esc(L.from.label)}" aria-label="Undo swap">↺</button>`:''}`;}
 // what the model reads around a player leg (shown under it)
 function ctxNote(L){if(!isP(L.key))return '';const i=pLegInfo(L.key);if(!i)return '';const M=playerMeans(i.pl),w=[];
   if(M.rf)w.push(`last ${M.rf.last5.length}: ${M.rf.last5.join(', ')}`);
@@ -1446,11 +1473,11 @@ function sim5HTML(id,legs){const S=SIM5[id];if(!S||S.sig!==legs.map(legSig).join
 function runSim5(id){const T=autoCache[id];if(!T||!T.legs||!T.legs.length)return;SIM5[id]=simJoint(T.legs);}
 // swap / undo / simulate controls (cards keep their legs in autoCache[id]; T.base holds the legs before swaps)
 document.addEventListener('click',e=>{
-  const sb=e.target.closest('[data-sub]'),ub=e.target.closest('[data-unsub]'),ux=e.target.closest('[data-subuse]'),s5=e.target.closest('[data-sim5]');
-  if(sb){const [id,i]=sb.dataset.sub.split('|'),T=autoCache[id];if(!T)return;const A=T.all||T.legs,L=A[+i],C=subCands(A,+i,id);
+  const sb=e.target.closest('[data-sub],[data-subrec]'),ub=e.target.closest('[data-unsub]'),ux=e.target.closest('[data-subuse]'),s5=e.target.closest('[data-sim5]');
+  if(sb){const [id,i]=(sb.dataset.sub||sb.dataset.subrec).split('|'),T=autoCache[id];if(!T)return;const A=T.all||T.legs,L=A[+i],C=subCands(A,+i,id);
     openSheet(`<h2>Swap this leg</h2><div class="panel" style="padding:8px 14px"><b>${esc(L.label)}</b> <span class="mono">${pct(+L.p||0)}</span></div>
       <div class="note">Legs of about the same chance that don't clash with the rest of this parlay (no player twice, no two players on one team for the same stat, nothing the parlay already covers).</div>
-      ${C.length?`<div class="panel" style="padding:2px 14px">${C.map((x,j)=>{const g=gameById(x.gid);return `<div class="mrow"><div class="lbl">${esc(x.label)}<small>${g?esc(g.away.abbr+' @ '+g.home.abbr+' · '+when(g)):''} · ${x.p>=+L.p?'+':''}${Math.round((x.p-(+L.p||0))*100)} pts vs the leg it replaces</small>${ctxNote(x)}</div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes" data-subuse="${esc(id)}|${i}|${j}">Use</button></div>`;}).join('')}</div>${C.length<3?`<div class="note">Only ${C.length} leg${C.length===1?'':'s'} fit this parlay's rules right now.</div>`:''}`
+      ${C.length?`<div class="panel" style="padding:2px 14px">${C.map((x,j)=>{const g=gameById(x.gid);return `<div class="mrow${x.rec?' subrec':''}"><div class="lbl">${x.rec?'<span class="link">★ RECOMMENDED</span> ':''}${esc(x.label)}<small>${g?esc(g.away.abbr+' @ '+g.home.abbr+' · '+when(g)):''}</small><small class="subwhy">${esc((x.why||[]).join(' · '))}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes" data-subuse="${esc(id)}|${i}|${j}">Use</button></div>`;}).join('')}</div>${C.length<3?`<div class="note">Only ${C.length} leg${C.length===1?'':'s'} fit this parlay's rules right now.</div>`:''}`
         :'<div class="empty">No leg of similar chance fits this parlay\'s rules right now.</div>'}<button class="btn full ghost" id="closeS">Close</button>`,{type:'subs',label:'Swap a leg'});
     $('closeS').onclick=()=>id==='slip'?openSlip():closeSheet();SUBCACHE={id,i:+i,C};return;}
   if(ux){const [id,i,j]=ux.dataset.subuse.split('|'),T=autoCache[id];if(!T||!SUBCACHE||SUBCACHE.id!==id||SUBCACHE.i!==+i)return;const x=SUBCACHE.C[+j],L=(T.all||T.legs)[+i],orig=L.from||L;
@@ -1540,6 +1567,7 @@ function recsHTML(only){
   const legRow=L=>`<span class="${L.res===true?'rok':L.res===false?'rno':'rmid'}">${L.res===true?'✓':L.res===false?'✗':'·'} ${esc(L.label)}${L.actual!=null?` (${esc(String(L.actual))})`:''}</span>`;
   return `<h2>How our parlays did <small>last ${days.length} day${days.length===1?'':'s'}, graded from final scores and box scores</small></h2>
    <div class="panel" style="padding:2px 14px">${[...tally.entries()].map(([t,x])=>`<div class="mrow"><div class="lbl">${esc(t)}<small>won ${x.w} of ${x.n} · the model expected ${x.exp.toFixed(1)}</small></div><span class="hit ${x.w?'h-hi':'h-lo'}">${x.w}/${x.n}</span><span></span></div>`).join('')||'<div class="empty" style="border:0">Nothing graded yet.</div>'}</div>
+   ${(()=>{const Ls=(lessons()||[]).filter(x=>x.n>=4);if(!Ls.length)return '';return `<div class="sec">Lessons so far</div><div class="panel" style="padding:2px 14px">${Ls.map(x=>`<div class="mrow"><div class="lbl">${esc(x.k)} legs<small>hit ${x.w} of ${x.n} (${pct(x.rate)}) vs ${pct(x.expRate)} the model expected${x.gap<-.15?' · next time: take a lower line or a different kind of leg; the swap list now marks these':x.gap>.1?' · these have beaten their prices':''}</small></div><span class="hit ${x.gap<-.15?'h-lo':x.gap>.1?'h-hi':'h-mid'}">${x.gap>=0?'+':''}${Math.round(x.gap*100)}</span><span></span></div>`).join('')}</div>`;})()}
    <div class="sec">${esc(dayLabel(last.day))}</div><div class="grid">${ps.map(P=>`<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span><span class="hit ${P.result==='won'?'h-hi':P.result==='lost'?'h-lo':'h-mid'}">${P.result==='won'?'Hit':P.result==='lost'?'Missed':'Not graded'}</span></div>
      <div class="reclegs">${P.legs.map(legRow).join('')}</div>${P.result==='lost'?`<div class="why">Missed on ${esc(P.legs.filter(L=>L.res===false).length)} leg${P.legs.filter(L=>L.res===false).length===1?'':'s'}. Today's ${esc(REC_TYPE(P.id))} parlay is the replacement.</div>`:''}</div>`).join('')}</div>
    <div class="note">Each morning the app saves every parlay it recommends; the next morning each leg is graded from the final score (game lines) or the ESPN box score (player props). A missed parlay is replaced by that day's new parlay of the same kind.</div>`;}
@@ -2163,7 +2191,7 @@ function refreshAll(){
 function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
 document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
 setInterval(refreshTick,10*60*1000);
-window.__fm2={get autoCache(){return autoCache},mpReplace,recsHTML,buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+window.__fm2={lessons,legKind,get autoCache(){return autoCache},mpReplace,recsHTML,buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

@@ -38,6 +38,14 @@ try {
   const txt = await page.textContent('#main');
   check('the picks page shows how yesterday\'s parlays did, graded leg by leg', /How our parlays did/.test(txt) && /Missed/.test(txt) && /✗ Cade Cunningham 15\+ points \(5 pts\)/.test(txt), '');
   check('a tally per parlay type with what the model expected', /Exact score/.test(txt) && /won 0 of 3 · the model expected/.test(txt));
+  check('lessons: which kinds of legs lose vs what the model expected, and what to do next time', /Lessons so far/.test(txt) && /hit \d+ of \d+ \(\d+%\) vs \d+% the model expected/.test(txt));
+  // the recommended swap next to each leg, with reasons
+  await page.locator('[data-subrec="mp-nba15|0"]').click();
+  await page.waitForSelector('[data-subuse]');
+  const sheet = await page.evaluate(() => ({ rec: document.querySelectorAll('.subrec').length, first: (document.querySelector('.subrec .subwhy') || {}).textContent || '', all: [...document.querySelectorAll('.subwhy')].map(x => x.textContent) }));
+  check('★ Rec next to a leg opens the swaps with one marked RECOMMENDED, on top', sheet.rec === 1 && /RECOMMENDED/.test(await page.locator('#sheet .mrow').first().textContent()), JSON.stringify(sheet.first));
+  check('every swap says why (value, fit with the card, game / opponent, recent form)', sheet.all.length >= 3 && sheet.all.every(w => /same chance|likelier|longer/.test(w)) && sheet.all.some(w => /cleared \d\/\d recent games|close game|blowout risk|feed|compete/.test(w)), JSON.stringify(sheet.all.slice(0, 3)));
+  await page.keyboard.press('Escape');
   // a missed pick gets a replacement of the same kind from games still to play
   const rep = await page.evaluate(() => {
     const M = __fm2.myPicks(), P = M.parlays.find(x => x.id === 'dog3'), D = __fm2.DATA, g = D.games.find(x => x.id === P.legs[0].gid);

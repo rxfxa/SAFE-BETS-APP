@@ -30,9 +30,19 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - researched form (form.json) and a form-backed parlay;
   - a streak check (who each run came against);
   - close games with an edge (home side, opponent injuries).
-- **📅 Weekend Patterns (pattern.js):**
-  - tests the tweet "weekends when all big teams lose / 80% draws" on 90 days of results (pattern.json). Verdict: not true. Big favourites beat their prices instead.
-  - shows the current round live, and next round's parlay mix.
+- **📅 Weekend Patterns (pattern.js), three views:**
+  - **🔮 Next weekend:**
+    - crazy-weekend meter: the exact chance that 40%+ of the next round's big favourites (60%+) drop points, vs a typical round of the same leagues; finished games count as they ended;
+    - likeliest to slip (research estimate, reasons with what the research found about each);
+    - unbeaten runs on the line;
+    - parlays: 3-upset lotto, full chaos 5, unbeaten runs end, the steady weekend.
+  - **🔬 6 seasons** (pattern.json "research", tools/weekend_research.py):
+    - 15,112 games, 7 leagues 2020/21 to now, closing odds; 2,870 European games (tools/euro_games.json, ESPN) matched by tools/teamnames.py;
+    - 15 causes tested by logistic regression vs similar-priced favourites with Holm correction. **None held.** Hint only: underdog unbeaten in 5+ (OR 1.40, p 0.03);
+    - big favourites failed 1,166 vs 1,287 margin-free priced, but backing all at real closing odds returned +0.4% (break-even: it is the margin);
+    - crazy rounds 17 of 213 vs ~25 by chance; no clustering;
+    - unbeaten runs of 10+ ended less often than priced (155 vs 179).
+  - **🐦 The tweet:** the 90-day test of "weekends when all big teams lose / 80% draws" (not true), the live round and its parlay mix.
 - **📈 Team Trends (trends.js, trends.json from tools/team_trends.py):** every team's last 7 / 30 days, months and season: record, over/under rates, as favourite / underdog vs prices, streaks; upset watch and over/under leans for next games with reasons and sample sizes (soccer from football-data.co.uk CSVs, NBA from ESPN scores and posted lines); a trend parlay card.
 - **Other tabs:** Soccer Parlays, Point Lottos, Polymarket, Weekly Plan, Best Parlays, NBA Props, First TD, UFC.
 - **Your bets:** My Parlays (ledger, grading) and Slip Check (screenshot or typed slips, 500,000-run simulation, recommended changes).
@@ -67,7 +77,9 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | form.json | tools/form_teams.py → tools/form-research.wf.js → tools/form_merge.py |
 | playerform.json | tools/nba_last4.py (ESPN box scores) and tools/player-form-research.wf.js → playerform_merge.py |
 | nbalast4.json | tools/nba_last4.py |
-| pattern.json | tools/weekend_pattern.py (football-data.co.uk CSVs; fixtures in tests/fixtures/fd) |
+| pattern.json | tools/weekend_pattern.py (90-day block; football-data.co.uk CSVs; fixtures in tests/fixtures/fd), then tools/weekend_research.py adds "research" (run it after) |
+| tools/euro_games.json | tools/euro_games.py (`--recent 21` daily; the full history once) |
+| .work/fdhist/*.csv (not committed) | tools/fd_history.py: 7 seasons × 7 leagues, past seasons kept |
 | nflrec.json | tools/rec_last4.py (ESPN box scores, NFL / college receivers on upcoming games) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
@@ -76,7 +88,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 ## Scheduled tasks
 All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times are America/Los_Angeles.
 - **3:47 AM daily, "Safe Bets: daily data refresh + My Parlay Picks"** (trig_0154hy44mSKH3UCJM4kjvses): game feed, Polymarket, UFC, NBA injury report, grade yesterday (recs.mjs grade), make_picks, snapshot today (recs.mjs snapshot), publish.
-- **7:32 AM daily, "Safe Bets: morning form research"** (trig_01HGBuKM416rUSPocccDMoui): nba_last4 box scores, team form, player form, weekend pattern, injury re-check of every picked leg, publish. Done by 8 AM as the owner asked. **Do not change its schedule.**
+- **7:32 AM daily, "Safe Bets: morning form research"** (trig_01HGBuKM416rUSPocccDMoui): nba_last4 box scores, team form, player form, weekend pattern + 6-season research and crazy-weekend forecast, injury re-check of every picked leg, publish. Done by 8 AM as the owner asked. **Do not change its schedule.**
 - **11:34 PM daily, "Safe Bets: nightly memory + build save"** (trig_01EfBa9zKHBDbwWgywjhNQPV): updates this file, commits and pushes, runs the tests, and makes sure the live app matches the repo.
 - **Sunday 8:17 PM, "Safe Bets: weekly slip grading and report"** (trig_01F9w4ED73EpBHW6db2vSDdf): grades Weekly Plan slips and reports SAFE / COIN FLIP / LOTTO / big slips / POLYMARKET.
 - **Hourly at :55, "FirstMove hourly games refresh"** (trig_011dcsKBB9zytWc2jL2e3jdQ): owns data.json. Not ours to change without the owner's OK.
@@ -140,3 +152,6 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - 📈 Team Trends tab (248 teams; upset watch, over/under leans).
   - NFL / college reception legs (259 receivers, last 4 box scores, levels); "Read more" on long text.
   - Points legs preferred over assists / rebounds (owner's call; NBA picks went from 3 to 7 points legs of 14).
+  - Weekend Patterns rebuilt on real research: 6 seasons, 7 leagues, European fixtures, and a crazy-weekend forecast.
+    - Honest result: nothing predicts a crazy weekend beyond the odds.
+    - Nov 28 round: 19% chance vs 18% typical; 12 big favourites.

@@ -39,6 +39,12 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **Swap legs (⇄):** 3+ substitutes of about the same chance that don't clash with the card. No player twice, no two players on one team for one stat, and the card's own rules hold. Kept per card for the day, with undo.
 - **🎲 500,000 runs:** game by game. Player legs are benched in simulated blowouts, and teammates share a team factor (correlation 0.2). Re-runs after a swap.
 - **▶ Watch live** opens the Simulator.
+- **The parlay builder** has ⇄ on every leg too (same rules); picking a swap replaces that leg in the slip.
+- **Track record (recs.json, tools/recs.mjs):**
+  - The 3:47 AM run grades every saved day (`node tools/recs.mjs grade`): game legs from final scores, NBA player legs from ESPN box scores.
+  - It then saves the new day's parlays (`node tools/recs.mjs snapshot`, after make_picks).
+  - "How our parlays did" shows on My Parlay Picks (all types) and Fantasy (its own types).
+  - A My Parlay Picks card that misses a leg gets a "Replacement" card of the same kind, from games still to play.
 - **Player model:** season average, with recent form (playerform.json) counting 30%. The team's expected points come from the total and spread. In blowouts (15+ NBA, 17+ NFL, 21+ college), starters ×0.8 and bench ×1.15.
 
 ## Data files (who writes them)
@@ -54,11 +60,12 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | playerform.json | tools/nba_last4.py (ESPN box scores) and tools/player-form-research.wf.js → playerform_merge.py |
 | nbalast4.json | tools/nba_last4.py |
 | pattern.json | tools/weekend_pattern.py (football-data.co.uk CSVs; fixtures in tests/fixtures/fd) |
+| recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
 
 ## Scheduled tasks
 All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times are America/Los_Angeles.
-- **3:47 AM daily, "Safe Bets: daily data refresh + My Parlay Picks"** (trig_0154hy44mSKH3UCJM4kjvses): game feed, Polymarket, UFC, NBA injury report, make_picks, publish.
+- **3:47 AM daily, "Safe Bets: daily data refresh + My Parlay Picks"** (trig_0154hy44mSKH3UCJM4kjvses): game feed, Polymarket, UFC, NBA injury report, grade yesterday (recs.mjs grade), make_picks, snapshot today (recs.mjs snapshot), publish.
 - **7:32 AM daily, "Safe Bets: morning form research"** (trig_01HGBuKM416rUSPocccDMoui): nba_last4 box scores, team form, player form, weekend pattern, injury re-check of every picked leg, publish. Done by 8 AM as the owner asked. **Do not change its schedule.**
 - **11:34 PM daily, "Safe Bets: nightly memory + build save"** (trig_01EfBa9zKHBDbwWgywjhNQPV): updates this file, commits and pushes, runs the tests, and makes sure the live app matches the repo.
 - **Sunday 8:17 PM, "Safe Bets: weekly slip grading and report"** (trig_01F9w4ED73EpBHW6db2vSDdf): grades Weekly Plan slips and reports SAFE / COIN FLIP / LOTTO / big slips / POLYMARKET.
@@ -72,7 +79,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 30 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 33 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -115,3 +122,6 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - nbaroles refreshed (Portland added).
   - Live-feed tests moved to fixtures.
   - This memory file and the nightly save.
+  - Track record: every recommended parlay is saved and graded.
+  - Nov 22's 9 picks all missed (the 10-leg mix on 1 leg, the SGP on 1 leg, NBA 14-leg props 10/14).
+  - Replacements for missed picks; ⇄ swap in the builder.

@@ -194,6 +194,7 @@ h2 a{font-size:14px;color:var(--blue);cursor:pointer;font-weight:700}
 .steps div{flex:1;border-radius:2px 2px 0 0;background:linear-gradient(180deg,var(--cyan),var(--blue-fill));box-shadow:0 0 10px color-mix(in srgb,var(--glow) 40%,transparent);position:relative;min-height:4px}
 .steps div span{position:absolute;top:-19px;left:0;right:0;text-align:center;font-size:11.5px;font-weight:800;font-style:italic;color:var(--text);font-variant-numeric:tabular-nums}
 .subbtn{flex:none;min-width:34px;min-height:34px;margin-left:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--text);font-size:15px;cursor:pointer}.subbtn:hover{border-color:var(--yes)}.ctxn{display:block;font-size:11.5px;color:var(--mute);margin-top:2px}
+.reclegs{display:flex;flex-direction:column;gap:3px;margin-top:6px;font-size:13px}.rok{color:var(--yes)}.rno{color:var(--no)}.rmid{color:var(--mute)}
 .steplbl{display:flex;gap:6px;margin-top:5px}.steplbl span{flex:1;min-width:0;overflow:hidden;text-align:center;font-size:11px;color:var(--dim);font-weight:600}
 .inrow{display:flex;gap:8px;align-items:center}
 input[type=text],input[type=number]{background:var(--soft);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:11px 12px;font:600 16px var(--f);width:100%;font-variant-numeric:tabular-nums}
@@ -1170,7 +1171,7 @@ function renderFantasy(){
   const HY=[5,10,15].map(n=>buildTicket({n,sports:fz.sports,minP:.6,target:.7,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed}));
   html+=`<h2>High-yield tickets <small>${fz.sports.length===5?'mixed sports':fz.sports.map(s=>(allS.find(a=>a[0]===s)||[,s])[1]).join(' + ')} · bigger payouts</small></h2><div class="grid">${HY.map((T,i)=>ticketCard('hy'+[5,10,15][i],`High yield · ${[5,10,15][i]} legs`,T,'Legs around 70% each. Long shots by design, with a real payout if it lands.')).join('')}</div>
    <div class="note">Every extra leg cuts the chance of hitting. Treat 10 and 15 leggers as small-stake lottery tickets.</div>`;
-  html+=sgpHTML(allS)+megaHTML()+stackHTML();
+  html+=sgpHTML(allS)+megaHTML()+stackHTML()+recsHTML(id=>!/^mp-|^up|^pt-/.test(id));
   $('main').innerHTML=html;wireFz();
 }
 // same game parlay: every leg from one game, same scroller and style as the fantasy parlay
@@ -1317,6 +1318,12 @@ function myPicks(){
 function mpFill(loc){let ch=false,B=null;
   for(const P of loc.parlays){if(P.legs.length||P.filled)continue;B=B||buildMyPicks(loc.day);const b=B.parlays.find(x=>x.id===P.id);if(b&&b.legs.length){Object.assign(P,b,{filled:new Date(now()).toISOString()});ch=true;}}
   if(ch)store.set('mypicks',loc);return {...loc,src:'device'};}
+// the same kind of parlay, rebuilt for a day (a missed pick's replacement)
+const MP_BUILD={exact1:d=>mpExact(d)[0],exact2:d=>mpExact(d)[1],exact3:d=>mpExact(d)[2],sgp5:d=>mpSgp(d),mixed10:d=>mpMixed(d),nba15:d=>mpNba(d,'below').legs,nba15up:d=>mpNba(d,'above').legs,dog3:d=>mpDogs(d,3),dog5:d=>mpDogs(d,5)};
+function mpReplace(P,why){const f=MP_BUILD[P.id];if(!f)return '';const today=dayOf(now());let day=today,legs=[];
+  for(const d of [today,nextDay(today)]){day=d;try{legs=(f(d)||[]).filter(L=>openG(gameById(L.gid)));}catch(e){legs=[];}if(legs.length>=2)break;}
+  if(legs.length<2)return '';
+  return ticketCard('mprep-'+P.id,`Replacement · ${esc(P.title)}`,{legs,p:parlayProb(legs).p,n:legs.length},`The pick missed (${esc(why)}). The same kind of parlay from games still to play ${day===today?'today':'tomorrow'}.`);}
 function mpCard(P){
   const legs=applySubs('mp-'+P.id,P.legs).map(L=>{const g=gameById(L.gid)||null,st=!g?'gone':isFinal(g)?'final':isVoid(g)?'void':started(g)?'live':'open';
     // a player leg whose player has dropped off the board since the pick (ruled out in a later injury report) is flagged, not priced
@@ -1329,6 +1336,7 @@ function mpCard(P){
   const outN=legs.filter(L=>L.gone).length,live=legs.filter(L=>L.st!=='void'&&!L.gone),allOpen=open.length===legs.length&&!outN;
   const p=allOpen?parlayProb(legs).p:parlayProb(live.filter(L=>L.st==='open')).p*live.filter(L=>L.st!=='open'&&L.res!==true).reduce((a,L)=>a*(+L.p||0),1);
   const lost=legs.some(L=>L.res===false),won=live.length>0&&live.every(L=>L.res===true);
+  const repl=lost?mpReplace(P,legs.filter(L=>L.res===false).map(L=>L.label).join(', ')+' missed'):'';
   const usable=open.filter(L=>!L.gone);  // the builder / My Parlays / Simulator get the legs that can still be bet
   autoCache[id]={legs:usable.map(L=>({gid:L.gid,key:L.key,label:L.label,sport:L.sport,p:L.p})),all:legs,p:parlayProb(usable).p,n:usable.length,
     title:usable.length<legs.length?`${P.title} · the ${usable.length} legs still to play`:P.title};
@@ -1337,7 +1345,7 @@ function mpCard(P){
   return `<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span><span class="hit ${hc}">${tag}</span></div>${lost||won?'':gaugeHTML(p)}<div class="why" style="margin-top:4px">${esc(P.sub||'')}</div>${short}
    <div style="margin-top:6px">${legs.map((L,i)=>`<div class="leg"><span class="sp" title="${esc(SPORTNAME[L.sport]||L.sport)}">${sportIco(L.sport)}</span><div class="legtxt"><b>${esc(L.label)}${L.from?'<span class="link">SWAPPED</span>':''}</b><span>${esc(L.away)} @ ${esc(L.home)} · ${esc(L.comp||'')} · ${L.gone?'<b style="color:var(--no)">ruled out since the pick: swap this leg</b>':L.st==='open'?esc(mpTime(Date.parse(L.start))):L.st==='final'?(L.res===true?'✓ hit':L.res===false?'✗ missed':'final'):L.st==='live'?'started':L.st==='void'?'void':'no longer listed'}</span>${L.st==='open'?ctxNote(L):''}</div><span class="legp mono">${pct(L.p)}</span>${L.st==='open'||L.gone?subLegHTML(id,L,i):''}</div>`).join('')}</div>
    <div class="pcfoot"><div class="odds mono">${allOpen?fmtOdds(p):'—'}<small>${allOpen?`Fair odds · $10 wins ~$${Math.round(10*(p2dec(p)-1)).toLocaleString()}`:`${open.length} of ${legs.length} legs still to start · chance for what is left`}</small></div>${usable.length?`<button class="btn" data-addp="${id}">${allOpen&&usable.length===legs.length?'Open in builder':'Open remaining legs'}</button>`:''}</div>
-   ${usable.length?`<div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-sim5="${id}">${SIM5[id]&&SIM5[id].sig===usable.map(legSig).join(',')?'🎲 Run again':'🎲 500,000 runs'}</button><button class="btn ghost" data-simp="${id}">▶ Watch live</button></div>${sim5HTML(id,usable)}`:''}${allOpen?`<div class="note">${minPriceLine(p)}</div>`:''}</div>`;}
+   ${usable.length?`<div class="sm-runrow" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-savep="${id}">＋ My Parlays</button><button class="btn ghost" data-sim5="${id}">${SIM5[id]&&SIM5[id].sig===usable.map(legSig).join(',')?'🎲 Run again':'🎲 500,000 runs'}</button><button class="btn ghost" data-simp="${id}">▶ Watch live</button></div>${sim5HTML(id,usable)}`:''}${allOpen?`<div class="note">${minPriceLine(p)}</div>`:''}</div>${repl}`;}
 let mpNbaMode=store.get('mpNba','below');
 function myPicksHTML(){
   const M=myPicks(),by=Object.fromEntries(M.parlays.map(P=>[P.id,P])),made=new Date(M.made);
@@ -1351,7 +1359,7 @@ function myPicksHTML(){
    <h2>NBA fantasy <small>player props only · 15 legs · 2 per game max · every game</small></h2>
    <div class="seg" id="mpNbaSeg" style="margin-bottom:8px"><button data-v="below" class="${mpNbaMode!=='above'?'on':''}">A point or two under average</button><button data-v="above" class="${mpNbaMode==='above'?'on':''}">A point or two over average</button></div>${nb?mpCard(nb):''}
    <h2>Underdog parlays <small>moneylines only</small></h2><div class="grid">${card('dog3')}${card('dog5')}</div>
-   <div class="note">Long parlays miss far more often than they hit, even with likely legs. Keep stakes small.</div>`;}
+   <div class="note">Long parlays miss far more often than they hit, even with likely legs. Keep stakes small.</div>${recsHTML()}`;}
 // ---------------- swap legs + 500,000-run parlay sim (every Fantasy / props ticket / My Parlay Picks card) ----------------
 // Each leg can be swapped for one of 3+ legs of about the same chance that don't clash with the rest of the card: never the
 // same player twice, never two players from one team on the same stat (two scorers on one team don't both go big: they share
@@ -1444,8 +1452,9 @@ document.addEventListener('click',e=>{
       <div class="note">Legs of about the same chance that don't clash with the rest of this parlay (no player twice, no two players on one team for the same stat, nothing the parlay already covers).</div>
       ${C.length?`<div class="panel" style="padding:2px 14px">${C.map((x,j)=>{const g=gameById(x.gid);return `<div class="mrow"><div class="lbl">${esc(x.label)}<small>${g?esc(g.away.abbr+' @ '+g.home.abbr+' · '+when(g)):''} · ${x.p>=+L.p?'+':''}${Math.round((x.p-(+L.p||0))*100)} pts vs the leg it replaces</small>${ctxNote(x)}</div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes" data-subuse="${esc(id)}|${i}|${j}">Use</button></div>`;}).join('')}</div>${C.length<3?`<div class="note">Only ${C.length} leg${C.length===1?'':'s'} fit this parlay's rules right now.</div>`:''}`
         :'<div class="empty">No leg of similar chance fits this parlay\'s rules right now.</div>'}<button class="btn full ghost" id="closeS">Close</button>`,{type:'subs',label:'Swap a leg'});
-    $('closeS').onclick=()=>closeSheet();SUBCACHE={id,i:+i,C};return;}
+    $('closeS').onclick=()=>id==='slip'?openSlip():closeSheet();SUBCACHE={id,i:+i,C};return;}
   if(ux){const [id,i,j]=ux.dataset.subuse.split('|'),T=autoCache[id];if(!T||!SUBCACHE||SUBCACHE.id!==id||SUBCACHE.i!==+i)return;const x=SUBCACHE.C[+j],L=(T.all||T.legs)[+i],orig=L.from||L;
+    if(id==='slip'){if(slip[+i]){slip[+i]={gid:x.gid,key:x.key,label:x.label};if(baseKey===legSig(L))baseKey=legSig(x);saveSlip();renderSlipBar();}openSlip();toast(`Swapped in ${esc(x.label)}`);return;}
     SUBS.c[id]=SUBS.c[id]||{};SUBS.c[id][legSig(orig)]={gid:x.gid,key:x.key,label:x.label,p:x.p,sport:(gameById(x.gid)||{}).sport};saveSubs();closeSheet();
     const had=!!SIM5[id];render();if(had){runSim5(id);render();}toast(`Swapped in ${esc(x.label)}`);return;}
   if(ub){const [id,i]=ub.dataset.unsub.split('|'),T=autoCache[id];if(!T)return;const L=(T.all||T.legs)[+i];if(L&&L.from&&SUBS.c[id]){delete SUBS.c[id][legSig(L.from)];saveSubs();}const had=!!SIM5[id];render();if(had){runSim5(id);render();}return;}
@@ -1518,6 +1527,22 @@ function stackHTML(){
 document.addEventListener('click',e=>{const b=e.target.closest('[data-stkday]');if(!b)return;stk.day=b.dataset.stkday;store.set('stk',stk);renderFantasy();});
 document.addEventListener('input',e=>{const t=e.target;if(t.id==='stkL'){$('stkLN').textContent=t.value;}if(t.id==='stkG'){$('stkGN').textContent=t.value;}});
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='stkL'){stk.legs=+t.value;store.set('stk',stk);renderFantasy();}if(t.id==='stkG'){stk.games=+t.value;store.set('stk',stk);renderFantasy();}});
+// ---------------- how our parlays did (recs.json: every parlay the app made each day, graded the next morning) ----------------
+const REC_TYPE=id=>/^mp-exact/.test(id)?'Exact score':/^mp-sgp|^sgp/.test(id)?'Same game':/^mp-mixed/.test(id)?'10-leg mix':/^mp-nba/.test(id)?'NBA props (picks)':/^mp-dog|^up/.test(id)?'Underdogs / upsets':
+  /^stk/.test(id)?'Duo / trio stacks':/^mega/.test(id)?'20-leg combo':/^pt-/.test(id)?'Weekend patterns':/^fantasy$/.test(id)?'Fantasy':/^hy/.test(id)?'High yield':/^p[sh]\d|^fs/.test(id)?'NBA props tickets':'Other';
+function recsHTML(only){
+  const R=DATA.recs;if(!R||!Array.isArray(R.days)||!R.days.length)return '';
+  const days=R.days.filter(d=>d.parlays&&d.parlays.some(P=>P.result==='won'||P.result==='lost')).slice(-7);
+  if(!days.length)return `<h2>How our parlays did</h2><div class="pc"><div class="why">The first graded day shows here the morning after.</div></div>`;
+  const keep=P=>!only||only(P.id),tally=new Map();
+  for(const d of days)for(const P of d.parlays.filter(keep)){if(P.result!=='won'&&P.result!=='lost')continue;const t=REC_TYPE(P.id),x=tally.get(t)||{w:0,n:0,exp:0};x.n++;if(P.result==='won')x.w++;x.exp+=+P.p||0;tally.set(t,x);}
+  const last=days[days.length-1],ps=last.parlays.filter(keep);
+  const legRow=L=>`<span class="${L.res===true?'rok':L.res===false?'rno':'rmid'}">${L.res===true?'✓':L.res===false?'✗':'·'} ${esc(L.label)}${L.actual!=null?` (${esc(String(L.actual))})`:''}</span>`;
+  return `<h2>How our parlays did <small>last ${days.length} day${days.length===1?'':'s'}, graded from final scores and box scores</small></h2>
+   <div class="panel" style="padding:2px 14px">${[...tally.entries()].map(([t,x])=>`<div class="mrow"><div class="lbl">${esc(t)}<small>won ${x.w} of ${x.n} · the model expected ${x.exp.toFixed(1)}</small></div><span class="hit ${x.w?'h-hi':'h-lo'}">${x.w}/${x.n}</span><span></span></div>`).join('')||'<div class="empty" style="border:0">Nothing graded yet.</div>'}</div>
+   <div class="sec">${esc(dayLabel(last.day))}</div><div class="grid">${ps.map(P=>`<div class="pc"><div class="pchead"><span class="pctitle">${esc(P.title)}</span><span class="hit ${P.result==='won'?'h-hi':P.result==='lost'?'h-lo':'h-mid'}">${P.result==='won'?'Hit':P.result==='lost'?'Missed':'Not graded'}</span></div>
+     <div class="reclegs">${P.legs.map(legRow).join('')}</div>${P.result==='lost'?`<div class="why">Missed on ${esc(P.legs.filter(L=>L.res===false).length)} leg${P.legs.filter(L=>L.res===false).length===1?'':'s'}. Today's ${esc(REC_TYPE(P.id))} parlay is the replacement.</div>`:''}</div>`).join('')}</div>
+   <div class="note">Each morning the app saves every parlay it recommends; the next morning each leg is graded from the final score (game lines) or the ESPN box score (player props). A missed parlay is replaced by that day's new parlay of the same kind.</div>`;}
 function forSure(){
   const games=[...new Set((DATA.players||[]).map(p=>p.gid))].map(gameById).filter(g=>g&&g.sport==='nba'&&openG(g)).sort((a,b)=>startMs(a)-startMs(b));
   const out=[];
@@ -1797,13 +1822,14 @@ function openSlip(){
    if(clash.length)tips.push(['bad','✗',`<b>Teammates fighting for the same stat:</b> <span>${esc(clash.join('; '))}. They take from each other, so drop one.</span>`]);}
   tips.push(['ok','$',`<b>Shop the price.</b> <span>Fair odds are <b class="mono">${pr.p>0?fmtOdds(pr.p):'—'}</b>. Check your books and only bet it if one pays more.</span>`]);
   const weakest=order.slice(1).sort((a,b)=>legP[a]-legP[b])[0];
+  autoCache.slip={legs:slip.map((L,i)=>({gid:L.gid,key:L.key,label:legLabel(L),p:legP[i],sport:(gameById(L.gid)||{}).sport}))};  // for the leg swap (⇄)
   openSheet(`<div class="r" style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:20px">Parlay builder</b><button class="btn ghost" id="clearSlip" style="padding:8px 12px;font-size:13.5px">Clear</button></div>
    <div class="panel" style="margin-top:12px"><div class="kpis"><div class="kpi"><b class="mono" style="color:var(--yes)">${pct(pr.p,1)}</b><span>Chance to hit</span></div><div class="kpi"><b class="mono">${pr.p>0?fmtOdds(pr.p):'—'}</b><span>Fair odds</span></div><div class="kpi"><b class="mono">${slip.length}</b><span>Legs</span></div></div>
    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--mute)"><span>Stake on all ${slip.length} legs $</span><input type="number" id="stakeTop" class="stakein" min="0" step="0.01" inputmode="decimal" value="${esc(stakeV)}" style="max-width:96px" aria-label="Stake on the whole parlay, in dollars"></label><div id="payTop" class="mono" style="font-size:14px;line-height:1.5;text-align:right"></div></div>
    ${pr.p>0?`<div class="note">${minPriceLine(pr.p)} Model estimate, not a guarantee.</div>`:''}</div>
    <div class="sec">Legs <span style="text-transform:none;font-weight:600;letter-spacing:0">· ★ = your anchor leg (the one you're most sure of)</span></div>
    <div class="panel" style="padding:4px 14px">${order.map(i=>{const L=slip[i],g=gameById(L.gid),id=L.gid+'|'+L.key,isB=i===bi,conn=!isB&&L.gid===base.gid&&g&&probOf(g,[base.key,L.key])>p1(g,base.key)*p1(g,L.key)*1.02;
-     return `<div class="leg" style="align-items:center"><button class="star ${isB?'on':''}" data-star="${esc(id)}" aria-pressed="${isB}" aria-label="${esc((isB?'Anchor leg: ':'Make anchor leg: ')+legLabel(L))}">★</button><div class="legtxt"><b>${esc(legLabel(L))}${conn?'<span class="link">CONNECTED</span>':''}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</b><span>${esc(g.home.abbr)} vs ${esc(g.away.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(legP[i])}</span><button class="x" data-rm="${esc(id)}" aria-label="${esc('Remove '+legLabel(L))}">✕</button></div>`;}).join('')}</div>
+     return `<div class="leg" style="align-items:center"><button class="star ${isB?'on':''}" data-star="${esc(id)}" aria-pressed="${isB}" aria-label="${esc((isB?'Anchor leg: ':'Make anchor leg: ')+legLabel(L))}">★</button><div class="legtxt"><b>${esc(legLabel(L))}${conn?'<span class="link">CONNECTED</span>':''}${g.line?'<span class="ybk">YOUR BOOK</span>':''}</b><span>${esc(g.home.abbr)} vs ${esc(g.away.abbr)} · ${esc(when(g))}</span></div><span class="legp mono">${pct(legP[i])}</span><button type="button" class="subbtn" data-sub="slip|${i}" aria-label="${esc('Swap '+legLabel(L))}">⇄</button><button class="x" data-rm="${esc(id)}" aria-label="${esc('Remove '+legLabel(L))}">✕</button></div>`;}).join('')}</div>
    <div class="sec">How your chances shrink</div>
    <div class="panel"><div class="steps">${(()=>{const n=steps.length,k=Math.ceil(n/7);return steps.map((p,i)=>`<div style="height:${Math.max(4,p*100)}%"><span>${i%k===0||i===n-1?(p<.01?pct(p,p>=.001?1:2):pct(p)):''}</span></div>`).join('');})()}</div><div class="steplbl">${steps.map((p,i)=>`<span>${steps.length>6?i+1:`${i+1} leg${i?'s':''}`}</span>`).join('')}</div>${steps.length>6?'<div class="note" style="margin-top:2px">Bars = number of legs.</div>':''}
    ${slip.length>=3&&weakest!=null?`<button class="btn full ghost" id="trimBtn">Trim weakest leg → ${pct(parlayProb(slip.filter((L,i)=>i!==weakest)).p)} to hit</button>`:''}</div>
@@ -2079,7 +2105,7 @@ async function load(){ // -> true when DATA was replaced
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
   // nbaroles.json + injuries.json = season averages and injury report: NBA games with no posted props get season-average
   // player legs from them (addRolePlayers); mypicks.json = the once-a-day My Parlay Picks made by the daily job
-  let [d,pr,sc,ro,inj,mp,pf,l4]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json')]);
+  let [d,pr,sc,ro,inj,mp,pf,l4,rc]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json'),get('recs.json')]);
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
@@ -2094,7 +2120,7 @@ async function load(){ // -> true when DATA was replaced
   if(!ro&&dataLoaded)ro=ROLES_LAST;if(!inj&&dataLoaded)inj=INJ_LAST;if(!mp&&dataLoaded)mp=DATA.mypicks;ROLES_LAST=ro;INJ_LAST=inj;
   addRolePlayers(d,ro,inj);
   // playerform.json: each picked player's last 5 games, researched each morning (team|name|stat -> entry)
-  d.last4=l4&&l4.teams?l4:(dataLoaded?DATA.last4:null);
+  d.last4=l4&&l4.teams?l4:(dataLoaded?DATA.last4:null);d.recs=rc&&Array.isArray(rc.days)?rc:(dataLoaded?DATA.recs:null);
   if(!pf&&dataLoaded&&DATA.playerform)d.playerform=DATA.playerform;
   else if(pf&&Array.isArray(pf.players)){d.playerform=new Map();for(const x of pf.players){if(!x||!x.name||!x.team||!x.stat)continue;const l5=(x.last5||[]).map(Number).filter(Number.isFinite);d.playerform.set(String(x.team).toUpperCase()+'|'+nameKey(x.name)+'|'+x.stat,{...x,last5:l5,avg5:l5.length?l5.reduce((a,b)=>a+b,0)/l5.length:null});}}d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
   applyLines(d);
@@ -2137,7 +2163,7 @@ function refreshAll(){
 function refreshTick(){return load().then(ch=>{if(ch)refreshAll();else renderSlipBar();});}
 document.addEventListener('focusout',()=>{if(!pendingRender)return;setTimeout(()=>{if(pendingRender&&!typingNow())refreshAll();},0);});
 setInterval(refreshTick,10*60*1000);
-window.__fm2={buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
+window.__fm2={get autoCache(){return autoCache},mpReplace,recsHTML,buildMyPicks,myPicks,mpChoose,subCands,simJoint,playerMeans,playerParts,teamCtx,get SUBS(){return SUBS},SIM5,dayOf,nextDay,dayGames,get DATA(){return DATA},refreshTick,sanitizeFeed,bestPairs,get SIMC(){return SIMC},buildParlay,buildMixed,parlayProb,p1,probOf,marketsFor,render,openSlip,openGame,toggleLeg,get slip(){return slip}};
 })();
 </script>
 <script src="soccer.js"></script>

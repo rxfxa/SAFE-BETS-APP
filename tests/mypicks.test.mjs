@@ -28,6 +28,7 @@ const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 await page.clock.setFixedTime(new Date('2026-11-22T10:00:00Z'));  // 2 AM in Los Angeles, Sunday Nov 22
 await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA }));
+await page.route('**/recs.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"days":[]}' }));  // the track record has its own test
 let SERVER = null;  // the daily job's file; null = not published yet
 await page.route('**/mypicks.json', r => SERVER ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SERVER) }) : r.fulfill({ status: 404, body: 'nf' }));
 const legsOf = () => page.evaluate(() => {

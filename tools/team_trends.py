@@ -3,6 +3,7 @@
 📈 Team Trends tab (trends.js).
 
     python3 tools/team_trends.py [--end YYYY-MM-DD] [--feed data.json] [--out trends.json] [--fd DIR] [--offline] [--no-nba]
+                                 [--now 2026-11-22T10:00:00Z]   (the clock for "next game"; tests use it with --offline)
 
 Soccer: football-data.co.uk 2026-27 season files (results + closing average odds), fetched live from
   https://www.football-data.co.uk/mmz4281/2627/<L>.csv. A league that can't be fetched (or --offline / --fd DIR) is read from
@@ -561,7 +562,7 @@ def main():
     else:
         nba_lines = {}
     # ---------- next game per team from the feed ----------
-    now = datetime.now(timezone.utc)
+    now = datetime.fromisoformat(opt('--now', '').replace('Z', '+00:00')) if '--now' in args else datetime.now(timezone.utc)
     idx = {}
     for t in out_teams:
         if t.get('abbr'):
@@ -602,7 +603,7 @@ def main():
             if not t or t.get('next'):
                 continue
             nx = {'gid': g['id'], 'comp': g['comp'], 'opp': g['away' if me == 'home' else 'home']['name'], 'oppAbbr': g['away' if me == 'home' else 'home']['abbr'],
-                  'start': g['start'], 'home': me == 'home', 'p': pm, 'pOpp': po, 'pDraw': pd}
+                  'start': g['start'], 'home': me == 'home', 'p': pm, 'pOpp': po, 'pDraw': pd, 'line': line}
             up = {'flag': False, 'role': None, 'why': []}
             if pm is not None and po is not None:
                 if MIN_DOG[g['sport']] <= pm < po:

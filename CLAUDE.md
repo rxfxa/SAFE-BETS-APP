@@ -32,6 +32,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **📅 Weekend Patterns (pattern.js):**
   - tests the tweet "weekends when all big teams lose / 80% draws" on 90 days of results (pattern.json). Verdict: not true. Big favourites beat their prices instead.
   - shows the current round live, and next round's parlay mix.
+- **📈 Team Trends (trends.js, trends.json from tools/team_trends.py):** every team's last 7 / 30 days, months and season: record, over/under rates, as favourite / underdog vs prices, streaks; upset watch and over/under leans for next games with reasons and sample sizes (soccer from football-data.co.uk CSVs, NBA from ESPN scores and posted lines); a trend parlay card.
 - **Other tabs:** Soccer Parlays, Point Lottos, Polymarket, Weekly Plan, Best Parlays, NBA Props, First TD, UFC.
 - **Your bets:** My Parlays (ledger, grading) and Slip Check (screenshot or typed slips, 500,000-run simulation, recommended changes).
 
@@ -65,6 +66,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | playerform.json | tools/nba_last4.py (ESPN box scores) and tools/player-form-research.wf.js → playerform_merge.py |
 | nbalast4.json | tools/nba_last4.py |
 | pattern.json | tools/weekend_pattern.py (football-data.co.uk CSVs; fixtures in tests/fixtures/fd) |
+| trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
 
@@ -84,7 +86,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 33 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 34 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -131,4 +133,4 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Nov 22's 9 picks all missed (the 10-leg mix on 1 leg, the SGP on 1 leg, NBA 14-leg props 10/14).
   - Replacements for missed picks; ⇄ swap in the builder.
   - ★ Rec swaps with reasons; lessons; clean Polymarket-style theme.
-  - Team Trends tab in progress (tools/team_trends.py, trends.js).
+  - 📈 Team Trends tab (248 teams; upset watch, over/under leans).

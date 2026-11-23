@@ -757,6 +757,9 @@ function playerPbase(pl,a,thr){ // chance of thr+ given a mean a
 //  - blowouts: in a 15+ point NBA game (17+ NFL, 21+ college) starters sit late (x0.8) and the bench plays more (x1.15).
 //    The chance of a blowout comes from the game's 100,000 simulations, and the 500,000-run parlay sim draws it game by game.
 const BLOW={nba:15,nfl:17,ncaaf:21},PCTX=new Map();
+// the owner prefers points legs over assists / rebounds: a selection bonus (never added to a chance), so between two
+// legs of similar chance the points leg is picked
+const STAT_PREF={pts:.06};
 function teamCtx(g,team){if(!g)return null;const k=g.id+'|'+team;if(PCTX.has(k))return PCTX.get(k);
   let c=null;const m=BLOW[g.sport]&&priced(g)&&fit(g);
   if(m&&m.kind==='margin'){const mu=g.home.abbr===team?m.mu:-m.mu,s=sim(g);let b=0;if(s)for(let i=0;i<s.N;i++)if(Math.abs(s.mg[i])>=BLOW[g.sport])b++;
@@ -1164,7 +1167,7 @@ function buildTicket(o){
   let hours=36,pool=ticketPool(o,hours);if(pool.length<o.n){hours=24*7;pool=ticketPool(o,hours);}
   else{for(const sp of o.sports){if(!pool.some(x=>x.sport===sp)){const extra=ticketPool({...o,sports:[sp]},24*7);if(extra.length){pool=pool.concat(extra);hours=24*7;}}}}
   let r=(o.seed||0)*7919+13;const rand=()=>{r=(r*9301+49297)%233280;return r/233280;};
-  pool.forEach(x=>x.score=(o.target?-Math.abs(x.p-o.target):x.p)+(o.seed?rand()*.06:0)+(x.boost?.02:0));
+  pool.forEach(x=>x.score=(o.target?-Math.abs(x.p-o.target):x.p)+(o.seed?rand()*.06:0)+(x.boost?.02:0)+(STAT_PREF[x.stat]||0));
   const bySport={};pool.sort((a,b)=>b.score-a.score).forEach(x=>(bySport[x.sport]=bySport[x.sport]||[]).push(x));
   const legs=[],perGame={},perWho={};const order=Object.keys(bySport);let guard=0;
   while(legs.length<o.n&&guard++<500){let added=false;
@@ -1308,7 +1311,7 @@ function mpNba(day,mode,n=15){
     for(const pl of DATA.players){if(pl.gid!==g.id||pl.status!=='active'||!(pl.avg>=(MP_MIN[pl.stat]||Infinity)))continue;
       const d=pl.stat==='pts'?2:1,base=Math.round(pl.avg*(1+(pl.boost||0))),thr=Math.max(1,mode==='above'?base+d:base-d);
       c.push({gid:g.id,key:`P:${pl.id}:${thr}`,label:`${pl.name} ${thr}+ ${STATN[pl.stat]}`,p:playerP(pl,thr),who:pl.name,team:pl.team,stat:pl.stat,kind:'player'});}
-    if(c.length)per.push(c.sort((a,b)=>b.p-a.p));}
+    if(c.length)per.push(c.sort((a,b)=>b.p+(STAT_PREF[b.stat]||0)*1.6-a.p-(STAT_PREF[a.stat]||0)*1.6));}  // points first
   per.sort((a,b)=>b[0].p-a[0].p);
   const legs=[],fits=x=>!legs.some(y=>y.who===x.who||(y.gid===x.gid&&y.team===x.team&&y.stat===x.stat));
   for(const c of per.slice(0,n)){const x=c.find(fits);if(x)legs.push(x);}
@@ -1447,7 +1450,8 @@ function subCands(legs,i,cardId){
   for(const x of pickd){const why=[],g=gameById(x.gid);let sc=Math.abs(x.p-Lp);
     const dp=Math.round((x.p-Lp)*100);why.push(Math.abs(dp)<=2?'same chance':dp>0?`${dp} pts likelier`:`${-dp} pts longer`);
     if(isP(x.key)){const i=pLegInfo(x.key),pl=i&&i.pl;
-      if(pl){for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid)continue;
+      if(pl){if(STAT_PREF[pl.stat]){why.push('points leg (preferred)');sc-=.02;}
+        for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid)continue;
           if(pl.stat==='ast'&&oi.pl.stat==='pts'){why.push(`his assists feed ${oi.pl.name}'s points`);sc-=.03;}
           else if(pl.stat==='pts'&&oi.pl.stat==='ast'){why.push(`${oi.pl.name}'s assists feed his points`);sc-=.03;}
           else if(pl.stat!==oi.pl.stat){why.push(`doesn't compete with ${oi.pl.name} (${STATN[oi.pl.stat]})`);sc-=.01;}}
@@ -1624,7 +1628,7 @@ function forSure(){
       if(!ok.length)continue; const c=ok.reduce((m,x)=>x.p<m.p?x:m);
       cands.push({pl,gid:g.id,key:`P:${pl.id}:${c.t}`,label:`${pl.name} ${c.t}+ ${STATN[pl.stat]}`,p:c.p});
     }
-    cands.sort((a,b)=>b.p-a.p);
+    cands.sort((a,b)=>b.p+(STAT_PREF[b.pl.stat]||0)-a.p-(STAT_PREF[a.pl.stat]||0));
     const legs=[];
     for(const c of cands){ if(legs.length>=3)break;
       if(legs.some(l=>l.pl.name===c.pl.name))continue;

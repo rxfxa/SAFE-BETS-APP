@@ -103,6 +103,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Honest numbers:** never "guaranteed", never treat 90% as certain, never claim a loss is "due". Show model estimates as estimates, label small samples, and don't invent stats.
 - **Research for real:** verify with a second source where possible, and say what couldn't be verified.
 - **500,000 runs** for any simulation. Swap legs on parlays.
+- **Points over assists / rebounds:** prefer points legs (STAT_PREF in index.html: a selection bonus in ticket building, NBA picks, highest-floor legs and swap ranking; never added to a chance). Keep reporting how each stat actually hits (Lessons).
 - **Security:**
   - Never ask for, store or use API keys, wallet keys or seed phrases.
   - A Polymarket API key was once pasted in chat: never use it.
@@ -138,3 +139,4 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - ★ Rec swaps with reasons; lessons; clean Polymarket-style theme.
   - 📈 Team Trends tab (248 teams; upset watch, over/under leans).
   - NFL / college reception legs (259 receivers, last 4 box scores, levels); "Read more" on long text.
+  - Points legs preferred over assists / rebounds (owner's call; NBA picks went from 3 to 7 points legs of 14).

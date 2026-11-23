@@ -357,7 +357,9 @@ try {
     // ---- theme (ux-16): one committed black theme, no toggle; the 'theme' event name stays subscribable for modules
     const th = await page.evaluate(() => ({ cs: getComputedStyle(document.documentElement).colorScheme, bg: getComputedStyle(document.body).backgroundColor,
       toggle: !!document.getElementById('themeBtn'), sub: typeof SB.on('theme', () => {}) }));
-    check('single black theme: color-scheme dark, black page, no theme toggle, theme event still subscribable', th.cs === 'dark' && th.bg === 'rgb(0, 0, 0)' && !th.toggle && th.sub === 'function', JSON.stringify(th));
+    // the clean theme (2026-11-23) uses a near-black slate page instead of pure black: any very dark background passes
+    const lum = (th.bg.match(/\d+/g) || [255, 255, 255]).slice(0, 3).reduce((a, x) => a + +x, 0) / 3;
+    check('single dark theme: color-scheme dark, near-black page, no theme toggle, theme event still subscribable', th.cs === 'dark' && lum < 30 && !th.toggle && th.sub === 'function', JSON.stringify(th));
 
     // ---- background refresh never steals focus from a field being typed in (ux-12)
     await page.evaluate(() => SB.goTab('odds'));

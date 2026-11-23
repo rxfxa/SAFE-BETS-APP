@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="brand/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Saira:ital,wdth,wght@0,75..125,300..900;1,75..125,300..900&display=swap" rel="stylesheet">
 <style>
 /* Blackout neon: a pure-black ground lit like a night broadcast. Panels are black with a thin blue edge light and one
@@ -370,6 +371,35 @@ details.method{margin-top:8px;font-size:12.5px;color:var(--dim)}details.method s
  .labframe{height:calc(100vh - 150px)}
  .slipbar{left:calc(var(--rail) + 24px)}}
 @media(max-width:380px){.top{gap:7px;padding-left:12px;padding-right:12px}.wm-name{font-size:17.5px}.wm-tag{font-size:6.8px}.brand{gap:6px}.brand img{width:31px;height:31px}.oddsel{max-width:58px;padding-left:8px}.search{padding:0 9px;gap:6px}}
+/* ===== Clean theme (2026-11-23): a quieter, Polymarket-style look over the components above ===== */
+:root{--bg:#0f1419;--card:#161c24;--card-hi:#161c24;--soft:#1c2430;--soft2:#232d3a;--sheet:#121820;--line:#263140;--edge:#263140;--edge-hot:#263140;
+ --text:#e9eef4;--mute:#a3afbd;--dim:#7d8a99;--blue-fill:#2d6ef6;--blue-top:#2d6ef6;--blue-deep:#2d6ef6;--glow:#2d6ef6;--cyan:#5b9cff;--ice:#8fb8ff;--accent:#2d6ef6;
+ --yes:#3db46d;--yesbg:rgba(61,180,109,.14);--no:#e5484d;--nobg:rgba(229,72,77,.14);--f:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--cut:0px;
+ --glow-btn:none;--glow-hot:none}
+html,body{font-weight:400;font-size:16px;letter-spacing:-.005em}
+.mono,.num,.hit,.tab,.btn,.chip,h2,.pctitle,.big,.kpi b,.odds,.legp,.yes,.no{font-style:normal!important;font-stretch:100%!important}
+.mono,.num{font-weight:600;letter-spacing:0}
+h2{font-weight:700;letter-spacing:-.01em;text-transform:none}
+.mk,.pc,.panel,.fbox,.hero-stats{background:var(--card)!important;border:1px solid var(--line);border-radius:12px;clip-path:none!important;box-shadow:none!important}
+.pc:hover,.mk:hover{border-color:#33404f}
+.mk,.pc,.panel,.fbox{max-width:100%;min-width:0;overflow-wrap:anywhere}
+.pctitle{font-weight:700;text-transform:none;letter-spacing:-.005em}
+.tab{text-transform:none!important;letter-spacing:0!important;font-weight:600!important;font-size:14.5px!important;color:var(--mute)}
+.tab.on{color:var(--text)}.tab.on .ti{color:var(--text)}
+.tab.on::after{background:var(--text)!important;box-shadow:none!important;height:2px}
+.btn{background:var(--accent)!important;border:0!important;border-radius:8px!important;box-shadow:none!important;font-weight:600!important;letter-spacing:0!important;text-transform:none!important;color:#fff}
+.btn.ghost{background:var(--soft)!important;color:var(--text)!important;border:1px solid var(--line)!important}
+.chip{border-radius:999px;background:var(--soft);border-color:var(--line);text-transform:none;letter-spacing:0;font-weight:600}
+.chip.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.hit{border-radius:999px;box-shadow:none;padding:4px 10px;font-weight:700}
+.hit.h-hi{background:var(--yesbg)}.hit.h-lo{background:var(--nobg)}.hit.h-mid{background:rgba(255,176,46,.12)}
+.yes{border-radius:8px!important;background:var(--yesbg)!important;color:var(--yes)!important;border:0!important;font-weight:700!important}
+.yes.in{background:var(--yes)!important;color:#08130c!important}
+.subbtn{border-radius:8px;background:var(--soft)}.subbtn.rec{color:var(--cyan)}
+.hero-kicker i{box-shadow:none}.gauge{border-radius:999px}
+.seg{border-radius:10px;background:var(--soft)}.seg button{border-radius:8px;text-transform:none;letter-spacing:0;font-style:normal}
+.seg button.on{background:var(--text);color:var(--bg)}
+.sec{letter-spacing:.04em}
 </style>
 </head>
 <body>

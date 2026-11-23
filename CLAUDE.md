@@ -39,13 +39,18 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **Swap legs (⇄):** 3+ substitutes of about the same chance that don't clash with the card. No player twice, no two players on one team for one stat, and the card's own rules hold. Kept per card for the day, with undo.
 - **🎲 500,000 runs:** game by game. Player legs are benched in simulated blowouts, and teammates share a team factor (correlation 0.2). Re-runs after a swap.
 - **▶ Watch live** opens the Simulator.
-- **The parlay builder** has ⇄ on every leg too (same rules); picking a swap replaces that leg in the slip.
+- **★ Rec next to every leg** (and ⇄): the swap list puts one RECOMMENDED pick on top. Every option says why: value, how it fits the card (assists feed a teammate's points), close game or blowout risk, recent box scores, and lessons (kinds of legs that keep missing are flagged and ranked down).
+- **The parlay builder** has ★ Rec and ⇄ on every leg too (same rules); picking a swap replaces that leg in the slip.
 - **Track record (recs.json, tools/recs.mjs):**
   - The 3:47 AM run grades every saved day (`node tools/recs.mjs grade`): game legs from final scores, NBA player legs from ESPN box scores.
   - It then saves the new day's parlays (`node tools/recs.mjs snapshot`, after make_picks).
   - "How our parlays did" shows on My Parlay Picks (all types) and Fantasy (its own types).
   - A My Parlay Picks card that misses a leg gets a "Replacement" card of the same kind, from games still to play.
+  - "Lessons so far": each kind of leg's hit rate vs what the model expected (memory of what loses), with what to do next time.
 - **Player model:** season average, with recent form (playerform.json) counting 30%. The team's expected points come from the total and spread. In blowouts (15+ NBA, 17+ NFL, 21+ college), starters ×0.8 and bench ×1.15.
+
+## Look
+- Clean theme (2026-11-23): slate background, flat rounded cards, Inter font, no italics / caps / glows, pill chips and price buttons (a Polymarket-style override block at the end of index.html's main style). Logo and layout kept.
 
 ## Data files (who writes them)
 | File | Written by |
@@ -125,3 +130,5 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Track record: every recommended parlay is saved and graded.
   - Nov 22's 9 picks all missed (the 10-leg mix on 1 leg, the SGP on 1 leg, NBA 14-leg props 10/14).
   - Replacements for missed picks; ⇄ swap in the builder.
+  - ★ Rec swaps with reasons; lessons; clean Polymarket-style theme.
+  - Team Trends tab in progress (tools/team_trends.py, trends.js).

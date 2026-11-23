@@ -1543,7 +1543,7 @@ function teamStack(g,team,mode){
   const pls=DATA.players.filter(p=>p.gid===g.id&&p.team===team&&p.status==='active');
   const starts=p=>{const l=last4Of(team,p.name);return l?l.starter:(p.mpg||0)>=26;};
   const taken=[],pick=(st,min)=>{const x=pls.filter(p=>p.stat===st&&starts(p)&&p.avg>=min&&!taken.includes(nameKey(p.name))).sort((a,b)=>b.avg-a.avg)[0];if(x)taken.push(nameKey(x.name));return x;};
-  const roles=[['Playmaker','ast',4],['Scorer','pts',12],['Big','reb',6]],M=[];
+  const roles=[['Scorer','pts',12],['Playmaker','ast',4],['Big','reb',6]],M=[];  // points first (the owner's preference); a duo is scorer + playmaker
   for(const [role,st,min] of roles){const pl=pick(st,min);if(!pl)continue;
     const d=st==='pts'?2:1,thr=Math.max(1,mode==='bigger'?Math.round(pl.avg):Math.round(pl.avg)-d),l4=last4Of(team,pl.name);
     const vals=l4?l4.rows.filter(r=>!r.dnp&&r[st]!=null).map(r=>r[st]):[];

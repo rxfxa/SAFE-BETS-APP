@@ -103,7 +103,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Honest numbers:** never "guaranteed", never treat 90% as certain, never claim a loss is "due". Show model estimates as estimates, label small samples, and don't invent stats.
 - **Research for real:** verify with a second source where possible, and say what couldn't be verified.
 - **500,000 runs** for any simulation. Swap legs on parlays.
-- **Points over assists / rebounds:** prefer points legs (STAT_PREF in index.html: a selection bonus in ticket building, NBA picks, highest-floor legs and swap ranking; never added to a chance). Keep reporting how each stat actually hits (Lessons).
+- **Points over assists / rebounds, for NBA parlays and Fantasy:** prefer points legs (STAT_PREF in index.html: a selection bonus in ticket building, NBA picks, highest-floor legs and swap ranking; PTS_PREF in plan.js for Weekly Plan; duo/trio stacks lead with the scorer; never added to a chance). Keep reporting how each stat actually hits (Lessons).
 - **Security:**
   - Never ask for, store or use API keys, wallet keys or seed phrases.
   - A Polymarket API key was once pasted in chat: never use it.

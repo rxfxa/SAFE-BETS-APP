@@ -197,11 +197,13 @@ function startLegs(byG, cost, N, keep) {
 }
 
 // ---------------- builder: hit-rate targets ----------------
+// the owner prefers points props over rebounds / assists: a small bonus in leg choice (prices are untouched)
+const PTS_PREF = 0.08, pref = c => (c.kind === 'prop' && c.stat === 'pts' ? PTS_PREF : 0);
 function buildTarget(C, tier, N, exclude, keep) {
   const [lo, hi] = tier.range, tgt = tier.target, q = Math.pow(tgt, 1 / N);
   const pool = C.filter(c => !(exclude && exclude.has(legId(c))) && c.ps > 0.05 && c.ps < 0.985);
   const byG = new Map(); for (const c of pool) { if (!byG.has(c.pg.slug)) byG.set(c.pg.slug, []); byG.get(c.pg.slug).push(c); }
-  const { legs, pinned } = startLegs(byG, c => Math.abs(Math.log(c.ps / q)), N, keep);
+  const { legs, pinned } = startLegs(byG, c => Math.abs(Math.log(c.ps / q)) - pref(c), N, keep);
   // swap legs (same game, same rules; never one the user kept) until the product sits in the range, closest to the target
   const prod = () => legs.reduce((s, c) => s * c.ps, 1);
   const okSwap = (old, nw) => {
@@ -252,7 +254,7 @@ function buildPayout(C, tier, N, exclude, keep) {
   const M = tier.minPay, L = Math.log(M), qa = Math.pow(1 / M, 1 / N);
   const pool = C.filter(c => !(exclude && exclude.has(legId(c))) && c.ask >= 0.2 && c.ps >= 0.25);
   const byG = new Map(); for (const c of pool) { if (!byG.has(c.pg.slug)) byG.set(c.pg.slug, []); byG.get(c.pg.slug).push(c); }
-  const score = c => Math.abs(Math.log(c.ask / qa)) - 0.8 * Math.log(c.ps / c.ask); // near the target price, value first
+  const score = c => Math.abs(Math.log(c.ask / qa)) - 0.8 * Math.log(c.ps / c.ask) - pref(c); // near the target price, value first, points preferred
   const { legs, pinned } = startLegs(byG, score, N, keep);
   const lpay = () => -legs.reduce((s, c) => s + Math.log(c.ask), 0), lp = () => legs.reduce((s, c) => s + Math.log(c.ps), 0);
   const okSwap = (old, nw) => {

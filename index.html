@@ -1170,7 +1170,7 @@ function renderFantasy(){
   const HY=[5,10,15].map(n=>buildTicket({n,sports:fz.sports,minP:.6,target:.7,propsOnly:false,perPlayer:1,perGame:fz.sports.length===1?3:2,seed:fzSeed}));
   html+=`<h2>High-yield tickets <small>${fz.sports.length===5?'mixed sports':fz.sports.map(s=>(allS.find(a=>a[0]===s)||[,s])[1]).join(' + ')} · bigger payouts</small></h2><div class="grid">${HY.map((T,i)=>ticketCard('hy'+[5,10,15][i],`High yield · ${[5,10,15][i]} legs`,T,'Legs around 70% each. Long shots by design, with a real payout if it lands.')).join('')}</div>
    <div class="note">Every extra leg cuts the chance of hitting. Treat 10 and 15 leggers as small-stake lottery tickets.</div>`;
-  html+=sgpHTML(allS)+megaHTML();
+  html+=sgpHTML(allS)+megaHTML()+stackHTML();
   $('main').innerHTML=html;wireFz();
 }
 // same game parlay: every leg from one game, same scroller and style as the fantasy parlay
@@ -1405,7 +1405,8 @@ function ctxNote(L){if(!isP(L.key))return '';const i=pLegInfo(L.key);if(!i)retur
 // ---- 500,000 runs, game by game: one simulated result per game per run (margin + total for NBA / NFL / college football,
 // a final score for soccer / NHL); every leg on that game is settled on it, and player legs draw from their blowout / normal
 // chance by the simulated margin. Legs the engine can't settle on a score are drawn on their own at their chance.
-const N5=500000;
+const N5=500000,RHO=.2,SQR=Math.sqrt(RHO),SQ1=Math.sqrt(1-RHO);  // teammates' legs: correlation .2 through a shared team factor
+function gauss(R){let u=0;while(u===0)u=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R());}
 function simJoint(legs,N=N5){
   const by=new Map();legs.forEach((L,i)=>{if(!by.has(L.gid))by.set(L.gid,[]);by.get(L.gid).push(i);});
   const R=mulberry32(hashStr(legs.map(legSig).join(','))),G=[];
@@ -1413,17 +1414,18 @@ function simJoint(legs,N=N5){
     if(m&&m.kind==='margin'){const s0=sim(g);if(s0){e.mode='margin';e.s=s0;}}
     else if(m&&m.kind==='goals'){const O=outcomes(g);if(O){e.mode='goals';const c=new Float64Array(O.n);let a=0;for(let k=0;k<O.n;k++){a+=O.p[k];c[k]=a;}e.cdf=c;e.n=O.n;}}
     e.ev=ix.map(i=>{const L=legs[i];
-      if(isP(L.key)){const inf=pLegInfo(L.key);if(!inf)return {t:'ind',p:0};const thr=inf.under?Math.floor(inf.thr)+1:inf.thr,P=playerParts(inf.pl,thr,inf.under);return {t:'pl',pn:P.pn,pb:P.pbw,B:BLOW[g&&g.sport]||1e9};}
+      if(isP(L.key)){const inf=pLegInfo(L.key);if(!inf)return {t:'ind',p:0};const thr=inf.under?Math.floor(inf.thr)+1:inf.thr,P=playerParts(inf.pl,thr,inf.under);
+        const tn=t=>invNorm(clamp(t,1e-6,1-1e-6));return {t:'pl',pn:P.pn,pb:P.pbw,zn:tn(P.pn),zb:tn(P.pbw),B:BLOW[g&&g.sport]||1e9,side:g&&inf.pl.team===g.away.abbr?1:0,under:!!inf.under};}
       if(g&&!legType(L.key)&&mkOf(g,L.key)){if(e.mode==='goals')return {t:'mask',M:stdMask(g,L.key)};if(e.mode==='margin')return {t:'f',f:mkOf(g,L.key).f};}
       return {t:'ind',p:g?p1(g,L.key):(+L.p||0)};});
     G.push(e);}
   const lh=new Float64Array(legs.length);let hits=0;
   for(let r=0;r<N;r++){let all=true;
-    for(const e of G){let mg=0,tt=0,idx=0;
+    for(const e of G){let mg=0,tt=0,idx=0;const zt=[gauss(R),gauss(R)];  // one shared factor per team per run
       if(e.mode==='margin'){const j=(R()*e.s.N)|0;mg=e.s.mg[j];tt=e.s.tt[j];}
       else if(e.mode==='goals'){const u=R()*e.cdf[e.n-1];let lo=0,hi=e.n-1;while(lo<hi){const md=(lo+hi)>>1;if(e.cdf[md]<u)lo=md+1;else hi=md;}idx=lo;}
       for(let k=0;k<e.ix.length;k++){const v=e.ev[k];let ok;
-        if(v.t==='pl')ok=R()<(e.mode==='margin'&&Math.abs(mg)>=v.B?v.pb:v.pn);
+        if(v.t==='pl'){const z=e.mode==='margin'&&Math.abs(mg)>=v.B?v.zb:v.zn,x=SQR*(v.under?zt[v.side]:-zt[v.side])+SQ1*gauss(R);ok=x<z;}  // a big team night pushes overs up, unders down
         else if(v.t==='mask')ok=!!(v.M&&v.M[idx]);else if(v.t==='f')ok=!!v.f(mg,tt);else ok=R()<v.p;
         if(ok)lh[e.ix[k]]++;else all=false;}}
     if(all)hits++;}
@@ -1450,6 +1452,72 @@ document.addEventListener('click',e=>{
   if(s5){const id=s5.dataset.sim5;s5.disabled=true;s5.textContent='Running 500,000…';setTimeout(()=>{runSim5(id);render();},30);return;}
 });
 let SUBCACHE=null;
+// ---------------- Duo & trio stacks (Fantasy): a team's starters whose stats feed each other ----------------
+// The playmaker's assists need someone to score, so "playmaker assists + scorer points (+ big rebounds)" from the SAME starting
+// five tend to land together; two players on one stat would fight over the same shots instead (never stacked). Close games
+// keep starters on the floor longer, so games are taken closest first (from the game's prices). Each member shows his last 4
+// box scores (nbalast4.json, ESPN), how often the stack cleared its lines together, and who takes over the stat if he sits.
+let stk=Object.assign({legs:6,games:3,day:null},store.get('stk',{}));
+function stackDays(){const by=new Map();for(const g of DATA.games)if(g.sport==='nba'&&openG(g)){const d=dayOf(startMs(g));by.set(d,(by.get(d)||0)+1);}return [...by.entries()].sort((a,b)=>a[0]<b[0]?-1:1);}
+// chance the game finishes within 8 points: the game's own simulations when priced, else Polymarket's moneyline
+function closeOf(g){if(g._cl!==undefined)return g._cl;let c=null;
+  const s=priced(g)&&sim(g);if(s){let n=0;for(let i=0;i<s.N;i++)if(Math.abs(s.mg[i])<=8)n++;c={p:n/s.N,src:'model'};}
+  else{try{const P=window.__polymarket&&__polymarket.PM&&__polymarket.PM.games||[],t=startMs(g);
+    const pg=P.find(x=>x.sport==='nba'&&Math.abs(Date.parse(x.start)-t)<6*3600e3&&((x.home.abbr===g.home.abbr&&x.away.abbr===g.away.abbr)||(x.home.abbr===g.away.abbr&&x.away.abbr===g.home.abbr)));
+    if(pg&&pg.ml&&pg.ml.home&&pg.ml.home.m!=null){const ph=pg.home.abbr===g.home.abbr?pg.ml.home.m:pg.ml.away.m,mu=12.5*invNorm(clamp(ph,.02,.98));c={p:Phi((8-mu)/12.5)-Phi((-8-mu)/12.5),src:'Polymarket',ph};}}catch(e){}}
+  if(c)g._cl=c;return c;}  // an answer is kept; "not known yet" is asked again once Polymarket has loaded
+function last4Of(team,name){const T=DATA.last4&&DATA.last4.teams&&DATA.last4.teams[team];if(!T)return null;const k=nameKey(name);
+  return {rows:T.games.map(gm=>{const e=Object.entries(gm.players).find(([n])=>nameKey(n)===k);return {date:gm.date,opp:gm.opp,...(e?e[1]:{dnp:true,min:0})};}),starter:T.starters.some(n=>nameKey(n)===k)};}
+function teamStack(g,team,mode){
+  const pls=DATA.players.filter(p=>p.gid===g.id&&p.team===team&&p.status==='active');
+  const starts=p=>{const l=last4Of(team,p.name);return l?l.starter:(p.mpg||0)>=26;};
+  const taken=[],pick=(st,min)=>{const x=pls.filter(p=>p.stat===st&&starts(p)&&p.avg>=min&&!taken.includes(nameKey(p.name))).sort((a,b)=>b.avg-a.avg)[0];if(x)taken.push(nameKey(x.name));return x;};
+  const roles=[['Playmaker','ast',4],['Scorer','pts',12],['Big','reb',6]],M=[];
+  for(const [role,st,min] of roles){const pl=pick(st,min);if(!pl)continue;
+    const d=st==='pts'?2:1,thr=Math.max(1,mode==='bigger'?Math.round(pl.avg):Math.round(pl.avg)-d),l4=last4Of(team,pl.name);
+    const vals=l4?l4.rows.filter(r=>!r.dnp&&r[st]!=null).map(r=>r[st]):[];
+    // who takes the stat if he sits: the next teammate by that stat (not already in the stack)
+    const playedLast=p=>{const l=last4Of(team,p.name);if(!l)return true;const r=l.rows[l.rows.length-1];return r&&!r.dnp&&r.min>0;};
+    const sub=pls.filter(p=>p.stat===st&&nameKey(p.name)!==nameKey(pl.name)&&!M.some(m=>nameKey(m.pl.name)===nameKey(p.name))&&playedLast(p)).sort((a,b)=>b.avg-a.avg)[0];
+    M.push({role,st,pl,thr,p:playerP(pl,thr),l4,vals,hits:vals.filter(v=>v>=thr).length,sub,missedLast:l4&&l4.rows.length&&l4.rows[l4.rows.length-1].dnp});}
+  // how often the stack cleared its lines together in the last 4, and whether they moved together (above / below their own mean)
+  let both=0,games=0,moved=0;
+  if(M.length>=2&&M.every(m=>m.l4)){const R=M[0].l4.rows.length;
+    for(let i=0;i<R;i++){const rs=M.map(m=>m.l4.rows[i]);if(rs.some(r=>r.dnp||r[M[rs.indexOf(r)].st]==null))continue;games++;
+      if(rs.every((r,j)=>r[M[j].st]>=M[j].thr))both++;
+      const dir=rs.map((r,j)=>Math.sign(r[M[j].st]-M[j].vals.reduce((a,b)=>a+b,0)/Math.max(1,M[j].vals.length)));if(dir.every(x=>x>=0)||dir.every(x=>x<=0))moved++;}}
+  return {g,team,M,both,games,moved,p:M.reduce((a,m)=>a*m.p,1)};}
+function buildStacks(){
+  const days=stackDays();if(!days.length)return {days,legs:[],stacks:[]};
+  const day=stk.day&&days.some(d=>d[0]===stk.day)?stk.day:(days.find(d=>d[1]>=3)||days[0])[0];
+  const G=DATA.games.filter(g=>g.sport==='nba'&&openG(g)&&dayOf(startMs(g))===day).map(g=>({g,c:closeOf(g)})).sort((a,b)=>((b.c&&b.c.p)||0)-((a.c&&a.c.p)||0));
+  const nG=Math.min(stk.games,G.length),per=[];let left=stk.legs;
+  for(let i=0;i<nG;i++){const k=Math.ceil(left/(nG-i));per.push(Math.min(6,k));left-=Math.min(6,k);}
+  const legs=[],stacks=[];
+  G.slice(0,nG).forEach(({g,c},i)=>{const S=[teamStack(g,g.home.abbr,fz.safe),teamStack(g,g.away.abbr,fz.safe)].sort((a,b)=>(b.both/Math.max(1,b.games))-(a.both/Math.max(1,a.games))||b.p-a.p);
+    const L=per[i],n0=L>=4?Math.min(3,Math.ceil(L/2)):Math.min(3,L),n1=Math.min(3,L-n0);
+    [[S[0],n0],[S[1],n1]].forEach(([s,n])=>{if(!n||!s.M.length)return;const take=s.M.slice(0,n);stacks.push({...s,M:take,c});
+      for(const m of take)legs.push({gid:g.id,key:`P:${m.pl.id}:${m.thr}`,label:`${m.pl.name} ${m.thr}+ ${STATN[m.st]}`,p:m.p,sport:'nba'});});});
+  return {days,day,legs,stacks,nG:G.length};}
+function stackHTML(){
+  const B=buildStacks();
+  if(!B.days.length)return `<h2>Duo & trio stacks</h2><div class="pc"><div class="why">No NBA games open right now.</div></div>`;
+  const T={legs:B.legs,p:parlayProb(B.legs).p,n:B.legs.length},fmtDay=d=>dayLabel(d);
+  const mrow=(m)=>`<div class="stkm"><b>${esc(m.role)}: ${esc(m.pl.name)} ${m.thr}+ ${STATN[m.st]}</b> <span class="mono">${pct(m.p)}</span>
+    <small>${m.vals.length?`last ${m.l4.rows.length}: ${m.l4.rows.map(r=>r.dnp?'DNP':r[m.st]).join(', ')} · cleared ${m.hits}/${m.vals.length}`:'last games not found'}${m.missedLast?' · <b style="color:var(--no)">missed his last game</b>':''}${m.sub?` · if he sits: ${esc(m.sub.name)} (${m.sub.avg} ${STATN[m.st]})`:''}</small></div>`;
+  return `<h2>Duo & trio stacks <small>starters whose stats feed each other</small></h2>
+   <div class="note">A playmaker's assists need someone to score, so a team's playmaker (assists), scorer (points) and big (rebounds) tend to land together. Two players on the same stat fight over the same shots, so they're never stacked. Close games keep starters on the floor, so the closest games go first.</div>
+   <div class="fbox"><div class="ctrl"><div><div class="big mono" id="stkLN">${stk.legs}</div><div style="font-size:13px;color:var(--dim);font-weight:700">LEGS</div></div><input type="range" id="stkL" min="2" max="15" value="${stk.legs}" aria-label="Stack legs"></div>
+    <div class="ctrl" style="margin-top:10px"><div><div class="big mono" id="stkGN">${stk.games}</div><div style="font-size:13px;color:var(--dim);font-weight:700">GAMES</div></div><input type="range" id="stkG" min="1" max="${Math.max(1,Math.min(8,B.nG||1))}" value="${Math.min(stk.games,Math.max(1,B.nG||1))}" aria-label="Stack games"></div>
+    <div class="sec" style="margin-top:12px">Day</div><div style="display:flex;gap:7px;flex-wrap:wrap">${B.days.map(([d,n])=>`<button class="chip ${d===B.day?'on':''}" data-stkday="${d}">${esc(fmtDay(d))} · ${n}</button>`).join('')}</div></div>
+   ${B.legs.length>=2?ticketCard('stk',`${B.legs.length}-leg stack parlay · ${esc(fmtDay(B.day))}`,T,`${B.stacks.length} stacks from ${new Set(B.stacks.map(s=>s.g.id)).size} games. The card's % multiplies the legs; the 500,000 runs let teammates' legs move together, as stacks do.`):'<div class="pc"><div class="why">Not enough starters with a playmaker, scorer and big on this day yet.</div></div>'}
+   ${B.stacks.map(s=>`<div class="pc"><div class="pchead"><span class="pctitle">${esc(s.team)} stack · ${esc(s.g.away.abbr)} @ ${esc(s.g.home.abbr)}</span><span class="hit h-mid">${s.c?`${pct(s.c.p)} within 8`:'closeness n/a'}</span></div>
+     <div class="why">${s.c?`${s.c.p>=.45?'Close game: starters should play big minutes.':'Could get away from one side: starters may sit late.'} (${s.c.src==='Polymarket'?'from Polymarket\'s moneyline':'from the game\'s simulations'})`:''}${s.games?` In the last ${s.games} games together the stack cleared every line ${s.both} time${s.both===1?'':'s'} and moved the same way ${s.moved} time${s.moved===1?'':'s'}.`:''}</div>
+     ${s.M.map(mrow).join('')}</div>`).join('')}
+   <div class="note">Last 4 games: ESPN box scores${DATA.last4&&DATA.last4.updated?`, pulled ${esc(new Date(DATA.last4.updated).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}))}`:''}. Four games is a small sample: it shows form and who is starting, not a guarantee.</div>`;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-stkday]');if(!b)return;stk.day=b.dataset.stkday;store.set('stk',stk);renderFantasy();});
+document.addEventListener('input',e=>{const t=e.target;if(t.id==='stkL'){$('stkLN').textContent=t.value;}if(t.id==='stkG'){$('stkGN').textContent=t.value;}});
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='stkL'){stk.legs=+t.value;store.set('stk',stk);renderFantasy();}if(t.id==='stkG'){stk.games=+t.value;store.set('stk',stk);renderFantasy();}});
 function forSure(){
   const games=[...new Set((DATA.players||[]).map(p=>p.gid))].map(gameById).filter(g=>g&&g.sport==='nba'&&openG(g)).sort((a,b)=>startMs(a)-startMs(b));
   const out=[];
@@ -2011,7 +2079,7 @@ async function load(){ // -> true when DATA was replaced
   // scorers.json = optional goalscorer data for the soccer module (DATA.scorers = null when missing)
   // nbaroles.json + injuries.json = season averages and injury report: NBA games with no posted props get season-average
   // player legs from them (addRolePlayers); mypicks.json = the once-a-day My Parlay Picks made by the daily job
-  let [d,pr,sc,ro,inj,mp,pf]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json')]);
+  let [d,pr,sc,ro,inj,mp,pf,l4]=await Promise.all([get('data.json'),get('props.json'),get('scorers.json'),get('nbaroles.json'),get('injuries.json'),get('mypicks.json'),get('playerform.json'),get('nbalast4.json')]);
   d=sanitizeFeed(d);
   if(!d){ // 404 / 503 / half-written file: keep what we have; the embedded seed is only for the very first load
     if(dataLoaded)return false;
@@ -2026,6 +2094,7 @@ async function load(){ // -> true when DATA was replaced
   if(!ro&&dataLoaded)ro=ROLES_LAST;if(!inj&&dataLoaded)inj=INJ_LAST;if(!mp&&dataLoaded)mp=DATA.mypicks;ROLES_LAST=ro;INJ_LAST=inj;
   addRolePlayers(d,ro,inj);
   // playerform.json: each picked player's last 5 games, researched each morning (team|name|stat -> entry)
+  d.last4=l4&&l4.teams?l4:(dataLoaded?DATA.last4:null);
   if(!pf&&dataLoaded&&DATA.playerform)d.playerform=DATA.playerform;
   else if(pf&&Array.isArray(pf.players)){d.playerform=new Map();for(const x of pf.players){if(!x||!x.name||!x.team||!x.stat)continue;const l5=(x.last5||[]).map(Number).filter(Number.isFinite);d.playerform.set(String(x.team).toUpperCase()+'|'+nameKey(x.name)+'|'+x.stat,{...x,last5:l5,avg5:l5.length?l5.reduce((a,b)=>a+b,0)/l5.length:null});}}d.mypicks=mp&&typeof mp==='object'&&Array.isArray(mp.parlays)?mp:null;
   applyLines(d);
@@ -2048,7 +2117,7 @@ function addRolePlayers(d,roles,inj){
         const st=stat.get(ab+'|'+nameKey(r.name))||'active';if(st==='out'||st==='doubtful')continue;
         const status=st==='questionable'||st==='day-to-day'?'questionable':'active',note=status==='active'?'':st;
         for(const [k,v,min] of [['pts',+r.ppg,8],['reb',+r.rpg,4],['ast',+r.apg,3]])if(v>=min)
-          {const rec={id:`${nameKey(r.name)}-${k}~${g.id}`,gid:g.id,name:r.name,stat:k,avg:+v.toFixed(1),status,note,team:ab,est:true,mpg:+r.mpg||0};
+          {const rec={id:`${nameKey(r.name)}-${k}~${g.id}`,gid:g.id,name:r.name,stat:k,avg:+v.toFixed(1),status,note,team:ab,est:true,mpg:+r.mpg||0,starter:r.starter!==false};
            if(have.has(g.id))d.estById.set(rec.id,rec);else add.push(rec);}}}}
   d.players=d.players.concat(add);}
 registerTab({key:'odds',label:'💰 Odds Tools',after:'parlays',render:renderOddsTools});

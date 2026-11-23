@@ -143,10 +143,13 @@ def stats(outcome):
     out['draw80'] = int(np.sum((ng >= 5) & (out['draw']['o'] >= 0.8 * ng)))
     out['maxdrawrate'] = float(np.max(np.where(ng >= 5, out['draw']['o'] / np.maximum(ng, 1), 0)))
     # contagion: early-slot vs late-slot residuals of favourites failing, across buckets that have both
-    fe = np.bincount(bidx, weights=(fail & is_early).astype(float) - np.where(isfav & is_early, 1 - favp, 0), minlength=B)
-    fl = np.bincount(bidx, weights=(fail & ~is_early).astype(float) - np.where(isfav & ~is_early, 1 - favp, 0), minlength=B)
+    ve = np.bincount(bidx, weights=np.where(isfav & is_early, favp * (1 - favp), 0), minlength=B)
+    vl = np.bincount(bidx, weights=np.where(isfav & ~is_early, favp * (1 - favp), 0), minlength=B)
+    fe = np.bincount(bidx, weights=(fail & is_early).astype(float) - np.where(isfav & is_early, 1 - favp, 0), minlength=B) / np.sqrt(np.maximum(ve, 1e-9))
+    fl = np.bincount(bidx, weights=(fail & ~is_early).astype(float) - np.where(isfav & ~is_early, 1 - favp, 0), minlength=B) / np.sqrt(np.maximum(vl, 1e-9))
     both = (np.bincount(bidx, weights=(isfav & is_early).astype(float), minlength=B) > 0) & (np.bincount(bidx, weights=(isfav & ~is_early).astype(float), minlength=B) > 0)
     out['contagion'] = float(np.corrcoef(fe[both], fl[both])[0, 1]) if both.sum() > 3 else 0.0
+    out['contagionRounds'] = int(both.sum())
     out['totfail'] = float(fail.sum())
     out['totdraw'] = float(draw.sum())
     return out, nf, ng
@@ -228,23 +231,29 @@ for c in cal:
     m = np.array([g['lg'] == c['lg'] for g in games])
     c['favRoi'] = (roi(m & isfav, lambda i: favside[i]) or {}).get('roi')
     c['drawRoi'] = (roi(m, lambda i: 1) or {}).get('roi')
+data_end = max(g['date'] for g in games)
+feed_n = sum(1 for g in games if g['src'] == 'feed chance')
 sig = [k for k in ('favDispersion', 'drawDispersion', 'allBigLose', 'draw80Weekends', 'contagion', 'favCarryOver', 'drawCarryOver') if tests[k]['p'] < 0.05]
 T = tests
 parts = []
 if not any(k in sig for k in ('favDispersion', 'drawDispersion', 'allBigLose', 'draw80Weekends')):
-    parts.append(f"The tweet's pattern isn't in the last {DAYS} days. No round had every big favourite lose (worst: {round(T['worstFavWeekend']['value'] * 100)}% of them dropped points) and none came close to 80% draws (most: {round(T['mostDrawsWeekend']['value'] * 100)}%). Rounds swung about as much as independent games at their prices would (p {T['favDispersion']['p']:.2f} for favourites, {T['drawDispersion']['p']:.2f} for draws).")
+    parts.append(f"The tweet's pattern isn't in the last {DAYS} days (results to {data_end}). No round had every big favourite lose (worst: {round(T['worstFavWeekend']['value'] * 100)}% of them dropped points) and none came close to 80% draws (most: {round(T['mostDrawsWeekend']['value'] * 100)}%). Rounds swung about as much as independent games at their prices would (p {T['favDispersion']['p']:.2f} for favourites, {T['drawDispersion']['p']:.2f} for draws).")
 else:
     parts.append('Rounds clustered more than chance at these prices would explain: ' + ', '.join(sig) + '.')
 c = T['contagion']
 if c['p'] < 0.05:
     parts.append(f"When a round's early favourites slipped, its later favourites slipped more than priced too (r {c['value']:.2f}, p {c['p']:.3f}).")
 elif c['p'] < 0.15:
-    parts.append(f"One hint, not proof: in rounds where the early favourites slipped, the later ones slipped a little more too (r {c['value']:.2f}, p {c['p']:.2f} over {B} rounds), too few rounds to rely on.")
+    parts.append(f"One hint, not proof: in rounds where the early favourites slipped, the later ones slipped a little more too (r {c['value']:.2f}, p {c['p']:.2f} over {real['contagionRounds']} rounds), too few rounds to rely on.")
+else:
+    parts.append(f"Early slips didn't lead to later slips in the same round (r {c['value']:.2f} over {real['contagionRounds']} rounds).")
 f = T['favsFailOverall']
 if f['p'] < 0.05:
     parts.append(f"What the data does show is the opposite of the tweet: big favourites failed {int(f['value'])} times where their prices expected {f['chance']:.0f} (p {f['p']:.3f}), so backing them returned more than betting against them.")
 verdict = ' '.join(parts)
-data = {'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'window': [start.isoformat(), end.isoformat()], 'games': N,
+if not feed_n:
+    print(f'note: the feed added no games (finished games carry no pre-match chance); data ends {data_end}', file=sys.stderr)
+data = {'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'window': [start.isoformat(), data_end], 'asked': [start.isoformat(), end.isoformat()], 'feedGames': feed_n, 'games': N,
         'sources': {'csv': 'football-data.co.uk 2026-27 results with closing odds', 'feedAfter': csv_end, 'leagues': sorted(set(g['comp'] for g in games))},
         'favThreshold': FAV, 'bets': bets, 'sims': SIMS, 'tests': tests, 'significant': sig, 'verdict': verdict, 'weeks': weeks, 'calibration': cal, 'drawByGap': drawByGap,
         'totals': {'favs': int(isfav.sum()), 'favFails': int(real['totfail']), 'favFailsExp': round(float(np.sum(np.where(isfav, 1 - favp, 0))), 1), 'draws': int(real['totdraw']), 'drawsExp': round(float(P[:, 1].sum()), 1)}}

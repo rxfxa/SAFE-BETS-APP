@@ -330,14 +330,17 @@ try {
 
     // ---- keyboard: Tab reaches a game opener, Enter opens the sheet, focus moves in, Escape returns focus (ux-2, ux-3)
     await page.evaluate(() => { SB.goTab('soccer'); document.activeElement.blur(); window.scrollTo(0, 0); });
-    let reached = false;
-    for (let i = 0; i < 40 && !reached; i++) { await page.keyboard.press('Tab'); reached = await page.evaluate(() => !!document.activeElement.closest('[data-open]')); }
+    // walk at most once through every focusable element (the header alone now holds ~40: brand, search, odds format, 23 tabs,
+    // league chips), so an opener that is not keyboard-focusable still fails, whatever the number of tabs
+    const maxTabs = await page.evaluate(() => document.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])').length);
+    let reached = false, presses = 0;
+    for (; presses < maxTabs && !reached; presses++) { await page.keyboard.press('Tab'); reached = await page.evaluate(() => !!document.activeElement.closest('[data-open]')); }
     const opener = await page.evaluate(() => document.activeElement.dataset.open);
     await page.keyboard.press('Enter'); await page.waitForTimeout(100);
     const kb = await page.evaluate(() => ({ open: document.getElementById('sheet').classList.contains('on'), inSheet: document.getElementById('sheet').contains(document.activeElement) }));
     await page.keyboard.press('Escape'); await page.waitForTimeout(50);
     const back = await page.evaluate(() => document.activeElement.dataset && document.activeElement.dataset.open);
-    check('keyboard: Tab reaches a game opener, Enter opens the sheet, focus moves into it', reached && kb.open && kb.inSheet, JSON.stringify({ reached, ...kb }));
+    check('keyboard: Tab reaches a game opener, Enter opens the sheet, focus moves into it', reached && kb.open && kb.inSheet, JSON.stringify({ reached, presses, ...kb }));
     check('keyboard: closing returns focus to the opener', back === opener, `${back} vs ${opener}`);
 
     // ---- nav (ux-1): the active tab is always scrolled into view; no horizontal page scroll

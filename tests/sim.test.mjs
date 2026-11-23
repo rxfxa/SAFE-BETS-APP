@@ -1,6 +1,7 @@
 // Simulator module tests (sim.js). Run: node tests/sim.test.mjs
 // Starts its own static server on a free port, drives the page with Playwright, prints PASS/FAIL lines,
-// exits non-zero on any failure.
+// exits non-zero on any failure. Runs on a saved slate (tests/fixtures/data-2026-11-18.json) and the scorer / roster files of the
+// same days, with the clock fixed that evening, so there are always soccer, NBA, NFL, NHL and college games to simulate.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +24,16 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}/index.html`;
 
+const FIX = f => fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8');
+const NOW = '2026-11-18T21:50:00Z';  // evening of the saved slate: NBA and NHL games tonight, NFL and soccer later in the week
+// every live file the simulator reads -> its saved copy (firsttd.js adds ?t=..., so match on the path only)
+const FEEDS = { 'data.json': FIX('data-2026-11-18.json'), 'scorers.json': FIX('scorers-2026-11-18.json'), 'props.json': FIX('props-2026-11-18.json'),
+  'nbaroles.json': FIX('nbaroles-2026-11-18.json'), 'injuries.json': FIX('injuries-2026-11-18.json'), 'firstbasket.json': FIX('firstbasket-2026-11-18.json'),
+  'firsttd.json': FIX('firsttd-2026-11-19.json') };
+async function pinFeeds(page) {
+  await page.clock.setFixedTime(new Date(NOW));
+  for (const [f, body] of Object.entries(FEEDS)) await page.route(new RegExp('/' + f.replace('.', '\\.') + '(\\?|$)'), r => r.fulfill({ status: 200, contentType: 'application/json', body }));
+}
 let fails = 0;
 const check = (name, ok, info = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${info ? ' :: ' + info : ''}`); if (!ok) fails++; };
 const browser = await chromium.launch();
@@ -32,6 +43,7 @@ async function openPage({ w = 390, h = 844, theme = 'light', noWorker = false } 
   const page = await ctx.newPage();
   page.on('console', m => { if (m.type() === 'error') allErrors.push(m.text() + ' @' + (m.location().url || '')); });
   page.on('pageerror', e => allErrors.push('pageerror: ' + e.message));
+  await pinFeeds(page);
   await page.addInitScript(([t, nw]) => {
     localStorage.setItem('fm2.tab', JSON.stringify('sim')); localStorage.setItem('fm2.theme', JSON.stringify(t));
     if (nw) { try { delete window.Worker; } catch (e) {} window.Worker = undefined; }
@@ -316,6 +328,7 @@ try {
     const C = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     const cp = await C.newPage(); const warns = [];
     cp.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') warns.push(m.text()); });
+    await pinFeeds(cp);
     await cp.addInitScript(() => { localStorage.setItem('fm2.tab', JSON.stringify('sim')); });
     await cp.goto(BASE.replace('/index.html', '/csp/index.html'));
     await cp.waitForFunction(() => window.SB && SB.firstRender && window.__sim, null, { timeout: 30000 });

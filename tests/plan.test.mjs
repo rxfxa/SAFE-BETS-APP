@@ -34,6 +34,9 @@ async function openPage({ fixture = true, w = 390, h = 844, ids = false } = {}) 
   page.on('pageerror', e => errors.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.clock.setFixedTime(new Date('2026-11-18T21:50:00Z'));
   await page.route('**/data.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: DATA }));
+  // the season averages, recent form and box scores of that morning (the live files move every day)
+  await page.route('**/nbaroles.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: fs.readFileSync(path.join(ROOT, 'tests/fixtures/nbaroles-2026-11-18.json'), 'utf8') }));
+  await page.route(/\/(playerform|nbalast4)\.json/, r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"players":[],"teams":{}}' }));
   await page.route('**/polymarket.json', r => r.fulfill({ status: 200, contentType: 'application/json', body: fixture ? (ids ? FXID : FX) : JSON.stringify({ updated: '2026-11-18T21:00:00Z', games: [] }) }));
   await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('plan')));
   await page.goto(BASE);

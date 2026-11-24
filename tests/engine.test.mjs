@@ -14,6 +14,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
 // module files owned by other engineers may not exist yet: their 404s are expected, not app errors
 const OPTIONAL = /\/(soccer\.js|sim\.js|scorers\.json)$/;
+// Highlights shows ESPN's pictures when the network allows them (it falls back to sport tiles when blocked, as here)
+const EXT_IMG = /^https:\/\/([a-z0-9-]+\.)*(espncdn\.com|akamaized\.net)\//;
 const RENDER_BUDGET_MS = 1500;
 const FIX = f => fs.readFileSync(path.join(ROOT, 'tests/fixtures', f), 'utf8');
 const NOW = '2026-11-18T21:50:00Z';  // evening of the saved slate: NBA, NHL, NFL, college and soccer games still to play
@@ -44,7 +46,7 @@ async function openPage({ tab = 'trending', fmt = null, w = 390, h = 844 } = {})
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const errors = [];
-  page.on('console', m => { if (m.type() === 'error' && !OPTIONAL.test(m.location().url || '')) errors.push(m.text()); });
+  page.on('console', m => { if (m.type() === 'error' && !OPTIONAL.test(m.location().url || '') && !EXT_IMG.test(m.location().url || '')) errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await pinFeeds(page);
   await page.addInitScript(([t, f]) => { localStorage.setItem('fm2.tab', JSON.stringify(t)); if (f) localStorage.setItem('fm2.oddsFmt', JSON.stringify(f)); }, [tab, fmt]);

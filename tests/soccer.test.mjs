@@ -56,7 +56,7 @@ async function openPage({ tab = 'soccerparlays', socp = null, w = 390, h = 844, 
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const errors = [];
-  page.on('console', m => { if (m.type() === 'error' && !(OPTIONAL && OPTIONAL.test(m.location().url || ''))) errors.push(m.text()); });
+  page.on('console', m => { const u = m.location().url || ''; if (m.type() === 'error' && !(OPTIONAL && OPTIONAL.test(u)) && !/^https:\/\/([a-z0-9-]+\.)*(espncdn\.com|akamaized\.net)\//.test(u)) errors.push(m.text()); });  // ESPN pictures on Highlights: blocked here, sport tiles show instead
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   await pinFeeds(page);
   if (NO_SIM) await page.route('**/sim.js', r => r.fulfill({ status: 404, body: '' }));

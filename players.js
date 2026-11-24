@@ -152,9 +152,10 @@
 
   // ---------- params ----------
   function applyParams(prm) {
-    if (!prm || typeof prm !== 'object' || seenP === prm) return;
+    // render() passes a fresh {} when no params were given, so only a non-empty params object (one goTab call) is applied, once;
+    // a click on the Players item in the menu goes back to the list (the capture listener below)
+    if (!prm || typeof prm !== 'object' || !Object.keys(prm).length || seenP === prm) return;
     seenP = prm;
-    if (!Object.keys(prm).length) { st.view = null; st.miss = null; return; }   // a plain tab click: the list
     if (typeof prm.sport === 'string' && (SPORTS.includes(prm.sport.toLowerCase()) || prm.sport === 'all')) st.sport = prm.sport.toLowerCase();
     if (typeof prm.name === 'string' && prm.name.trim()) { st.pending = { name: prm.name.trim(), sport: typeof prm.sport === 'string' ? prm.sport.toLowerCase() : null }; st.view = null; st.miss = null; }
   }
@@ -475,6 +476,10 @@
     if (t.hasAttribute('data-pl-an')) { let o = {}; try { o = JSON.parse(t.getAttribute('data-pl-an')); } catch (er) { o = {}; } SB.goTab('propan', o); return; }
     if (t.hasAttribute('data-pl-ask')) { SB.goTab('ask', { q: t.getAttribute('data-pl-ask') }); }
   });
+  document.addEventListener('click', ev => {
+    const nav = ev.target.closest && ev.target.closest('[data-t="players"]');
+    if (nav && !nav.closest('.pl-root')) { st.view = null; st.miss = null; st.pending = null; }
+  }, true);
   document.addEventListener('change', ev => {
     const s = ev.target; if (!s || !s.matches || !s.matches('.pl-root select[data-ui-select="pl-min"]')) return;
     st.min = [1, 3, 5, 10].includes(+s.value) ? +s.value : 3; store.set('pl.min', st.min); st.shown = PAGE;

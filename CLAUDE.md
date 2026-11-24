@@ -55,9 +55,11 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **🎲 500,000 runs:** game by game. Player legs and anytime TDs are correlated normals linked to each other, to their team's simulated margin and to the game total by the measured links (pairs.json); NBA / NHL starters sit late in simulated blowouts. Re-runs after a swap.
 - **Legs that help each other (pairs.json, tools/leg_pairs.py):**
   - Measured on this season's ESPN box scores: NFL 162 games, college 822, NBA 248, NHL 334, soccer 545.
-  - Each leg "lands" when the player beats his own median (TD / goal: scores). The link is the normal-copula correlation of the 2x2 table, with a bootstrap over players. It is used only when its range excludes 0 and there are 150+ games.
-  - Examples: an NFL back's TD + rushing yards +0.42 (66% vs 46%); a receiver's catches + yards about +0.8; QB yards + top receiver +0.46; back's yards + team win +0.38; NBA points + rebounds +0.23; NHL goal + shots +0.43.
-  - Same-game legs are priced together (2 exact, 3+ by a seeded simulation). Builders add a partner leg that helps (link >= .15) and keep off legs that work against each other (<= -.15). Swaps and the slip say which legs help or hurt each other.
+  - Each leg "lands" when the player beats his own median (TD / goal: scores). The joint rate is measured within players (pooled per-player covariance), the link is the normal-copula correlation, with a bootstrap over players. It is used only when it survives Holm's correction across all pairs, has 150+ player-games and is at least 0.05.
+  - Examples (2026-11-24 run): an NFL back's TD + rushing yards +0.43; WR TD + receiving yards +0.42; TE TD + receiving yards +0.46; QB yards + top receiver +0.57; back's yards + team win +0.44; NBA points + rebounds +0.24; NHL goal + shots +0.43; soccer goal + win +0.34. No longer reliable: an NFL back's TD + receiving yards, TE TD + team win.
+  - Yards chances are recalibrated by what happened (pairs.json calib: isotonic knots from walking through the season pricing each player from his earlier games only, shrunk toward no change by sample size). Held out by player, NFL rushing lines priced 65% landed 52% before the fix (calibrated 55%). The yards average counts every game played (a zero is a real result).
+  - Same-game legs are priced together on the game's own model: the game's markets settle on each of its 100,000 simulations (or exact scores) and each player leg / anytime TD is a normal linked to that game's margin and total (one linked leg exactly, more by a seeded 20,000-draw simulation); the 500,000-run sim draws the same links, so the card and the sim agree (tested). Spreads, handicaps, double chance and win-to-nil carry the side's win link. Games without a model (started) link a win / total leg to the players directly.
+  - Builders add a partner leg that helps (link >= .15) only when the pair costs the card no more than its next best leg from another game, and keep off legs that work against each other (<= -.15). Swaps and the slip say which legs help or hurt each other, with what the research counted ("when he scored a TD, he beat his usual rushing yards 66% of the time vs 46%"). An anytime TD swaps for other anytime TDs (then that game's yards legs).
   - The same player twice is allowed only for two different stats the research links.
 - **▶ Watch live** opens the Simulator.
 - **★ Rec next to every leg** (and ⇄): the swap list puts one RECOMMENDED pick on top. Every option says why: value, how it fits the card (assists feed a teammate's points), close game or blowout risk, recent box scores, and lessons (kinds of legs that keep missing are flagged and ranked down).
@@ -151,6 +153,8 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
+- 2026-11-24:
+  - Legs that help each other, reviewed (14 confirmed findings fixed): within-player links with Holm; yards calibrated (v156 had overpriced rushing lines, about 65% priced vs 52% landed); the card's joint price now conditions on the game's simulations (the old 500,000-run sim had the team-win link's sign reversed); spreads and double chance linked; partner legs gated by cost; TD swaps; help pairs follow the sport filter and are grouped by sport. Engine kept fast (normal scores taken from the sim's own model; the help section fills in after the Fantasy tab paints).
 - 2026-11-23:
   - Weekend Patterns tab (tweet tested: not true).
   - Fantasy duo/trio stacks with last-4 ESPN box scores.

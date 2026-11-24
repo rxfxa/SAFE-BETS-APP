@@ -6,9 +6,15 @@
 
 For every pair of legs that can share a parlay (the same player's two stats, two teammates, a player and his team's
 result, a player and the game total) it measures how often both land, against each player's own usual level: a leg
-"lands" when the player beats his own median in that game (for a touchdown / goal: scores at least once). From the 2x2
-table of player-games it finds the correlation of a normal copula that gives the same joint rate (tetrachoric), with a
-95% range from a bootstrap over players, and how much likelier the second leg is when the first lands ("lift").
+"lands" when the player beats his own median in that game (for a touchdown / goal: scores at least once). The joint rate
+is measured WITHIN players (each player's own covariance, pooled), so players who simply score more often, or play for
+teams that win more, don't create a link. The correlation of a normal copula giving that joint rate (tetrachoric), a
+bootstrap over players (seeded per pair) for its range and p-value, and Holm's correction across every pair tested:
+a link is "reliable" only if it survives Holm, has 150+ player-games and is at least 0.05 in size.
+Yards legs are calibrated: walking forward through the season, each player's chance at each line is priced the way the
+app prices it (from his earlier games only) and compared with what happened; the isotonic map from priced to actual is
+written next to the spread model as an isotonic map (shrunk toward no correction when under 80 players back it), with a
+by-player split check.
 
 Pairs (positions from ESPN rosters for the NFL; college positions read from each player's stats):
   NFL / college: RB touchdown + rushing yards / receiving yards / receptions; WR, TE touchdown + receiving yards,
@@ -22,7 +28,7 @@ Also writes the yards spread model (sd = a + b x mean), nflplayers.json (every N
 feed's upcoming games, with his season game logs: rushing, receiving, passing yards and touchdowns, and position) and
 refreshes firsttd.json's season touchdowns for every NFL team in the feed (its game-day "status" notes are kept).
 """
-import json, math, os, re, sys, time, unicodedata, urllib.request
+import hashlib, json, math, os, re, sys, time, unicodedata, urllib.request
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -32,7 +38,7 @@ args = sys.argv[1:]
 opt = lambda k, d: args[args.index(k) + 1] if k in args else d
 OUT, PLAYERS, FEED, CACHE = opt('--out', 'pairs.json'), opt('--players', 'nflplayers.json'), opt('--feed', 'data.json'), opt('--cache', '.work/box')
 SPORTS = opt('--sports', 'nfl,ncaaf,nba,nhl,soccer').split(',')
-BOOT = int(opt('--boot', 300))
+BOOT = int(opt('--boot', 1000))
 NOW = datetime.now(timezone.utc)
 API = 'https://site.api.espn.com/apis/site/v2/sports/'
 PATH = {'nfl': 'football/nfl', 'ncaaf': 'football/college-football', 'nba': 'basketball/nba', 'nhl': 'hockey/nhl'}
@@ -153,16 +159,21 @@ def load_games(sport):
 
 # ---------- positions (NFL rosters; college from stats) ----------
 def nfl_positions(games):
-    ids = {t['id'] for g in games for t in g['teams'].values() if t.get('id')}
-    pos = {}
+    """(team id, name) -> roster position; a name alone only when it is unique across rosters"""
+    ids = sorted({str(t['id']) for g in games for t in g['teams'].values() if t.get('id')})
+    pos, byname = {}, defaultdict(set)
 
     def one(tid):
         r = get(f"{API}football/nfl/teams/{tid}/roster") or {}
-        return [(nk(it['displayName']), (it.get('position') or {}).get('abbreviation')) for grp in r.get('athletes', []) for it in grp.get('items', [])]
+        return tid, [(nk(it['displayName']), (it.get('position') or {}).get('abbreviation')) for grp in r.get('athletes', []) for it in grp.get('items', [])]
     with ThreadPoolExecutor(8) as ex:
-        for res in ex.map(one, sorted(ids)):
-            pos.update(dict(res))
-    return pos
+        for tid, res in ex.map(one, ids):
+            for n, q in res:
+                pos[(tid, n)] = q
+                byname[n].add(q)
+    uniq = {n: next(iter(v)) for n, v in byname.items() if len(v) == 1}
+    abbr2id = {ab: str(t['id']) for g in games for ab, t in g['teams'].items() if t.get('id')}
+    return lambda ab, name: pos.get((abbr2id.get(ab), nk(name))) or uniq.get(nk(name))
 
 
 def guess_pos(lines):
@@ -221,37 +232,48 @@ def tetra(pA, pB, pAB):
     return (lo + hi) / 2
 
 
-def measure(rows, desc, why):
-    """rows: [(player_key, A, B)] booleans"""
+def measure(rows, desc, why, key=''):
+    """rows: [(player_key, A, B)] booleans. The joint rate is measured within players: pA * pB plus the players' own
+    (unbiased) covariance of A and B, pooled - so a player who scores a lot and also clears his yards a lot doesn't count
+    as a link unless his good-yards games are his scoring games."""
     rows = [r for r in rows if r[1] is not None and r[2] is not None]
     n = len(rows)
     if n < 60:
         return None
-    A = np.array([r[1] for r in rows], float)
-    B = np.array([r[2] for r in rows], float)
-    pA, pB, pAB = A.mean(), B.mean(), (A * B).mean()
+    by = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
+    for k, a, b in rows:
+        x = by[k]
+        x[0] += 1
+        x[1] += float(a)
+        x[2] += float(b)
+        x[3] += float(a) * float(b)
+    M = np.array(list(by.values()), float)
+
+    def est(M):
+        N = M[:, 0].sum()
+        pA, pB = M[:, 1].sum() / N, M[:, 2].sum() / N
+        m = M[M[:, 0] >= 2]
+        ni = m[:, 0]
+        cov = (m[:, 3] / ni - (m[:, 1] / ni) * (m[:, 2] / ni)) * ni / (ni - 1)
+        pAB = pA * pB + float((ni * cov).sum()) / N
+        return pA, pB, min(max(pAB, max(0.0, pA + pB - 1) + 1e-9), min(pA, pB) - 1e-9)
+    pA, pB, pAB = est(M)
     rho = tetra(pA, pB, pAB)
     if rho is None:
         return None
-    # bootstrap over players (a player's games move together)
-    by = defaultdict(list)
-    for i, r in enumerate(rows):
-        by[r[0]].append(i)
-    keys = list(by)
-    idx = [np.array(by[k]) for k in keys]
+    r_ = np.random.default_rng(int(hashlib.md5(key.encode()).hexdigest()[:8], 16))
     bs = []
     for _ in range(BOOT):
-        pick = rng.integers(0, len(keys), len(keys))
-        ii = np.concatenate([idx[j] for j in pick])
-        a, b = A[ii], B[ii]
-        r = tetra(a.mean(), b.mean(), (a * b).mean())
+        r = tetra(*est(M[r_.integers(0, len(M), len(M))]))
         if r is not None:
             bs.append(r)
+    se = float(np.std(bs, ddof=1)) if len(bs) > 20 else None
     lo, hi = (float(np.quantile(bs, .025)), float(np.quantile(bs, .975))) if len(bs) > 20 else (None, None)
-    pBA = pAB / pA if pA else None
-    return {'desc': desc, 'why': why, 'n': n, 'players': len(keys), 'pA': round(pA, 4), 'pB': round(pB, 4), 'pAB': round(pAB, 4), 'pBgivenA': round(pBA, 4) if pBA else None,
-            'lift': round(pBA / pB, 3) if pBA and pB else None, 'rho': round(rho, 3), 'lo': round(lo, 3) if lo is not None else None, 'hi': round(hi, 3) if hi is not None else None,
-            'reliable': bool(lo is not None and (lo > 0 or hi < 0) and n >= 150)}
+    pv = math.erfc(abs(rho) / se / math.sqrt(2)) if se else 1.0
+    ab = key.split('|')[-2:] if key else [None, None]
+    return {'desc': desc, 'why': why, 'ab': ab, 'n': n, 'players': len(M), 'pA': round(pA, 4), 'pB': round(pB, 4), 'pAB': round(pAB, 4),
+            'pBgivenA': round(pAB / pA, 4), 'pAgivenB': round(pAB / pB, 4), 'lift': round(pAB / pA / pB, 3), 'rho': round(rho, 3),
+            'lo': round(lo, 3) if lo is not None else None, 'hi': round(hi, 3) if hi is not None else None, 'se': round(se, 4) if se else None, 'p': pv, 'reliable': False}
 
 
 def logs(games, keyf=lambda p: (p['team'], p['name'])):
@@ -356,7 +378,7 @@ def football(games, sport, pos_of):
          'QB|ptd|pyd': ('QB 2+ passing TDs + passing yards', 'a big passing day'), 'QB|pyd|win': ('QB passing yards + team win', 'trailing teams throw more'),
          'QB|pyd|over': ('QB passing yards + game over', 'shoot-outs'), 'tm|pyd|recyd': ("QB passing yards + his top receiver's yards", 'the yards go to someone'),
          'tm|pyd|ryd': ("QB passing yards + his lead rusher's yards", 'pass-heavy days leave fewer carries'), 'tm|recyd|ryd': ("Top receiver's yards + lead rusher's yards", 'one ball to share')}
-    pairs = {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, ''))))}
+    pairs = {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, '')), key=f'{sport}|{k}'))}
     return pairs, lines, tmed
 
 
@@ -411,12 +433,12 @@ def basketball(games):
                     R['tm|pts|reb'].append((bg[0], ps, row[bg[0]].get('reb', 0) > lines[bg[0]]['reb']))
                 if s2 and s2[0] in row:
                     R['tm|pts|pts'].append((s2[0], ps, row[s2[0]].get('pts', 0) > lines[s2[0]]['pts']))
-    W = {'pts|reb': ('Points + rebounds, same player', 'minutes drive both'), 'ast|pts': ('Points + assists, same player', 'minutes and the ball'),
-         'ast|reb': ('Rebounds + assists, same player', 'minutes'), 'pts|win': ('Points + team win', 'stars carry wins'), 'reb|win': ('Rebounds + team win', ''),
+    W = {'pts|reb': ('Points + rebounds, same player', 'minutes drive both'), 'ast|pts': ('Assists + points, same player', 'minutes and the ball'),
+         'ast|reb': ('Assists + rebounds, same player', 'minutes'), 'pts|win': ('Points + team win', 'stars carry wins'), 'reb|win': ('Rebounds + team win', ''),
          'ast|win': ('Assists + team win', 'made shots need passers'), 'pts|over': ('Points + game over', 'pace'),
          'tm|ast|pts': ("Playmaker's assists + top scorer's points", 'his assists feed the scorer'), 'tm|pts|reb': ("Top scorer's points + big's rebounds", 'misses become rebounds'),
          'tm|pts|pts': ('Two top scorers, same team', 'they share the shots')}
-    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, ''))))}
+    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, '')), key=f'nba|{k}'))}
 
 
 def hockey(games):
@@ -454,7 +476,7 @@ def hockey(games):
     W = {'goal|sog': ('Goal + shots on goal, same player', 'goals come from shots'), 'point|sog': ('Point + shots on goal, same player', 'an active night'),
          'goal|win': ('Goal + team win', 'winners score'), 'point|win': ('Point + team win', 'winners score'), 'sog|win': ('Shots on goal + team win', ''),
          'tm|point|point': ('Two top scorers, same team', 'linemates set each other up')}
-    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, ''))))}
+    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, '')), key=f'nhl|{k}'))}
 
 
 def soccer(games):
@@ -472,7 +494,99 @@ def soccer(games):
             R['sot|win'].append((k, p.get('sot', 0) >= 1, tm['win']))
     W = {'goal|sot': ('Goal + shot on target, same player', 'nearly every goal is a shot on target'), 'goal|win': ('Goal + team win', 'his goal often wins it'),
          'sot|win': ('Shot on target + team win', '')}
-    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, ''))))}
+    return {k: m for k, v in R.items() if (m := measure(v, *W.get(k, (k, '')), key=f'soccer|{k}'))}
+
+
+YACT = {'ryd': lambda p: True, 'recyd': lambda p: True, 'pyd': lambda p: p.get('pa', 0) >= 10}
+YPOS = {'ryd': ('RB', 'QB'), 'recyd': ('WR', 'TE', 'RB'), 'pyd': ('QB',)}
+YLAD = {'ryd': [20, 30, 40, 50, 60, 70, 80, 90, 100, 120], 'recyd': [20, 30, 40, 50, 60, 70, 80, 90, 100], 'pyd': [150, 175, 200, 225, 250, 275, 300, 325]}
+
+
+def pav(x, y):
+    """isotonic (non-decreasing) fit of y on x, x sorted: pool adjacent violators"""
+    blocks = [[yi, 1.0] for yi in y]
+    out = []
+    for b in blocks:
+        out.append(b)
+        while len(out) > 1 and out[-2][0] / out[-2][1] > out[-1][0] / out[-1][1]:
+            a = out.pop()
+            out[-1][0] += a[0]
+            out[-1][1] += a[1]
+    fit = []
+    for v, w in out:
+        fit += [v / w] * int(w)
+    return np.array(fit)
+
+
+def yards_calib(G, lines, sd, sport):
+    """walk forward through the season: price each player's lines the way the app does (earlier games only: average of every
+    game played, 30% weight on the last 4, spread = max(6, half the model + half his own)), see what happened, and fit an
+    isotonic map priced -> actual. Checked by splitting players in two (fit on one half, test on the other)."""
+    L = logs(G)
+    out, check = {}, {}
+    for st in ('ryd', 'recyd', 'pyd'):
+        S = sd.get(st)
+        if not S:
+            continue
+        X, Y, who = [], [], []
+        for k, gl in L.items():
+            s0 = lines.get(k)
+            if not s0 or s0['pos'] not in YPOS[st]:
+                continue
+            gl = sorted(gl, key=lambda x: x[0]['date'])
+            vals = [(p.get(st, 0), YACT[st](p)) for _, p in gl]
+            for i in range(3, len(vals)):
+                prev = [v for v, ok in vals[:i] if ok]
+                if len(prev) < 3 or not vals[i][1]:
+                    continue
+                avg = float(np.mean(prev))
+                if avg < (120 if st == 'pyd' else 20):
+                    continue
+                a = .7 * avg + .3 * float(np.mean(prev[-4:]))
+                m = S['a'] + S['b'] * avg
+                own = float(np.std(prev, ddof=1)) if len(prev) >= 5 else m
+                sdv = max(6.0, .5 * m + .5 * own)
+                for t in YLAD[st]:
+                    q = 1 - Phi((t - .5 - a) / sdv)
+                    if .03 <= q <= .985:
+                        X.append(q)
+                        Y.append(1.0 if vals[i][0] >= t else 0.0)
+                        who.append(k)
+        if len(X) < 400:
+            continue
+        X, Y = np.array(X), np.array(Y)
+        # an isotonic map priced -> actual, binned (20 bins; 6 when few players back it), and shrunk toward "no correction"
+        # when fewer than 80 players back it (NFL quarterbacks): a small sample can't move every price on its own
+        def iso(x, y, nb):
+            o = np.argsort(x)
+            xs, fit = x[o], pav(x[o], y[o])
+            qs = np.quantile(xs, np.linspace(0, 1, nb + 1))
+            kn = []
+            for lo_, hi_ in zip(qs[:-1], qs[1:]):
+                sel = (xs >= lo_) & (xs <= hi_)
+                if sel.sum():
+                    kn.append([float(xs[sel].mean()), float(fit[sel].mean())])
+            for j in range(1, len(kn)):
+                kn[j][1] = max(kn[j][1], kn[j - 1][1])
+            return kn
+        npl = len(set(who))
+        nb, w = (20 if npl >= 100 else 6), min(1.0, npl / 80)
+        shrink = lambda kn: [[round(x_, 4), round(w * y_ + (1 - w) * x_, 4)] for x_, y_ in kn]
+        out[st] = {'knots': shrink(iso(X, Y, nb)), 'players': npl, 'n': int(len(X)), 'weight': round(w, 2)}
+        # check: fit on half the players, test on the other half
+        ks = sorted({w_ for w_ in who})
+        half = {w_ for w_ in ks if int(hashlib.md5(repr(w_).encode()).hexdigest(), 16) % 2 == 0}
+        A_ = np.array([w_ in half for w_ in who])
+        ka = shrink(iso(X[A_], Y[A_], nb))
+        mp = lambda q: float(np.interp(q, [0] + [k_[0] for k_ in ka] + [1], [0] + [k_[1] for k_ in ka] + [1]))
+        rows = []
+        for lo_, hi_ in ((.5, .6), (.6, .7), (.7, .8), (.8, .9), (.9, .985)):
+            sel = (~A_) & (X >= lo_) & (X < hi_)
+            if sel.sum() >= 30:
+                rows.append({'lo': lo_, 'hi': hi_, 'n': int(sel.sum()), 'priced': round(float(X[sel].mean()), 3), 'actual': round(float(Y[sel].mean()), 3),
+                             'calibrated': round(float(np.mean([mp(q) for q in X[sel]])), 3)})
+        check[st] = rows
+    return out, check
 
 
 def sd_model(lines_games, stat, active):
@@ -514,17 +628,17 @@ for sp in SPORTS:
         continue
     if sp in ('nfl', 'ncaaf'):
         if sp == 'nfl':
-            pos = nfl_positions(G)
-            nfl_games, nfl_pos = G, pos
-            pos_of = lambda k, ps: (lambda q: q if q in ('QB', 'RB', 'WR', 'TE') else ('RB' if q == 'FB' else None))(pos.get(nk(k[1])))
+            posf = nfl_positions(G)
+            nfl_games, nfl_pos = G, posf
+            pos_of = lambda k, ps: (lambda q: q if q in ('QB', 'RB', 'WR', 'TE') else ('RB' if q == 'FB' else None))(posf(k[0], k[1]))
         else:
             pos_of = lambda k, ps: guess_pos(ps)
         pairs, lines, tmed = football(G, sp, pos_of)
         L = logs(G)
-        sd = {'ryd': sd_model([gl for k, gl in L.items() if (lines.get(k) or {}).get('pos') == 'RB'], 'ryd', lambda p: p.get('ra', 0) > 0),
-              'recyd': sd_model([gl for k, gl in L.items() if (lines.get(k) or {}).get('pos') in ('WR', 'TE', 'RB')], 'recyd', lambda p: p.get('tgt', 0) > 0 or p.get('rec', 0) > 0),
-              'pyd': sd_model([gl for k, gl in L.items() if (lines.get(k) or {}).get('pos') == 'QB'], 'pyd', lambda p: p.get('pa', 0) >= 10)}
-        out['sports'][sp] = {'games': len(G), 'playerGames': sum(len(g['players']) for g in G), 'totalMedian': tmed, 'pairs': pairs, 'sd': sd}
+        sd = {st: sd_model([gl for k, gl in L.items() if (lines.get(k) or {}).get('pos') in YPOS[st]], st, YACT[st]) for st in ('ryd', 'recyd', 'pyd')}
+        sd = {k: v for k, v in sd.items() if v}
+        calib, ccheck = yards_calib(G, lines, sd, sp)
+        out['sports'][sp] = {'games': len(G), 'playerGames': sum(len(g['players']) for g in G), 'totalMedian': tmed, 'pairs': pairs, 'sd': sd, 'calib': calib, 'calibCheck': ccheck}
         # players on teams in the feed's upcoming games
         up = [g for g in feed_games if g.get('sport') == sp and g.get('status') != 'closed' and datetime.fromisoformat(g['start'].replace('Z', '+00:00')) <= NOW + timedelta(days=8)]
         # the feed's teams -> ESPN's abbreviations, by abbreviation or by name (the feed's 'LA' is ESPN's 'LAR', and so on)
@@ -569,6 +683,19 @@ for sp in SPORTS:
         out['sports'][sp] = {'games': len(G), 'pairs': soccer(G)}
 for sp, v in old.get('sports', {}).items():
     out['sports'].setdefault(sp, v)
+# Holm's correction across every pair measured in this run: a link is "reliable" only if it survives it, has 150+
+# player-games and is at least 0.05 in size
+allp = sorted([(m['p'], sp, k) for sp in SPORTS if sp in out['sports'] for k, m in out['sports'][sp]['pairs'].items() if 'p' in m])
+run, alive = 0.0, True
+for i, (pv, sp, k) in enumerate(allp):
+    run = max(run, min(1.0, pv * (len(allp) - i)))
+    m = out['sports'][sp]['pairs'][k]
+    m['pHolm'] = round(run, 5)
+    alive = alive and run < 0.05
+    m['reliable'] = bool(alive and m['n'] >= 150 and abs(m['rho']) >= 0.05)
+    m['p'] = round(m['p'], 6)
+out['method'] = ('each leg lands when the player beats his own median that game (touchdown / goal: scores); joint rate within players; '
+                 'normal-copula correlation; bootstrap over players; reliable when it survives Holm across all pairs, n >= 150 and |link| >= 0.05')
 # firsttd.json: this season's rushing / receiving touchdowns per team and player, for every NFL team in the feed
 if 'nfl' in SPORTS and 'nfl_games' in globals():
     try:
@@ -601,7 +728,7 @@ if 'nfl' in SPORTS and 'nfl_games' in globals():
                 x['rush'] += int(p.get('rtd', 0))
                 x['rec'] += int(p.get('ctd', 0))
                 x['touch'] += p.get('ra', 0) + p.get('tgt', 0)
-        pl = [{'name': n, 'pos': nfl_pos.get(nk(n)), 'gp': x['gp'], 'rush': x['rush'], 'rec': x['rec']} for n, x in P.items() if x['rush'] + x['rec'] > 0 or x['touch'] >= 15]
+        pl = [{'name': n, 'pos': nfl_pos(ea, n), 'gp': x['gp'], 'rush': x['rush'], 'rec': x['rec']} for n, x in P.items() if x['rush'] + x['rec'] > 0 or x['touch'] >= 15]
         pl.sort(key=lambda q: -(q['rush'] + q['rec']))
         teams[fa] = {'gp': len(gl), 'rush': sum(q['rush'] for q in pl), 'rec': sum(q['rec'] for q in pl), 'players': pl}
     if teams:
@@ -620,7 +747,9 @@ if players_out:
 for sp, v in out['sports'].items():
     print(f"== {sp}: {v['games']} games")
     for k, m in sorted(v['pairs'].items(), key=lambda x: -abs(x[1]['rho'])):
-        print(f"   {k:16} n {m['n']:5} rho {m['rho']:+.2f} [{m['lo']}, {m['hi']}] lift {m['lift']}  P(B|A) {m['pBgivenA']} vs {m['pB']}  {'RELIABLE' if m['reliable'] else ''}")
+        print(f"   {k:16} n {m['n']:5} rho {m['rho']:+.2f} [{m['lo']}, {m['hi']}] lift {m['lift']}  P(B|A) {m['pBgivenA']} vs {m['pB']}  holm {m.get('pHolm')}  {'RELIABLE' if m['reliable'] else ''}")
     if v.get('sd'):
         print('   sd model:', v['sd'])
+    for st, rows in (v.get('calibCheck') or {}).items():
+        print(f'   yards calibration {st} (held-out players):', ', '.join(f"{r['priced']:.2f}->{r['actual']:.2f} now {r['calibrated']:.2f} (n {r['n']})" for r in rows))
 print(f'wrote {OUT}' + (f' and {PLAYERS} ({sum(len(t["players"]) for t in players_out)} players on {len(players_out)} teams)' if players_out else ''))

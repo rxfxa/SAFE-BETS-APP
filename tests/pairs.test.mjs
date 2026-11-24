@@ -38,7 +38,7 @@ await page.route('**/recs.json', r => r.fulfill({ status: 404, body: 'nf' }));
 try {
   // ---------- the research file ----------
   const all = Object.entries(PJ.sports).flatMap(([sp, S]) => Object.entries(S.pairs).map(([k, r]) => ({ sp, k, ...r })));
-  check('research: every pair has n, a correlation with its range, lift, and "reliable" only when the range excludes 0 with 150+ games', all.length >= 30 && all.every(r => r.n >= 60 && r.lo <= r.rho + 1e-9 && r.rho <= r.hi + 1e-9 && r.reliable === ((r.lo > 0 || r.hi < 0) && r.n >= 150)), `${all.length} pairs`);
+  check('research: every pair has n, a correlation with its range, lift, and "reliable" only when it survives Holm with 150+ games and |link| >= 0.05', all.length >= 30 && all.every(r => r.n >= 60 && (r.lo == null || (r.lo <= r.rho + 1e-9 && r.rho <= r.hi + 1e-9)) && r.reliable === (r.pHolm != null && r.pHolm < .05 && r.n >= 150 && Math.abs(r.rho) >= .05)), `${all.length} pairs`);
   const td = PJ.sports.nfl.pairs['RB|td|ryd'];
   check('research: an NFL back\'s touchdown and rushing yards go together (reliable, positive)', td && td.reliable && td.rho > .2 && td.pBgivenA > td.pB, JSON.stringify(td && { rho: td.rho, pBA: td.pBgivenA, pB: td.pB, n: td.n }));
   check('research: covers NFL, college, NBA, NHL and soccer, with the yards spread model', ['nfl', 'ncaaf', 'nba', 'nhl', 'soccer'].every(s => PJ.sports[s] && Object.keys(PJ.sports[s].pairs).length) && PJ.sports.nfl.sd && PJ.sports.nfl.sd.ryd && PJ.sports.nfl.sd.ryd.b > 0);
@@ -81,6 +81,26 @@ try {
   check('unmeasured / unreliable links (two NBA teammates\' points) stay independent', !E.nbaInd || (!E.nbaInd.rho && Math.abs(E.nbaInd.p - E.nbaInd.indep) < 1e-12), JSON.stringify(E.nbaInd));
   check('three linked legs: a seeded simulation above the product; no links = the exact product', E.three > .6 * .7 * .5 && Math.abs(E.indep3 - .21) < 1e-12, JSON.stringify({ three: E.three, indep3: E.indep3 }));
 
+  // ---------- the review fixes: card price = 500,000-run draw with a team result; yards calibrated; TD swaps ----------
+  const R2 = await page.evaluate(() => { const F = __fm2, D = F.DATA;
+    const g = D.games.find(x => x.sport === 'nfl' && x.status !== 'closed' && D.players.some(p => p.gid === x.id && p.stat === 'ryd' && p.pos === 'RB'));
+    const rb = D.players.filter(p => p.gid === g.id && p.stat === 'ryd' && p.pos === 'RB').sort((a, b) => b.avg - a.avg)[0];
+    const own = rb.team === g.home.abbr ? 'H' : 'A', opp = own === 'H' ? 'A' : 'H', B = { gid: g.id, key: `P:${rb.id}:40` };
+    const res = {}; for (const [nm, k] of [['own', own], ['opp', opp], ['under', 'U99.5']]) { const L = [B, { gid: g.id, key: k }], c = F.parlayProb(L), sm = F.simJoint(L, 200000); res[nm] = { card: c.p, indep: c.indep, sim: sm.rate, lo: sm.lo, hi: sm.hi }; }
+    const C = D.pairs && D.pairs.sports.nfl.calib;
+    // a TD leg's swaps: other anytime TDs (or the game's yards legs), never game markets
+    const g2 = D.games.find(x => x.sport === 'nfl' && new Date(x.start) > Date.now() && D.players.some(p => p.gid === x.id && p.stat === 'ryd' && p.pos === 'RB'));
+    { const r2 = D.players.filter(p => p.gid === g2.id && p.stat === 'ryd' && p.pos === 'RB').sort((a, b) => b.avg - a.avg)[0]; if (r2) { var rbT = r2, gT = g2; } }
+    const slug = rbT.name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/ /g, '-');
+    const td = { gid: gT.id, key: `TD:A:${rbT.team}:${slug}`, label: 'td', p: SB.p1(gT, `TD:A:${rbT.team}:${slug}`) }, ownT = rbT.team === gT.home.abbr ? 'H' : 'A';
+    const sw = F.subCands([td, { gid: gT.id, key: ownT, label: 'win', p: SB.p1(gT, ownT) }], 0, 'x-test');
+    return { res, calib: !!(C && C.ryd && C.ryd.knots && C.ryd.knots.length >= 2), sw: sw.map(x => x.key) };
+  });
+  const ok = x => x.card >= x.lo - .004 && x.card <= x.hi + .004;
+  check('player + his own team win / the other team win: the card price matches the 500,000-run draw (the link\'s sign is right in both)', ok(R2.res.own) && ok(R2.res.opp) && R2.res.own.card > R2.res.own.indep && R2.res.opp.card < R2.res.opp.indep, JSON.stringify(R2.res));
+  check('yards chances are recalibrated on this season\'s results (calibration knots in pairs.json)', R2.calib);
+  check('an anytime TD swaps for other anytime TDs or yards legs (3+), never game markets', R2.sw.length >= 3 && R2.sw.every(k => /^TD:A:|^P:/.test(k)), JSON.stringify(R2.sw));
+
   // ---------- builders ----------
   const SG = await page.evaluate(() => { const F = __fm2, D = F.DATA, out = [];
     for (const g of D.games.filter(x => (x.sport === 'nfl' || x.sport === 'nba') && x.status !== 'closed' && Date.parse(x.start) > Date.now()).slice(0, 8)) {
@@ -98,7 +118,7 @@ try {
     const legs = [{ gid: g.id, key: `P:${wr.id}:3`, label: `${wr.name} 3+ receptions`, p: SB.p1(g, `P:${wr.id}:3`) }, { gid: g.id, key: `P:${other.id}:20`, label: other.name, p: SB.p1(g, `P:${other.id}:20`) }];
     const C = F.subCands(legs, 1, 'test-pairs');
     return { name: wr.name, whys: C.map(c => (c.why || []).join(' · ')) }; });
-  check('swap reasons say when an option helps (or works against) a leg already on the card, from the research', SW.whys.some(w => /helps .+: .+link \+0\.\d\d over [\d,]+ games this season/.test(w)), JSON.stringify(SW.whys.slice(0, 4)));
+  check('swap reasons say when an option helps (or works against) a leg already on the card, from the research', SW.whys.some(w => /helps .+: .+link \+0\.\d\d over [\d,]+ (player-|team-)?games this season/.test(w)), JSON.stringify(SW.whys.slice(0, 4)));
 
   // ---------- the section ----------
   await page.evaluate(() => SB.goTab('fantasy'));

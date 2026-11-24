@@ -640,7 +640,10 @@ function sim(g,n){ // seeded, lazy, cached: margin + total for 100,000 games (or
     const k=Math.sqrt(-2*Math.log(r2)/r2);tt[i]=m.T+m.tsd*y*k;
     if(cdf){const u=R();let lo=0,hi=cdf.length-1;while(lo<hi){const md=(lo+hi)>>1;if(cdf[md]<u)lo=md+1;else hi=md;}mg[i]=lo-m.kmax;} // integer margin
     else mg[i]=m.mu+m.sd*x*k;}
-  const s={N,mg,tt,kind:'margin',seed,sig,bm:{}};if(!n){SIMC.set(sig,s);g._s=s;}return s;
+  // the draws' own normal scores come from the model that drew them: the total's normal, the margin's normal or its
+  // integer distribution (mid-rank of each margin), so the links need no ranking of the 100,000 games
+  let ztab=null;if(cdf){ztab=new Float64Array(cdf.length);let pv=0;for(let i=0;i<cdf.length;i++){ztab[i]=invNorm(clamp(pv+(cdf[i]-pv)/2,1e-6,1-1e-6));pv=cdf[i];}}
+  const s={N,mg,tt,kind:'margin',seed,sig,bm:{},T:m.T,tsd:m.tsd,mu:m.mu,sd:m.sd,kmax:m.kmax,ztab};if(!n){SIMC.set(sig,s);g._s=s;}return s;
 }
 // ---------------- markets ----------------
 // each market: {group, key, label, desc, f, anch?, nopool?}. Goals sports: f(h,a) on the FINAL score.
@@ -747,13 +750,18 @@ const STATN={rec:'receptions',pts:'points',ast:'assists',reb:'rebounds',hpts:'po
 const LADDER={rec:[2,3,4,5,6,7,8],pts:[10,15,20,25,30],ast:[2,3,4,5,6,7,8,9,10],reb:[3,4,5,6,7,8,9,10,12],hpts:[1,2],sog:[2,3,4],sot:[1,2],
   ryd:[20,30,40,50,60,70,80,90,100,120],recyd:[20,30,40,50,60,70,80,90,100],pyd:[150,175,200,225,250,275,300,325]};
 const YARDS={ryd:1,recyd:1,pyd:1};
+// yards chances are recalibrated by what happened: tools/leg_pairs.py walks through the season pricing each player's lines
+// from his earlier games only, and fits priced -> actual (pairs.json calib; yards have a long right tail, so a normal
+// around the average overrates lines near it). Piecewise-linear between the knots.
+function calibY(q,sp,st){const C=((((DATA&&DATA.pairs)||{}).sports||{})[sp]||{}).calib,K=C&&C[st]&&C[st].knots;if(!K||K.length<2)return q;
+  const X=[0,...K.map(k=>k[0]),1],Y=[0,...K.map(k=>k[1]),1];let i=1;while(i<X.length-1&&q>X[i])i++;const t=(q-X[i-1])/Math.max(1e-9,X[i]-X[i-1]);return clamp(Y[i-1]+t*(Y[i]-Y[i-1]),0,1);}
 function erf(x){const t=1/(1+.3275911*Math.abs(x));const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
 const Phi=z=>.5*(1+erf(z/Math.SQRT2));
 function playerPbase(pl,a,thr){ // chance of thr+ given a mean a
   if(pl.stat==='pts'){const sd=.28*a+3;return 1-Phi((thr-.5-a)/sd);}
   if(pl.stat==='ast'||pl.stat==='reb'){const sd=Math.sqrt(a)*1.25+.5;return 1-Phi((thr-.5-a)/sd);}
   // yards: normal, with the player's own game-to-game spread shrunk toward the spread model measured on this season's box scores
-  if(YARDS[pl.stat]){const sd=pl.sd||(.45*a+8);return 1-Phi((thr-.5-a)/sd);}
+  if(YARDS[pl.stat]){const sd=pl.sd||(.45*a+8);return calibY(1-Phi((thr-.5-a)/sd),pl.sport,pl.stat);}
   let c=0;for(let k=0;k<thr;k++)c+=pois(a,k);return 1-c;}
 // Reading the game around a player, not just his average:
 //  - recent form: his last 5 games (playerform.json, researched each morning) weigh 30% against the season average
@@ -815,7 +823,7 @@ function legMeta(L,g){if(!L)return null;g=g||gameById(L.gid);if(LMD!==DATA){LMD=
   if(isP(k)){const i=pLegInfo(k);if(i){const pl=i.pl;m={who:pl.team+'|'+nameKey(pl.name),name:pl.name,team:pl.team,stat:PSTAT[pl.stat]||pl.stat,pos:pl.pos||(DATA.nflpos&&DATA.nflpos.get(pl.team+'|'+nameKey(pl.name)))||null,sport:g?g.sport:null,flip:!!i.under};}}
   else if(g&&/^TD:A:/.test(k)){const [,,team,slug]=k.split(':'),x=DATA.nflByTd&&DATA.nflByTd.get(team+'|'+slug);m={who:team+'|'+(x?nameKey(x.name):slug),name:x?x.name:slug,team,stat:'td',pos:x?x.pos:null,sport:g.sport,flip:false};}
   else if(g&&/^G:[^:]+$/.test(k)&&window.__soccer&&__soccer.model){try{const R=__soccer.model(g.id),x=R&&R.byId&&R.byId.get(k.slice(2));if(x)m={who:(x.abbr||x.team||'')+'|'+nameKey(x.name),name:x.name,team:x.abbr||x.team,stat:'goal',sport:g.sport,flip:false};}catch(e){}}
-  else if(g&&(k==='H'||k==='A'))m={stat:'win',team:(k==='H'?g.home:g.away).abbr,sport:g.sport,game:true};
+  else if(g&&(k==='H'||k==='A'||/^[HA](\d+(\.\d+)?|\+\d+(\.\d+)?|WN)$/.test(k)||k==='DC1X'||k==='DCX2'))m={stat:'win',team:(k[0]==='H'||k==='DC1X'?g.home:g.away).abbr,sport:g.sport,game:true};
   else if(g){const o=/^([OU])(\d+(?:\.\d+)?)$/.exec(k);if(o)m={stat:'over',sport:g.sport,game:true,flip:o[1]==='U'};}
   LMC.set(ck,m);return m;}
 // each team's roles in one game, from its players' averages: NBA scorer / second scorer / playmaker / big; NFL QB, top
@@ -863,25 +871,81 @@ function jointP(ps,R){const d=ps.length;if(!d)return 1;if(ps.some(p=>!(p>0)))ret
     for(let n=0;n<N;n++){for(let i=0;i<k;i++)e[i]=gauss(rnd);let ok=true;for(let i=0;i<k&&ok;i++){let x=0;for(let j=0;j<=i;j++)x+=L[i][j]*e[j];if(!(x<z[i]))ok=false;}if(ok)hit++;}
     const p=hit/N;if(JPC.size>4000)JPC.clear();JPC.set(key,p);out*=p;}
   return clamp(out,0,1);}
-// one game's legs together: player legs and anytime TDs as linked units; the game's own markets (and module legs such as
-// soccer scorers) priced together by the game's model as one block, linked to each unit by its strongest measured link
-function gameJoint(g,units,blk){
-  const pu=units.map(L=>isP(L.key)?((pLegInfo(L.key)||{}).p||0):(g?p1(g,L.key):0));let pb=null;
-  if(blk.length){if(!g)return 0;pb=probOf(g,blk);}
-  if(pb===0||pu.some(x=>!(x>0)))return 0;
-  const d=units.length+(pb!=null?1:0);if(!g||d<2)return pu.reduce((a,b)=>a*b,1)*(pb==null?1:pb);
-  const M=units.map(L=>legMeta(L,g)),BM=blk.map(k=>legMeta({gid:g.id,key:k},g)).filter(Boolean),R=[];
-  for(let i=0;i<d;i++){R.push(new Array(d).fill(0));R[i][i]=1;}
-  for(let i=0;i<units.length;i++){for(let j=i+1;j<units.length;j++){const r=legRho(M[i],M[j],g.id);if(r)R[i][j]=R[j][i]=r.r;}
-    if(pb!=null){let best=0;for(const b of BM){const r=legRho(M[i],b,g.id);if(r&&Math.abs(r.r)>Math.abs(best))best=r.r;}R[i][d-1]=R[d-1][i]=best;}}
-  return jointP(pb!=null?[...pu,pb]:pu,R);}
 const isUnit=k=>isP(k)||/^TD:A:/.test(k);
+// a unit's threshold: player legs split by blowout (margin sports), anytime TDs one threshold
+function unitZ(L,g){if(isP(L.key)){const inf=pLegInfo(L.key);if(!inf)return {zn:-9,zb:-9,B:1e9};const thr=inf.under?Math.floor(inf.thr)+1:inf.thr,P=playerParts(inf.pl,thr,inf.under),tn=t=>invNorm(clamp(t,1e-6,1-1e-6));return {zn:tn(P.pn),zb:tn(P.pbw),B:BLOW[g&&g.sport]||1e9};}
+  const z=invNorm(clamp(g?p1(g,L.key):0,1e-6,1-1e-6));return {zn:z,zb:z,B:1e9};}
+// the links of a game's units: [home margin, game total, units...]. A unit lands when its latent is LOW, while the margin /
+// total scores are HIGH for a home win / an over, so the result links enter negated.
+function unitLinks(g,units){const k=units.length,M=units.map(L=>legMeta(L,g)),C=[];for(let a=0;a<k+2;a++){C.push(new Array(k+2).fill(0));C[a][a]=1;}
+  const hw=legMeta({gid:g.id,key:'H'},g),ov={stat:'over',sport:g.sport,game:true};let linked=false;
+  for(let a=0;a<k;a++){const r1=legRho(M[a],hw,g.id),r2=legRho(M[a],ov,g.id);
+    if(r1){C[0][a+2]=C[a+2][0]=-r1.r;linked=true;}if(r2){C[1][a+2]=C[a+2][1]=-r2.r;linked=true;}
+    for(let b=a+1;b<k;b++){const r=legRho(M[a],M[b],g.id);if(r){C[a+2][b+2]=C[b+2][a+2]=r.r;linked=true;}}}
+  return {C,linked};}
+// the game's own model: its 100,000 simulations (margin sports) or exact score matrix (soccer / NHL), as normal scores
+function hasModel(g){const m=g&&priced(g)?fit(g):null;return !!m&&(m.kind==='margin'||m.kind==='goals');}
+function gameModel(g){const m=g&&priced(g)?fit(g):null;if(!m)return null;
+  if(m.kind==='margin'){const s=sim(g);if(!s)return null;return {kind:'margin',s,get zm(){return simZm(s);},get zt(){return simZt(s);},N:s.N};}  // normal scores ranked only when a link needs them
+  if(m.kind==='goals'){const O=outcomes(g);if(!O)return null;const Z=goalsZ(O);return {kind:'goals',O,zm:Z.zm,zt:Z.zt,N:O.n};}
+  return null;}
+// the game's markets settled on each simulated game / exact score (module legs as probOf treats them)
+function blockW(g,G,blk){let mult=1;const std=[],cust=new Map();
+  for(const k of blk){const lt=legType(k);if(lt){if(!cust.has(lt))cust.set(lt,[]);cust.get(lt).push(k);continue;}if(String(k).includes(':'))return null;std.push(k);}
+  if(G.kind==='margin'){for(const [lt,ks] of cust)for(const k of ks)mult*=num(()=>lt.prob(g,k));
+    const w=new Uint8Array(G.N).fill(1);for(const k of std){const B=simBits(g,k);if(!B)return null;for(let i=0;i<G.N;i++)if(!((B[i>>>5]>>>(i&31))&1))w[i]=0;}return {w,mult};}
+  const O=G.O,w=Float64Array.from(O.p);
+  for(const k of std){const M=stdMask(g,k);if(!M)return null;for(let i=0;i<O.n;i++)if(!M[i])w[i]=0;}
+  const ap=f=>{for(let i=0;i<O.n;i++)if(w[i]>0){const c=+f(O.h[i],O.a[i]);w[i]*=isFinite(c)?clamp(c,0,1):0;}};
+  for(const [lt,ks] of cust){let f=null;try{if(lt.condMany)f=lt.condMany(g,ks);}catch(e){}
+    if(typeof f==='function'){ap(f);continue;}
+    if(lt.cond){for(const k of ks){let fk=null;try{fk=lt.cond(g,k);}catch(e){}if(typeof fk==='function')ap(fk);else mult*=num(()=>lt.prob(g,k));}continue;}
+    for(const k of ks)mult*=num(()=>lt.prob(g,k));}
+  return {w,mult};}
+// one game's legs together. With no measured link among them: the game's markets jointly (probOf) times the player legs,
+// as before. With links: conditioned on the game's own model, the way the 500,000-run simulation draws it - the game's
+// markets are settled on each simulated game (or exact score), and each player leg / anytime TD is a normal linked to that
+// game's margin and total and to the other legs. One linked leg exactly (an average over the simulations); more by a
+// seeded 20,000-draw simulation. Games without a model: the legs' own links only.
+const GJC=new Map();let GJD=null;
+function gameJoint(g,units,blk){
+  const pu=units.map(L=>isP(L.key)?((pLegInfo(L.key)||{}).p||0):(g?p1(g,L.key):0));
+  if(pu.some(x=>!(x>0)))return 0;
+  if(!units.length)return blk.length?(g?probOf(g,blk):0):1;
+  if(!g)return blk.length?0:pu.reduce((a,b)=>a*b,1);
+  const {C,linked}=unitLinks(g,units);
+  if(!linked)return pu.reduce((a,b)=>a*b,1)*(blk.length?probOf(g,blk):1);
+  const Z0=units.map(L=>unitZ(L,g));
+  if(!blk.length&&Z0.every(z=>z.zn===z.zb))return jointP(pu,C.slice(2).map(r=>r.slice(2)));  // nothing settles on the game and no blowout switch: the game's margin / total integrate out (normal scores), leaving the units' own links
+  const G=gameModel(g);
+  if(!G)return jointP(pu,C.slice(2).map(r=>r.slice(2)))*(blk.length?probOf(g,blk):1);
+  if(GJD!==DATA){GJD=DATA;GJC.clear();}
+  const ck=g.id+'|'+units.map(L=>L.key).join(',')+'|'+blk.join(',')+'|'+pu.map(x=>x.toFixed(6)).join(',');if(GJC.has(ck))return GJC.get(ck);
+  const W=blk.length?blockW(g,G,blk):null;if(blk.length&&!W)return 0;
+  const Z=Z0,k=units.length,L=cholPD(C),mg=G.kind==='margin'?G.s.mg:null;
+  const zthr=(a,j)=>mg&&Math.abs(mg[j])>=Z[a].B?Z[a].zb:Z[a].zn;
+  let p=0;
+  const usesM=C[0].some((v,i)=>i>1&&v!==0),usesT=C[1].some((v,i)=>i>1&&v!==0),ZM=usesM?G.zm:null,ZT=usesT?G.zt:null;  // (C[0][1] is 0: L[1][0] = 0)
+  const E0=j=>ZM?ZM[j]/L[0][0]:0,E1=j=>ZT?ZT[j]/L[1][1]:0;
+  if(k===1){const s1=L[2][2],a0=L[2][0],a1=L[2][1];
+    if(G.kind==='margin'){const n=Math.min(G.N,50000);let acc=0;for(let j=0;j<n;j++){if(W&&!W.w[j])continue;acc+=Phi((zthr(0,j)-a0*E0(j)-a1*E1(j))/s1);}p=acc/n;}
+    else{const w=W?W.w:G.O.p;for(let i=0;i<G.N;i++){if(!(w[i]>0))continue;p+=w[i]*Phi((Z[0].zn-a0*E0(i)-a1*E1(i))/s1);}}}
+  else{const rnd=mulberry32(hashStr(ck)),ND=20000,e=new Float64Array(k+2);let hit=0,pb=1,pick;
+    if(G.kind==='margin'){const n=G.N,J=[];for(let j=0;j<n;j++)if(!W||W.w[j])J.push(j);if(!J.length){GJC.set(ck,0);return 0;}pb=J.length/n;pick=()=>J[(rnd()*J.length)|0];}
+    else{const w=W?W.w:G.O.p,c=new Float64Array(G.N);let a=0;for(let i=0;i<G.N;i++){a+=w[i]>0?w[i]:0;c[i]=a;}if(!(a>0)){GJC.set(ck,0);return 0;}pb=a;
+      pick=()=>{const u=rnd()*a;let lo=0,hi=G.N-1;while(lo<hi){const md=(lo+hi)>>1;if(c[md]<u)lo=md+1;else hi=md;}return lo;};}
+    for(let d=0;d<ND;d++){const j=pick();e[0]=E0(j);e[1]=E1(j);for(let a=2;a<k+2;a++)e[a]=gauss(rnd);
+      let ok=true;for(let a=0;a<k&&ok;a++){const row=L[a+2];let x=0;for(let b=0;b<=a+2;b++)x+=row[b]*e[b];if(!(x<zthr(a,j)))ok=false;}if(ok)hit++;}
+    p=pb*hit/ND;}
+  p=clamp(p*(W?W.mult:1),0,1);if(GJC.size>3000)GJC.clear();GJC.set(ck,p);return p;}
 // parlay hit chance: each game's legs priced together (exact score matrix for soccer/NHL, 100,000 sims otherwise, and the
 // measured links between player legs, TDs and the game's result), separate games multiplied
 function parlayProb(legs){
   const by=new Map();let p=1,indep=1;
   for(const L of legs){if(!by.has(L.gid))by.set(L.gid,[]);by.get(L.gid).push(L);}
-  for(const [gid,Ls] of by){const g=gameById(gid),units=Ls.filter(L=>isUnit(L.key)),blk=Ls.filter(L=>!isUnit(L.key)).map(L=>L.key);
+  for(const [gid,Ls] of by){const g=gameById(gid),hasU=Ls.some(L=>isUnit(L.key));let nm;const noModel=()=>nm===undefined?(nm=!!g&&!hasModel(g)):nm;
+    const u=L=>isUnit(L.key)||(hasU&&!legType(L.key)&&!!(legMeta(L,g)||{}).game&&noModel());  // no game model (started / unpriced): a win / total leg joins the linked units
+    const units=Ls.filter(u),blk=Ls.filter(L=>!u(L)).map(L=>L.key);
     if(blk.length&&!g)return {p:0,indep:0};
     for(const L of units)indep*=isP(L.key)?((pLegInfo(L.key)||{}).p||0):(g?p1(g,L.key):0);
     for(const k of blk)indep*=p1(g,k);
@@ -1277,6 +1341,9 @@ function buildTicket(o){
           if(y.kind==='player'&&legs.some(z=>z.kind==='player'&&z.gid===y.gid&&z.team===y.team&&z.stat===y.stat))continue;
           if(legs.some(z=>{if(z.gid!==y.gid)return false;const q=legRho(legMeta(y),legMeta(z),y.gid);return !!q&&q.r<=-.15;}))continue;
           const a=parlayProb([...legs,y]).p;if(a>0&&(!best||a>best.a))best={y,a};}
+        // the partner must cost the card no more than the leg it would otherwise add next (from another game)
+        let alt=0;if(best&&!o.target&&!(o.gids&&o.gids.length===1))for(const sp2 of order){const z=bySport[sp2].find(y=>y.gid!==x.gid&&(perGame[y.gid]||0)<o.perGame&&(!y.who||(perWho[y.who]||0)<o.perPlayer));if(z&&z.p>alt)alt=z.p;}
+        if(best&&alt&&best.a<parlayProb(legs).p*alt*.999)best=null;
         if(best){const y=best.y,L2=bySport[y.sport];L2.splice(L2.indexOf(y),1);legs.push(y);perGame[y.gid]++;if(y.who)perWho[y.who]=(perWho[y.who]||0)+1;}}}
     if(!added)break;}
   const pr=parlayProb(legs);return {legs,p:pr.p,hours,n:o.n};
@@ -1540,6 +1607,10 @@ function subCands(legs,i,cardId){
       const lines=[...new Set([...(LADDER[pl.stat]||[]),...[-2,-1,1,2].map(d=>Math.max(1,Math.round(pl.avg)+d))])];let best=null;
       for(const t of lines){const p=playerP(pl,t);if(p<.05||p>.98)continue;if(!best||Math.abs(p-Lp)<Math.abs(best.p-Lp))best={gid:pl.gid,key:`P:${pl.id}:${t}`,label:`${pl.name} ${t}+ ${STATN[pl.stat]}`,p};}
       if(best)take(best);}
+  } else if(/^TD:A:/.test(L.key)){const [,,t0,s0]=String(L.key).split(':');
+    for(const g of games){if(g.sport!=='nfl'||!DATA.nflByTd)continue;
+      for(const [k,x] of DATA.nflByTd){const [team,slug]=k.split('|');if((team!==g.home.abbr&&team!==g.away.abbr)||(team===t0&&slug===s0))continue;
+        const key=`TD:A:${team}:${slug}`,p=p1(g,key);if(p>=.05)take({gid:g.id,key,label:`${x.name} (${team}) anytime TD`,p});}}
   } else if(!propsOnly){
     for(const g of games){if(!priced(g))continue;let best={};
       for(const m of marketsFor(g)){if(csOnly?!m.cs:(m.nopool||m.cs))continue;if(g.id===L.gid&&m.key===L.key)continue;
@@ -1552,6 +1623,9 @@ function subCands(legs,i,cardId){
     if(isP(L.key)){const [,pid,t0]=String(L.key).split(':'),pl=DATA.players.find(p=>p.id===pid);
       if(pl&&pl.status==='active'&&g0&&openG(g0))for(const t of new Set([...(LADDER[pl.stat]||[]),...[-2,-1,1,2].map(d=>Math.max(1,Math.round(pl.avg)+d))])){if(t===+t0)continue;const p=playerP(pl,t);if(p>=.05&&p<=.98)alt.push({gid:pl.gid,key:`P:${pl.id}:${t}`,label:`${pl.name} ${t}+ ${STATN[pl.stat]}`,p});}}
     else if(csOnly&&g0&&openG(g0)&&priced(g0)){for(const m of marketsFor(g0)){if(!m.cs||m.key===L.key||out.some(o=>o.gid===g0.id&&o.key===m.key))continue;const p=p1(g0,m.key);if(p>0)alt.push({gid:g0.id,key:m.key,label:`${m.label} (exact score)`,p});}}
+    // an anytime TD: the same game's yards legs (rushing / receiving), at the line nearest its chance
+    else if(/^TD:A:/.test(L.key)&&g0&&openG(g0)){for(const pl of DATA.players||[]){if(pl.gid!==g0.id||pl.status!=='active'||!YARDS[pl.stat]||pl.stat==='pyd')continue;let b=null;
+      for(const t of LADDER[pl.stat]||[]){const p=playerP(pl,t);if(p>=.05&&p<=.98&&(!b||Math.abs(p-Lp)<Math.abs(b.p-Lp)))b={gid:pl.gid,key:`P:${pl.id}:${t}`,label:`${pl.name} ${t}+ ${STATN[pl.stat]}`,p};}if(b)alt.push(b);}}
     // a game market: the same game's other lines (alternate spreads / totals), not only the best one per market
     else if(!isP(L.key)&&!legType(L.key)&&g0&&openG(g0)&&priced(g0)){for(const m of marketsFor(g0)){if(m.cs||m.nopool||m.key===L.key||out.some(o=>o.gid===g0.id&&o.key===m.key))continue;const p=p1(g0,m.key);if(p>0)alt.push({gid:g0.id,key:m.key,label:m.label,p});}}
     alt.sort((a,b)=>Math.abs(a.p-Lp)-Math.abs(b.p-Lp));
@@ -1566,14 +1640,14 @@ function subCands(legs,i,cardId){
         if(STAT_PREF[pl.stat]){why.push('points leg (preferred)');sc-=.02;}
         for(const o of others){if(!isP(o.key))continue;const oi=pLegInfo(o.key);if(!oi||oi.pl.team!==pl.team||oi.pl.gid!==pl.gid||oi.pl.stat===pl.stat)continue;
           if(!legRho(legMeta(x),legMeta(o),x.gid)){why.push(`doesn't compete with ${oi.pl.name} (${STATN[oi.pl.stat]})`);sc-=.01;}}
-        const c=g&&closeOf(g);if(c&&c.p>=.45){why.push(`close game (${pct(c.p)} within 8): starters play`);sc-=.015;}
-        const M=playerMeans(pl);if(M.c&&M.c.pb>=.25){why.push(`blowout risk ${pct(M.c.pb)}: may sit late`);sc+=.02;}
+        const c=!YARDS[pl.stat]&&g&&closeOf(g);if(c&&c.p>=.45){why.push(`close game (${pct(c.p)} within 8): starters play`);sc-=.015;}
+        const M=playerMeans(pl);if(!YARDS[pl.stat]&&M.c&&M.c.pb>=.25){why.push(`blowout risk ${pct(M.c.pb)}: may sit late`);sc+=.02;}
         const l4=last4Of(pl.team,pl.name),th=+x.key.split(':')[2];if(l4){const v=l4.rows.filter(r=>!r.dnp&&r[pl.stat]!=null).map(r=>r[pl.stat]);if(v.length){const h=v.filter(z=>z>=th).length;why.push(`cleared ${h}/${v.length} recent games`);sc-=.02*(h/v.length-.5);}}
         else if(M.rf)why.push(`last ${M.rf.last5.length}: ${M.rf.last5.join(', ')}`);}
     } else if(g){const Lg=gameById(L.gid);if(Lg&&Lg.comp===g.comp)why.push('same league');if(x.gid!==L.gid)why.push(`${g.away.abbr} @ ${g.home.abbr}`);}
     // what the research measured between this option and the card's other legs on the same game
     for(const o of others){if(o.gid!==x.gid)continue;const r=legRho(legMeta(x),legMeta(o),x.gid);if(!r||Math.abs(r.r)<.1)continue;
-      if(r.r>0){why.push(`helps ${o.label}: ${helpWhy(r)}`);sc-=.06*r.r;}else{why.push(`⚠ works against ${o.label}: ${helpWhy(r)}`);sc+=.06*-r.r;}}
+      if(r.r>0){why.push(`helps ${o.label}: ${helpWhy(r,x,o)}`);sc-=.06*r.r;}else{why.push(`⚠ works against ${o.label}: ${helpWhy(r,x,o)}`);sc+=.06*-r.r;}}
     const ls=lessonOf(x);if(ls&&ls.gap<-.15){why.push(`⚠ ${ls.k} legs hit ${ls.w}/${ls.n} lately vs ${pct(ls.expRate)} expected`);sc+=.03;}
     else if(ls&&ls.gap>.1)why.push(`${ls.k} legs hit ${ls.w}/${ls.n} lately`);
     x.why=why;x.sc=sc;}
@@ -1583,7 +1657,7 @@ function subLegHTML(id,L,i){return `<button type="button" class="subbtn rec" dat
 // what the model reads around a player leg (shown under it)
 function ctxNote(L){if(!isP(L.key))return '';const i=pLegInfo(L.key);if(!i)return '';const M=playerMeans(i.pl),w=[];
   if(M.rf)w.push(`last ${M.rf.last5.length}: ${M.rf.last5.join(', ')}`);
-  if(M.c&&M.c.pb>=.15)w.push(`blowout risk ${Math.round(M.c.pb*100)}%: ${M.ab<M.an?'starters sit late':'bench plays more'}`);
+  if(M.c&&M.c.pb>=.15&&!YARDS[i.pl.stat])w.push(`blowout risk ${Math.round(M.c.pb*100)}%: ${M.ab<M.an?'starters sit late':'bench plays more'}`);
   if(M.c&&Math.abs(M.c.tf-1)>=.03&&!M.c.gen)w.push(`team expected ${M.c.tf>1?'+':''}${Math.round((M.c.tf-1)*100)}% points vs average`);
   return w.length?`<small class="ctxn">${esc(w.join(' · '))}</small>`:'';}
 // ---- 500,000 runs, game by game: one simulated result per game per run (margin + total for NBA / NFL / college football,
@@ -1592,10 +1666,20 @@ function ctxNote(L){if(!isP(L.key))return '';const i=pLegInfo(L.key);if(!i)retur
 const N5=500000;  // runs per card simulation; links between legs come from pairs.json (legRho)
 function gauss(R){let u=0;while(u===0)u=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*R());}
 // normal score of each value's mid-rank (ties share one), weighted: the simulated margin / total as a standard normal
-function zScores(vals,w){const cnt=new Map();let tot=0;for(let i=0;i<vals.length;i++){const q=w?w[i]:1;cnt.set(vals[i],(cnt.get(vals[i])||0)+q);tot+=q;}
+function zScores(vals,w){if(!w){  // unweighted (the simulations, float32): one native sort of (value bits, index) keys; ties share their mid-rank
+    const N=vals.length,P=2**Math.ceil(Math.log2(N+1)),K=new Float64Array(N),f=new Float32Array(1),u=new Uint32Array(f.buffer),out=new Float64Array(N);
+    for(let i=0;i<N;i++){f[0]=vals[i]+0;const b=u[0];K[i]=((b&0x80000000)?(~b>>>0):((b|0x80000000)>>>0))*P+i;}
+    K.sort();
+    for(let i=0;i<N;){const ui=Math.floor(K[i]/P);let j=i;while(j+1<N&&Math.floor(K[j+1]/P)===ui)j++;const z=invNorm(clamp((i+(j-i+1)/2)/N,1e-6,1-1e-6));for(let k=i;k<=j;k++)out[K[k]%P]=z;i=j+1;}
+    return out;}
+  const cnt=new Map();let tot=0;for(let i=0;i<vals.length;i++){const q=w?w[i]:1;cnt.set(vals[i],(cnt.get(vals[i])||0)+q);tot+=q;}
   const ks=[...cnt.keys()].sort((a,b)=>a-b),sc=new Map();let c=0;for(const k of ks){const q=cnt.get(k);sc.set(k,invNorm(clamp((c+q/2)/tot,1e-6,1-1e-6)));c+=q;}
   const out=new Float64Array(vals.length);for(let i=0;i<vals.length;i++)out[i]=sc.get(vals[i]);return out;}
-function simZ(s){return s._z||(s._z={zm:zScores(s.mg),zt:zScores(s.tt)});}
+function simZm(s){if(s._zm)return s._zm;const N=s.N,z=new Float64Array(N);
+  if(s.ztab){for(let i=0;i<N;i++)z[i]=s.ztab[s.mg[i]+s.kmax];}else if(s.sd>0){for(let i=0;i<N;i++)z[i]=(s.mg[i]-s.mu)/s.sd;}else return s._zm=zScores(s.mg);
+  return s._zm=z;}
+function simZt(s){if(s._zt)return s._zt;if(!(s.tsd>0))return s._zt=zScores(s.tt);const N=s.N,z=new Float64Array(N);for(let i=0;i<N;i++)z[i]=(s.tt[i]-s.T)/s.tsd;return s._zt=z;}
+function simZ(s){return {zm:simZm(s),zt:simZt(s)};}
 function goalsZ(O){if(O._z)return O._z;const m=new Float64Array(O.n),t=new Float64Array(O.n);for(let i=0;i<O.n;i++){m[i]=O.h[i]-O.a[i];t[i]=O.h[i]+O.a[i];}return O._z={zm:zScores(m,O.p),zt:zScores(t,O.p)};}
 // 500,000 runs, game by game: each game's result is drawn from its own simulations (or exact score matrix); player legs and
 // anytime TDs are correlated normals linked to each other, to their team's margin and to the game total by the measured links
@@ -1610,14 +1694,11 @@ function simJoint(legs,N=N5){
     e.ev=ix.map(i=>{const L=legs[i];
       if(isP(L.key)){const inf=pLegInfo(L.key);if(!inf)return {t:'ind',p:0};const thr=inf.under?Math.floor(inf.thr)+1:inf.thr,P=playerParts(inf.pl,thr,inf.under);
         const tn=t=>invNorm(clamp(t,1e-6,1-1e-6)),v={t:'u',zn:tn(P.pn),zb:tn(P.pbw),B:BLOW[g&&g.sport]||1e9,L,x:0};U.push(v);return v;}
-      if(g&&/^TD:A:/.test(L.key)){const z=invNorm(clamp(p1(g,L.key),1e-6,1-1e-6)),v={t:'u',zn:z,zb:z,B:1e9,L,x:0};U.push(v);return v;}
+      if(g&&(/^TD:A:/.test(L.key)||(e.mode==='ind'&&!legType(L.key)&&(legMeta(L,g)||{}).game))){const z=invNorm(clamp(p1(g,L.key),1e-6,1-1e-6)),v={t:'u',zn:z,zb:z,B:1e9,L,x:0};U.push(v);return v;}
       if(g&&!legType(L.key)&&mkOf(g,L.key)){if(e.mode==='goals')return {t:'mask',M:stdMask(g,L.key)};if(e.mode==='margin')return {t:'f',f:mkOf(g,L.key).f};}
       return {t:'ind',p:g?p1(g,L.key):(+L.p||0)};});
-    if(U.length){const k=U.length,Mt=U.map(v=>legMeta(v.L,g)),C=[];for(let a=0;a<k+2;a++){C.push(new Array(k+2).fill(0));C[a][a]=1;}
-      const hw=g?legMeta({gid:g.id,key:'H'},g):null,ov=g?{stat:'over',sport:g.sport,game:true}:null;
-      for(let a=0;a<k;a++){const r1=legRho(Mt[a],hw,gid),r2=legRho(Mt[a],ov,gid);C[0][a+2]=C[a+2][0]=r1?r1.r:0;C[1][a+2]=C[a+2][1]=r2?r2.r:0;
-        for(let b=a+1;b<k;b++){const r=legRho(Mt[a],Mt[b],gid);C[a+2][b+2]=C[b+2][a+2]=r?r.r:0;}}
-      e.U=U;e.Lc=cholPD(C);e.ee=new Float64Array(k+2);}
+    if(U.length&&g){const {C}=unitLinks(g,U.map(v=>v.L));e.U=U;e.Lc=cholPD(C);e.ee=new Float64Array(U.length+2);}
+    else if(U.length){const C=[];for(let a=0;a<U.length+2;a++){C.push(new Array(U.length+2).fill(0));C[a][a]=1;}e.U=U;e.Lc=C;e.ee=new Float64Array(U.length+2);}
     G.push(e);}
   const lh=new Float64Array(legs.length);let hits=0;
   for(let r=0;r<N;r++){let all=true;
@@ -1644,7 +1725,7 @@ document.addEventListener('click',e=>{
   const sb=e.target.closest('[data-sub],[data-subrec]'),ub=e.target.closest('[data-unsub]'),ux=e.target.closest('[data-subuse]'),s5=e.target.closest('[data-sim5]');
   if(sb){const [id,i]=(sb.dataset.sub||sb.dataset.subrec).split('|'),T=autoCache[id];if(!T)return;const A=T.all||T.legs,L=A[+i],C=subCands(A,+i,id);
     openSheet(`<h2>Swap this leg</h2><div class="panel" style="padding:8px 14px"><b>${esc(L.label)}</b> <span class="mono">${pct(+L.p||0)}</span></div>
-      <div class="note">Legs of about the same chance that don't clash with the rest of this parlay (no player twice, no two players on one team for the same stat, nothing the parlay already covers).</div>
+      <div class="note">Legs of about the same chance that don't clash with the rest of this parlay (no player twice unless his two stats are linked by the research, no two players on one team for the same stat, nothing the parlay already covers).</div>
       ${C.length?`<div class="panel" style="padding:2px 14px">${C.map((x,j)=>{const g=gameById(x.gid);return `<div class="mrow${x.rec?' subrec':''}"><div class="lbl">${x.rec?'<span class="link">★ RECOMMENDED</span> ':''}${esc(x.label)}<small>${g?esc(g.away.abbr+' @ '+g.home.abbr+' · '+when(g)):''}</small><small class="subwhy">${esc((x.why||[]).join(' · '))}</small></div><span class="mono" style="font-weight:800">${pct(x.p)}</span><span></span><button class="yes" data-subuse="${esc(id)}|${i}|${j}">Use</button></div>`;}).join('')}</div>${C.length<3?`<div class="note">Only ${C.length} leg${C.length===1?'':'s'} fit this parlay's rules right now.</div>`:''}`
         :'<div class="empty">No leg of similar chance fits this parlay\'s rules right now.</div>'}<button class="btn full ghost" id="closeS">Close</button>`,{type:'subs',label:'Swap a leg'});
     $('closeS').onclick=()=>id==='slip'?openSlip():closeSheet();SUBCACHE={id,i:+i,C};return;}
@@ -1704,8 +1785,19 @@ function buildStacks(){
       for(const m of take)legs.push({gid:g.id,key:`P:${m.pl.id}:${m.thr}`,label:`${m.pl.name} ${m.thr}+ ${STATN[m.st]}`,p:m.p,sport:'nba'});});});
   return {days,day,legs,stacks,nG:G.length};}
 // what the research found for a pair, in words
-function helpWhy(r){const w=r.row,s=(r.r>=0?'+':'−')+Math.abs(r.r).toFixed(2);
-  return `${w.desc.toLowerCase()}: ${w.pBgivenA!=null?`${pct(w.pBgivenA)} vs ${pct(w.pB)} when the first lands, `:''}link ${s} over ${w.n.toLocaleString()} games this season`;}
+// (the research counts a stat as landing when the player beats his own usual level - his median - and a TD / goal when he scores)
+function helpEv(M,P,he){const nm=he?'he':(M.name||'the player');
+  if(M.game)return M.stat==='win'?(he?'his team won':`${M.team} won`):'the game went over';
+  return M.stat==='td'?`${nm} scored a touchdown`:M.stat==='goal'?`${nm} scored`:M.stat==='ptd'?`${nm} threw 2+ touchdowns`:M.stat==='point'?`${nm} had a point`:`${nm} beat his usual ${STATN[M.stat]||M.stat}`;}
+function helpWhy(r,a,b){const w=r.row,s=(r.r>=0?'+':'−')+Math.abs(r.r).toFixed(2),A=a&&legMeta(a),B=b&&legMeta(b);
+  const same=A&&B&&!A.game&&!B.game&&A.who===B.who,unit=same||(A&&B&&(A.game||B.game))?'player-games':'team-games';
+  const tail=`link ${s} over ${w.n.toLocaleString()} ${unit} this season`;
+  // rates only when both legs are bet the way the research counted them (no under, not the other team's win)
+  const asCounted=A&&B&&r.r>0&&w.rho>0&&!A.flip&&!B.flip&&w.pBgivenA!=null;
+  if(!asCounted)return `${w.desc.toLowerCase()}: ${tail}`;
+  let F=A,S=B;if(w.ab&&B.stat===w.ab[0]&&A.stat!==w.ab[0]){F=B;S=A;}
+  const P=F.game?S:F;  // the player in the pair names the game leg ("his team won")
+  return `when ${helpEv(F,P,false)}, ${helpEv(S,P,same||S.game||F.game)} ${pct(w.pBgivenA)} of the time (vs ${pct(w.pB)} overall); ${tail}`;}
 function stackNote(){const a=pairsIdx().get('nba#tm|ast|pts'),b=pairsIdx().get('nba#pts|reb'),s=r=>(r.rho>=0?'+':'−')+Math.abs(r.rho).toFixed(2);
   if(!a)return 'A team\'s playmaker (assists), scorer (points) and big (rebounds) make up a stack.';
   return `This season's box scores: a playmaker's assists and his top scorer's points landed together ${a.reliable?'more often than chance':'about as often as chance would give'} (link ${s(a)}${a.reliable?'':', not reliable'}, ${a.n} games), so stacks are picked for roles and close games${a.reliable?'':', not for a proven lift between the teammates'}.${b&&b.reliable?` A player's own points and rebounds do go together (link ${s(b)}).`:''}`;}
@@ -1713,28 +1805,41 @@ function stackNote(){const a=pairsIdx().get('nba#tm|ast|pts'),b=pairsIdx().get('
 // rushing yards, a receiver's catches and yards, a skater's point and shots), a QB and his top receiver, a player and his
 // team's win. Each at the line nearest 65%; priced together; best together-chance first, two per game at most.
 let HPC=null;
-function helpPairs(){if(HPC&&HPC.d===DATA&&now()-HPC.t<5*60e3)return HPC.v;const v=helpPairs0();HPC={d:DATA,t:now(),v};return v;}
-function helpPairs0(){const out=[],FB={nfl:1,ncaaf:1};  // football is weekly: its next 8 days; the rest the next 3
-  for(const g of DATA.games){if(!openG(g)||startMs(g)>now()+(FB[g.sport]?8:3)*864e5||!['nfl','ncaaf','nba','nhl','soccer'].includes(g.sport))continue;
+function helpPairs(){const sp=((typeof fz!=='undefined'&&fz.sports)||[]).join(',');if(HPC&&HPC.d===DATA&&HPC.sp===sp&&now()-HPC.t<5*60e3)return HPC.v;const v=helpPairs0();HPC={d:DATA,sp,t:now(),v};return v;}
+function helpPairs0(){const out=[],FB={nfl:1,ncaaf:1},on=(typeof fz!=='undefined'&&fz.sports)||['nfl','ncaaf','nba','nhl','soccer'];  // football is weekly: its next 8 days; the rest the next 3
+  for(const g of DATA.games){if(!openG(g)||startMs(g)>now()+(FB[g.sport]?8:3)*864e5||!['nfl','ncaaf','nba','nhl','soccer'].includes(g.sport)||!on.includes(g.sport))continue;
     const C=[];
     for(const pl of DATA.players||[]){if(pl.gid!==g.id||pl.status!=='active'||!LADDER[pl.stat])continue;
       const ls=LADDER[pl.stat].map(t=>({t,p:playerP(pl,t)})).filter(x=>x.p>=.4&&x.p<=.9);if(!ls.length)continue;
       const b=ls.reduce((a,x)=>Math.abs(x.p-.65)<Math.abs(a.p-.65)?x:a);C.push({gid:g.id,key:`P:${pl.id}:${b.t}`,label:`${pl.name} ${b.t}+ ${STATN[pl.stat]}`,p:b.p,sport:g.sport});}
     if(g.sport==='nfl'&&DATA.nflByTd&&legType('TD:A:X:y'))for(const [k,x] of DATA.nflByTd){const [team,slug]=k.split('|');if(team!==g.home.abbr&&team!==g.away.abbr)continue;
-      const key=`TD:A:${team}:${slug}`,p=p1(g,key);if(p>=.15&&p<=.9)C.push({gid:g.id,key,label:`${x.name} anytime TD`,p,sport:g.sport});}
+      const key=`TD:A:${team}:${slug}`,p=p1(g,key);if(p>=.15&&p<=.9)C.push({gid:g.id,key,label:`${x.name} (${team}) anytime TD`,p,sport:g.sport});}
     if(priced(g))for(const s of ['H','A']){const p=p1(g,s);if(p>=.45&&p<=.92)C.push({gid:g.id,key:s,label:`${(s==='H'?g.home:g.away).name} to win`,p,sport:g.sport});}
     const P=[];
-    for(let i=0;i<C.length;i++)for(let j=i+1;j<C.length;j++){const r=legRho(legMeta(C[i],g),legMeta(C[j],g),g.id);if(!r||r.r<.15)continue;
-      const pj=parlayProb([C[i],C[j]]).p,pi=C[i].p*C[j].p;if(pj<.2)continue;P.push({g,a:C[i],b:C[j],r,pj,pi,lift:pj/pi});}
-    // per game, the best pair of each kind (a leg may sit in pairs of different kinds)
-    P.sort((x,y)=>y.pj*Math.sqrt(y.lift)-x.pj*Math.sqrt(x.lift));const kinds=new Set();
-    for(const x of P){if(kinds.has(x.r.row.desc))continue;kinds.add(x.r.row.desc);out.push(x);}}
+    for(let i=0;i<C.length;i++)for(let j=i+1;j<C.length;j++){if(Math.min(C[i].p,C[j].p)<.2)continue;const r=legRho(legMeta(C[i],g),legMeta(C[j],g),g.id);if(!r||r.r<.15)continue;
+      const q=jointP([C[i].p,C[j].p],[[1,r.r],[r.r,1]]),pi=C[i].p*C[j].p;if(q<.18)continue;P.push({g,a:C[i],b:C[j],r,q,pi});}
+    // per game, the best pair of each kind (a leg may sit in pairs of different kinds): ranked by the quick figure, then
+    // priced together on the game's own model (the next one of the kind steps in if the exact price falls under 20%)
+    P.sort((x,y)=>y.q*Math.sqrt(y.q/y.pi)-x.q*Math.sqrt(x.q/x.pi));const kinds=new Map();
+    for(const x of P){const kk=hpKind(x);if((kinds.get(kk)||0)>=2||kinds.get(kk+'#ok'))continue;kinds.set(kk,(kinds.get(kk)||0)+1);
+      x.pj=parlayProb([x.a,x.b]).p;x.lift=x.pj/x.pi;if(x.pj<.2)continue;kinds.set(kk+'#ok',1);out.push(x);}}
   return out.sort((x,y)=>y.pj*Math.sqrt(y.lift)-x.pj*Math.sqrt(x.lift));}
-// the pairs by kind (touchdown + yards first), the best three of each
-function helpGroups(P){const by=new Map();for(const x of P){const k=x.r.row.desc;if(!by.has(k))by.set(k,[]);by.get(k).push(x);}
-  return [...by.entries()].sort((a,b)=>(/touchdown/i.test(b[0])-/touchdown/i.test(a[0]))||(b[1][0].r.r-a[1][0].r.r)).slice(0,8).map(([k,v])=>({k,row:v[0].r.row,xs:v.slice(0,2)}));}
-function helpHTML(){const P=helpPairs(),R=DATA.pairs;
-  if(!R||!R.sports)return '';
+// the pairs by sport and kind (touchdown pairs first), two of each; at most 3 kinds per sport so every sport gets a turn
+const hpKind=x=>x.g.sport+'|'+x.r.row.desc;
+function helpGroups(P){const by=new Map();for(const x of P){const k=hpKind(x);if(!by.has(k))by.set(k,[]);by.get(k).push(x);}
+  const G=[...by.entries()].sort((a,b)=>(/touchdown/i.test(b[0])-/touchdown/i.test(a[0]))||(b[1][0].r.row.rho-a[1][0].r.row.rho)),per={},out=[];
+  for(const [k,v] of G){const sp=v[0].g.sport;if((per[sp]||0)>=3)continue;per[sp]=(per[sp]||0)+1;out.push({k:v[0].r.row.desc,sport:sp,row:v[0].r.row,xs:v.slice(0,2)});if(out.length>=10)break;}
+  return out;}
+// the section is priced on each game's own model, which takes a moment on the first visit: the tab paints first with a
+// placeholder and the section fills in right after (later visits read the 5-minute cache)
+function helpCached(){const sp=((typeof fz!=='undefined'&&fz.sports)||[]).join(',');return !!(HPC&&HPC.d===DATA&&HPC.sp===sp&&now()-HPC.t<5*60e3);}
+let HPT=0;
+function helpHTML(){const R=DATA.pairs;if(!R||!R.sports)return '';
+  if(!helpCached()){clearTimeout(HPT);HPT=setTimeout(()=>{const host=document.getElementById('helpHost');if(!host)return;helpPairs();const h=document.getElementById('helpHost');if(!h)return;
+      const w=document.createElement('div');w.innerHTML=helpHTML();h.replaceWith(...w.childNodes);clampLong(document.getElementById('main'));},30);
+    return `<div id="helpHost"><h2>Legs that help each other <small>pairs that land together, measured this season</small></h2><div class="note">Pricing the pairs together…</div></div>`;}
+  return helpHTML0(R);}
+function helpHTML0(R){const P=helpPairs();
   const top=[];for(const [sp,S] of Object.entries(R.sports))for(const [k,w] of Object.entries(S.pairs||{}))if(w.reliable&&w.rho>=.2&&!/\|(win|over)$/.test(k)&&w.pBgivenA!=null)top.push({sp,w});
   top.sort((a,b)=>b.w.rho-a.w.rho);
   // the paired parlay: one touchdown pair if there is one, then the likeliest pairs, each from a different game
@@ -1743,7 +1848,7 @@ function helpHTML(){const P=helpPairs(),R=DATA.pairs;
   return `<h2>Legs that help each other <small>pairs that land together, measured this season</small></h2>
    <div class="note">When one leg lands, the other usually does too: a running back who scores has usually been running well, a receiver's catches bring his yards, a skater's goal comes with shots. These are measured on this season's box scores (${Object.entries(R.sports).map(([sp,S])=>`${(SPORTNAME[sp]||sp)} ${S.games}`).join(', ')} games) against each player's own usual level, and the chances below price both legs together. Pairs with no reliable link are left out.</div>
    ${top.length?`<div class="panel" style="padding:2px 14px">${top.slice(0,6).map(({sp,w})=>`<div class="mrow"><div class="lbl">${esc(w.desc)} <small>${esc(SPORTNAME[sp]||sp)} · when the first landed, the second did ${pct(w.pBgivenA)} of the time vs ${pct(w.pB)} overall · ${w.n.toLocaleString()} player-games</small></div><span class="mono" style="font-weight:800">×${w.lift}</span><span></span></div>`).join('')}</div>`:''}
-   ${P.length?helpGroups(P).map(G=>`<div class="sec">${esc(G.k)} <span style="font-weight:600;text-transform:none;letter-spacing:0">· link ${G.row.rho>=0?'+':'−'}${Math.abs(G.row.rho).toFixed(2)}</span></div><div class="panel" style="padding:2px 14px">${G.xs.map(x=>`<div class="mrow"><div class="lbl">${esc(x.a.label)} + ${esc(x.b.label)}<small>${esc(x.g.away.abbr)} @ ${esc(x.g.home.abbr)} · ${esc(when(x.g))} · ${pct(x.a.p)} and ${pct(x.b.p)} · together ${pct(x.pj)} (${pct(x.pi)} if unrelated)</small><small class="subwhy">${esc(helpWhy(x.r))}</small></div><span class="mono" style="font-weight:800">${pct(x.pj)}</span><span></span><button class="yes" data-addpair="${esc(x.g.id)}|${esc(x.a.key)}|${esc(x.b.key)}" aria-label="Add ${esc(x.a.label)} and ${esc(x.b.label)}">Add both</button></div>`).join('')}</div>`).join(''):'<div class="pc"><div class="why">No pairs with a reliable link in the coming games.</div></div>'}
+   ${P.length?helpGroups(P).map(G=>`<div class="sec">${esc(G.k)} <span style="font-weight:600;text-transform:none;letter-spacing:0">· ${esc(SPORTNAME[G.sport]||G.sport)} · link ${G.row.rho>=0?'+':'−'}${Math.abs(G.row.rho).toFixed(2)}</span></div><div class="panel" style="padding:2px 14px">${G.xs.map(x=>`<div class="mrow"><div class="lbl">${esc(x.a.label)} + ${esc(x.b.label)}<small>${esc(x.g.away.abbr)} @ ${esc(x.g.home.abbr)} · ${esc(when(x.g))} · ${pct(x.a.p)} and ${pct(x.b.p)} · together ${pct(x.pj)} (${pct(x.pi)} if unrelated)</small><small class="subwhy">${esc(helpWhy(x.r,x.a,x.b))}</small></div><span class="mono" style="font-weight:800">${pct(x.pj)}</span><span></span><button class="yes" data-addpair="${esc(x.g.id)}|${esc(x.a.key)}|${esc(x.b.key)}" aria-label="Add ${esc(x.a.label)} and ${esc(x.b.label)}">Add both</button></div>`).join('')}</div>`).join(''):'<div class="pc"><div class="why">No pairs with a reliable link in the coming games.</div></div>'}
    ${T?ticketCard('pairs',`Paired parlay · ${T.legs.length} legs`,T,'The strongest pairs from different games. Each pair is priced together; the 500,000 runs draw the same links.'):''}`;}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-addpair]');if(!b)return;const [gid,...ks]=b.dataset.addpair.split('|');
   for(const k of ks)if(!inSlip(gid,k))toggleLeg(gid,k);renderSlipBar();toast('Both legs added to the slip');});
@@ -2071,7 +2176,7 @@ function openSlip(){
   tips.push(slip.length<=3?['ok','✓',`<b>${slip.length} legs.</b> <span>Small parlays hit far more often.</span>`]:slip.length===4?['warn','!',`<b>4 legs.</b> <span>Still OK, but each extra leg cuts your chances.</span>`]:['bad','✗',`<b>${slip.length} legs is a lot.</b> <span>This is how parlays lose by one leg. Trim the weakest.</span>`]);
   tips.push(pr.p===0?['bad','✗',`<b>Conflicting legs.</b> <span>These can't all win together.</span>`]:connected?['ok','✓',`<b>Connected legs: ${connected}.</b> <span>Same-game legs that move together${boost>1.01?`, worth +${pct(boost-1)} vs. random legs`:boost<.99?`, though some pull against each other (${pct(boost-1)})`:''}.</span>`]:['warn','!',`<b>No connected legs.</b> <span>Try adding a leg from the base's game that helps it win.</span>`]);
   {const H=[],W=[];for(let i=0;i<slip.length;i++)for(let j=i+1;j<slip.length;j++){const A=slip[i],B=slip[j];if(A.gid!==B.gid)continue;const r=legRho(legMeta(A),legMeta(B),A.gid);if(!r||Math.abs(r.r)<.1)continue;
-      (r.r>0?H:W).push(`${legLabel(A)} + ${legLabel(B)} (${helpWhy(r)})`);}
+      (r.r>0?H:W).push(`${legLabel(A)} + ${legLabel(B)} (${helpWhy(r,A,B)})`);}
    if(H.length)tips.push(['ok','✓',`<b>Legs that help each other:</b> <span>${esc(H.slice(0,3).join('; '))}.</span>`]);
    if(W.length)tips.push(['warn','!',`<b>Legs that work against each other:</b> <span>${esc(W.slice(0,3).join('; '))}. Consider swapping one.</span>`]);}
   {const seen={},clash=[];for(const L of slip){if(!isP(L.key))continue;const pl=playerById(L.key.split(':')[1]);if(!pl)continue;const k=L.gid+'|'+pl.team+'|'+pl.stat;if(seen[k])clash.push(seen[k]+' and '+pl.name);else seen[k]=pl.name;}
@@ -2399,12 +2504,12 @@ function addNflPlayers(d,np){d.nflpos=new Map();d.nflByTd=new Map();if(!np||!Arr
     for(const g of d.games){if(g.sport!==T.sport||isFinal(g)||isVoid(g))continue;const side=g.home.abbr===T.feedAbbr?g.home:g.away.abbr===T.feedAbbr?g.away:null;if(!side)continue;
       for(const p of P){if(T.sport==='nfl'&&p.pos)d.nflByTd.set(side.abbr+'|'+tdSlug(p.name),{name:p.name,pos:p.pos});
         if((Date.parse(p.dates[p.dates.length-1])||0)<lastDate)continue;  // missed the last game
-        for(const [st,ok,act] of [['ryd',p.pos==='RB'||p.pos==='QB',i=>(p.ra||[])[i]>0],['recyd',p.pos==='WR'||p.pos==='TE'||p.pos==='RB',i=>(p.tgt||[])[i]>0||(p.rec||[])[i]>0],['pyd',p.pos==='QB',i=>(p.pa||[])[i]>=10]]){
+        for(const [st,ok,act] of [['ryd',p.pos==='RB'||p.pos==='QB',()=>true],['recyd',p.pos==='WR'||p.pos==='TE'||p.pos==='RB',()=>true],['pyd',p.pos==='QB',i=>(p.pa||[])[i]>=10]]){  // every game he played counts (a zero is a real result)
           if(!ok||!Array.isArray(p[st]))continue;const v=p[st].filter((_,i)=>act(i)).map(Number).filter(Number.isFinite);if(v.length<3)continue;
           const avg=v.reduce((a,b)=>a+b,0)/v.length;if(avg<(st==='pyd'?120:20))continue;
           const m=SD[st]?SD[st].a+SD[st].b*avg:.45*avg+8,own=v.length>=5?Math.sqrt(v.reduce((a,b)=>a+(b-avg)**2,0)/(v.length-1)):m,sd=Math.max(6,.5*m+.5*own);
           const id=`${nameKey(p.name)}-${st}~${g.id}`;if(d.players.some(x=>x.id===id))continue;
-          d.players.push({id,gid:g.id,name:p.name,stat:st,avg:+avg.toFixed(1),sd:+sd.toFixed(1),pos:p.pos,status:'active',team:side.abbr,est:true,mpg:0});
+          d.players.push({id,gid:g.id,name:p.name,stat:st,avg:+avg.toFixed(1),sd:+sd.toFixed(1),pos:p.pos,sport:T.sport,status:'active',team:side.abbr,est:true,mpg:0});
           const l4=v.slice(-4);if(d.playerform instanceof Map)d.playerform.set(side.abbr+'|'+nameKey(p.name)+'|'+st,{name:p.name,team:side.abbr,stat:st,last5:l4,avg5:+(l4.reduce((a,b)=>a+b,0)/l4.length).toFixed(1),confidence:'verified',note:'ESPN box scores'});}}}}}
 function clampLong(root){if(!root)return;for(const el of root.querySelectorAll('.why,.note,.subwhy,.lineup>div')){if(el.dataset.cl)continue;el.dataset.cl='1';
     if((el.textContent||'').length<180)continue;el.classList.add('clamp');

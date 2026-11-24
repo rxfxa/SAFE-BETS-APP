@@ -101,10 +101,10 @@ try {
   const ul = await page.$$eval('.trlist .tri small', s => s.map(x => x.textContent));
   check('the lists follow the league filter', ul.every(s => /Premier League/.test(s)), ul.slice(0, 3).join(' | '));
   await page.selectOption('[data-trl]', 'all');
-  await page.fill('#q', 'arsenal');
+  await page.evaluate(() => SB.openNav()); await page.fill('#q', 'arsenal'); await page.evaluate(() => SB.closeNav());  // the search box sits in the menu drawer on phones
   await page.waitForFunction(() => document.querySelectorAll('.trd').length <= 3, null, { timeout: 10000 });
   check('the top search box filters the teams', /Arsenal/.test(await page.textContent('.trtab')) && (await page.locator('.trd').count()) <= 3);
-  await page.fill('#q', '');
+  await page.evaluate(() => SB.openNav()); await page.fill('#q', ''); await page.evaluate(() => SB.closeNav());
   const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   check('390px: no horizontal scroll', over <= 0, `${over}px`);
   // the committed trends.json (live run, NBA included) also renders

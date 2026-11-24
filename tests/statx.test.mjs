@@ -32,8 +32,11 @@ const chip = async (page, k) => { await page.click(`.sx-root [data-sx-pos="${k}"
 const { page, errors, browser } = await open({ width: 390, height: 844, tab: 'statx' });
 await ready(page);
 check('season.json loaded', await page.evaluate(() => __statx.seasonState) === 'ok');
-const fr = await page.evaluate(() => SB.firstRender && SB.firstRender.ms);
-check('first render under 1,500 ms on the fixture slate', fr != null && fr < 1500, `${Math.round(fr)} ms`);
+// measured inside the page: from the first Stat Explorer render to the first table on screen (season.json load and parse included;
+// SB.firstRender only times the shell's first pass, which shows "Loading…" here)
+const tim = await page.evaluate(() => __statx.timing);
+const fr = tim.table != null && tim.start != null ? tim.table - tim.start : null;
+check('first render to table under 1,500 ms on the fixture slate (measured in the page)', fr != null && fr < 1500, `${fr == null ? 'no table' : Math.round(fr)} ms; one render ${tim.last == null ? '?' : Math.round(tim.last)} ms`);
 const rr = await page.evaluate(() => { const t = performance.now(); SB.render(); return performance.now() - t; });
 check('a full re-render with the table stays fast', rr < 400, `${Math.round(rr)} ms`);
 const head = await page.evaluate(() => ({ kick: document.querySelector('.sx-root .ui-kick').textContent, title: document.querySelector('.sx-root .ui-title').textContent }));
@@ -77,6 +80,7 @@ T = await table(page);
 const L3 = top.log.slice(-3), r3 = T.find(r => r.name === top.n);
 check('Last 3 recomputes from the logs', r3 && r3.GP === '3' && r3.Yds === fInt(sumL(NFL, L3, 'pyd')) && r3.TD === String(sumL(NFL, L3, 'ptd')), JSON.stringify(r3));
 check('Last 3: meta names the sample and flags small samples', await page.evaluate(() => /Last 3 games/.test(document.querySelector('.sx-meta').textContent) && /Small samples/.test(document.querySelector('.sx-meta').textContent)));
+check('a filter change is announced to screen readers (status line)', /^Showing \d+ of \d+ players$/.test(await page.evaluate(() => document.querySelector('.sx-root .sx-live').textContent)), await page.evaluate(() => document.querySelector('.sx-root .sx-live').textContent));
 await sel(page, 'sx-last', '0');
 
 // vs team
@@ -163,7 +167,10 @@ await sel(page, 'sx-ha', 'home');
 T = await table(page);
 const defHome = defRows.filter(r => r[2] === 0), tDefH = T.find(r => r.name === tmName);
 check('team defense at home = opponents\' away lines (home flipped)', tDefH && tDefH['Tot yds vs'] === fInt(defHome.reduce((a, r) => a + r[3 + fI(NFL, 'pyd')] + r[3 + fI(NFL, 'ryd')], 0)) && tDefH.GP === String(new Set(defHome.map(r => r[0])).size), JSON.stringify(tDefH));
-await sel(page, 'sx-ha', 'all');
+check('team table: Clear filters keeps focus on a control (there is no search box here)', await page.evaluate(() => !document.querySelector('#sx-q') && !!document.querySelector('.sx-root .sx-filt [data-sx-reset]')));
+await page.click('.sx-root .sx-filt [data-sx-reset]');
+await page.waitForTimeout(60);
+check('  focus lands on the Team select', await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-ui-select') === 'sx-team'), await page.evaluate(() => document.activeElement && document.activeElement.outerHTML.slice(0, 80)));
 
 // honest footnote and words
 const foot = await page.locator('.sx-root .sx-foot').innerText();
@@ -184,8 +191,10 @@ check('CSV of the table: header and one line per shown row', csvLines[0].startsW
 await page.click('.sx-root [data-sx-csv]');
 await page.waitForTimeout(250);
 check('CSV button copies or shows the text to copy', await page.evaluate(() => !!document.querySelector('.sx-csvbox') || /Copied/.test((document.getElementById('toast') || {}).textContent || '')));
+const sheetShown = await page.evaluate(() => document.body.classList.contains('sheet-open'));
 await page.keyboard.press('Escape');
-await page.waitForTimeout(100);
+await page.waitForTimeout(150);
+if (sheetShown) check('closing the CSV sheet gives focus back to the CSV button', await page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-sx-csv')), await page.evaluate(() => document.activeElement && document.activeElement.outerHTML.slice(0, 80)));
 
 // a name opens the player page
 await page.click('.sx-root .ui-table tbody tr:first-child button.sx-nm');
@@ -216,6 +225,10 @@ const NHL = SEASON.sports.nhl;
 T = await table(page);
 const D = NHL.players.filter(p => p.pos === 'D').sort((a, b) => (b.tot[0] + b.tot[1]) - (a.tot[0] + a.tot[1]) || b.gp - a.gp);
 check('NHL defense: only D, points = goals + assists, sorted by points', T.every(r => / · D$/.test(r.sub)) && T[0].Pts === String(D[0].tot[0] + D[0].tot[1]) && T[0].G === String(D[0].tot[0]) && T[0].A === String(D[0].tot[1]), JSON.stringify(T[0]));
+await sel(page, 'sx-team', 'UTA');
+T = await table(page);
+check('NHL: a team missing from season.json\'s names (UTA) still reads as a full name', T.length > 0 && T.every(r => r.sub.startsWith('Utah Mammoth')) && await page.evaluate(() => [...document.querySelectorAll('select[data-ui-select="sx-team"] option')].some(o => o.value === 'UTA' && o.textContent === 'Utah Mammoth')), T.slice(0, 2).map(r => r.sub).join(' | '));
+await sel(page, 'sx-team', 'all');
 await chip(page, 'f');
 T = await table(page);
 check('NHL forwards: C / LW / RW, no goalies or defensemen', T.length > 0 && T.every(r => / · (C|LW|RW)$/.test(r.sub)), T.slice(0, 3).map(r => r.sub).join(' | '));
@@ -233,6 +246,14 @@ check('Rows All shows every row and still renders fast', nAll === await page.eva
 await sel(page, 'sx-rows', '50');
 await chip(page, 'off');
 check('College team offense renders (Rows 50 of 100+ teams)', (await table(page)).length === 50 && await page.evaluate(() => __statx.model().rows.length) > 100, String(await page.evaluate(() => __statx.model().rows.length)));
+await chip(page, 'def');
+await page.click('.sx-root [data-sx-per]');
+await page.waitForTimeout(60);
+const cdef = await page.evaluate(() => { const M = __statx.model(); return { minG: M.minG, low: M.rows.filter(r => r.gp < M.minG).length, all: M.view.team === 'def' && M.rows.length, meta: document.querySelector('.sx-meta').textContent }; });
+check('per game team tables need the minimum games too (no 1-game schools on top)', cdef.minG === 3 && cdef.low === 0 && cdef.all > 100 && /Min 3 games/.test(cdef.meta), JSON.stringify(cdef).slice(0, 200));
+await page.click('.sx-root [data-sx-per]');
+await page.waitForTimeout(60);
+await chip(page, 'off');
 check('remembered on this device: sport, position, rows', await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('fm2.sx.prefs')); return p.sport === 'ncaaf' && p.pos.ncaaf === 'off' && p.rows === 50; }));
 await page.evaluate(() => SB.goTab('statx', { sport: 'nfl', pos: 'qb' }));
 await ready(page);
@@ -261,5 +282,35 @@ await browser.close();
   check('season.json missing: honest empty state, no table', await page.evaluate(() => __statx.seasonState) === 'none' && /did not load/.test(txt) && /season\.json is missing/.test(txt) && !(await page.$('.sx-root .ui-table')), txt.slice(0, 160));
   check('season.json missing: sport pills still there, no page errors', (await page.$$('.sx-root .sx-sports .ui-pill')).length === 4 && errors.length === 0, errors.join(' | '));
   check('season.json missing: no horizontal scroll', await noScroll(page));
+
+  // partial and hostile data: an HTML name, a formula-looking name, a player with no log and no totals, a sport with no players
+  const S2 = JSON.parse(JSON.stringify(SEASON)), F2 = S2.sports.nfl.fields, z = F2.map(() => 0);
+  const line = (o) => F2.map(f => o[f] || 0);
+  S2.sports.nfl.players = [
+    { n: '<img src=x onerror="window.__xss=1">', t: 'DAL', pos: 'QB', gp: 1, tot: line({ pa: 30, pyd: 400, ptd: 3 }), log: [['2026-11-02', 'NYG', 1, ...line({ pa: 30, pyd: 400, ptd: 3 })]] },
+    { n: '=HYPERLINK("https://example.com")', t: 'NYG', pos: 'QB', gp: 1, tot: line({ pa: 20, pyd: 200 }), log: [['2026-11-02', 'DAL', 0, ...line({ pa: 20, pyd: 200 })]] },
+    { n: 'No Log Guy', t: 'NYG', pos: 'QB', gp: 2, tot: 'bad', log: null },
+    { n: 'Bad Rows Guy', t: 'NYG', pos: 'QB', gp: 1, tot: line({ pa: 5, pyd: 50 }), log: ['oops', null, ['2026-11-09', 'PHI', 0, ...line({ pa: 5, pyd: 50 })]] },
+  ];
+  S2.sports.nba.players = [];
+  await page.route(/season\.json/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(S2) }));
+  await page.evaluate(() => localStorage.setItem('fm2.sx.prefs', JSON.stringify({ sport: 'nfl', pos: { nfl: 'qb' }, rows: 50 })));
+  await page.reload();
+  await page.waitForFunction(() => window.SB && SB.firstRender, null, { timeout: 30000 });
+  await ready(page);
+  const T2 = await table(page);
+  check('hostile data: an HTML player name shows as text, nothing runs', T2[0] && T2[0].name === '<img src=x onerror="window.__xss=1">' && await page.evaluate(() => window.__xss === undefined && !document.querySelector('.sx-root .ui-table img')), T2[0] && T2[0].name);
+  check('partial data: bad log rows are skipped, a player without totals does not break the table', T2.length === 3 && T2.some(r => r.name === 'Bad Rows Guy' && r.Yds === '50'), T2.map(r => r.name + ' ' + r.Yds).join(' | '));
+  await sel(page, 'sx-last', '3');
+  const T3 = await table(page);
+  check('partial data: Last 3 uses only real log rows (no log -> left out)', T3.length === 3 && T3.find(r => r.name === 'Bad Rows Guy').GP === '1' && !T3.some(r => r.name === 'No Log Guy'), T3.map(r => r.name + ' ' + r.GP).join(' | '));
+  await sel(page, 'sx-last', '0');
+  const csv2 = await page.evaluate(() => __statx.csvText());
+  check('CSV: a name that looks like a spreadsheet formula is quoted as text', /'=HYPERLINK/.test(csv2) && !/(^|,)"?=HYPERLINK/m.test(csv2), csv2.split('\n').find(l => /HYPERLINK/.test(l)));
+  await page.click('.sx-root [data-ui-pill="sx-sport|nba"]');
+  await page.waitForTimeout(60);
+  const nbaTxt = await page.locator('.sx-root .sx-out').innerText();
+  check('a sport with no players: an honest "no players" note, not "no players match these filters"', /No NBA players in our season stats right now/.test(nbaTxt) && !/match these filters/.test(nbaTxt) && !(await page.$('.sx-root .ui-table')), nbaTxt.slice(0, 120));
+  check('hostile / partial data: no page errors', errors.length === 0, errors.join(' | '));
   await done(browser);
 }

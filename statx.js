@@ -90,10 +90,13 @@
   }
   const sportData = sp => {
     const S = SEAS && SEAS.sports && SEAS.sports[sp];
-    return S && Array.isArray(S.players) && Array.isArray(S.fields) ? S : null;
+    return S && Array.isArray(S.players) && S.players.length && Array.isArray(S.fields) ? S : null;
   };
   const teamsOf = S => (S && S.teams && typeof S.teams === 'object' && !Array.isArray(S.teams) ? S.teams : {});
-  const teamName = (S, ab) => String(teamsOf(S)[ab] || ab || '');
+  // ESPN abbreviations season.json has no name for (its team list misses them); only names we are sure of, else the abbreviation
+  const XNAME = { UTA: 'Utah Mammoth', AFA: 'Air Force Falcons', BUFF: 'Buffalo Bulls' };
+  const XSP = { UTA: 'nhl', AFA: 'ncaaf', BUFF: 'ncaaf' };
+  const teamName = (S, ab) => String(teamsOf(S)[ab] || (S && XSP[ab] && SEAS && SEAS.sports[XSP[ab]] === S ? XNAME[ab] : '') || ab || '');
   const viewOf = sp => VIEWS[sp].find(v => v.k === st.pos[sp]) || VIEWS[sp][0];
 
   // which fields carry anything (college box scores have no targets)
@@ -150,6 +153,7 @@
 
   // ---------- the sample: season totals, or recomputed from the logs when a filter is on ----------
   const filtered = () => st.vs !== 'all' || st.ha !== 'all' || st.last > 0;
+  const anyFilter = () => !!(st.q && !viewOf(st.sport).team) || st.team !== 'all' || filtered();
   function sampleOf(log) {
     let L = Array.isArray(log) ? log.filter(Array.isArray) : [];
     if (st.vs !== 'all') L = L.filter(r => r[1] === st.vs);
@@ -251,7 +255,7 @@
     let rows = view.team ? teamRows(sp, view, cols) : playerRows(sp, view, cols);
     const maxGp = rows.reduce((a, r) => Math.max(a, r.gp), 0);
     let minG = 1;
-    if (st.per && !view.team && rows.length) { minG = Math.max(1, Math.min(MING[sp], Math.ceil(maxGp / 2))); rows = rows.filter(r => r.gp >= minG); }
+    if (st.per && rows.length) { minG = Math.max(1, Math.min(MING[sp], Math.ceil(maxGp / 2))); rows = rows.filter(r => r.gp >= minG); }
     sortRows(rows, st.sort.k, st.sort.dir);
     const shown = st.rows > 0 ? rows.slice(0, st.rows) : rows;
     return { sp, S, view, cols, rows, shown, maxGp, minG };
@@ -294,7 +298,7 @@
     let filt = '';
     if (S) {
       const O = opts(sp);
-      const any = st.q || st.team !== 'all' || st.vs !== 'all' || st.ha !== 'all' || st.last > 0;
+      const any = anyFilter();
       filt = `<div class="sx-filt">
         ${view.team ? '' : `<label class="sx-q"><span class="l">Player</span>${ICO_Q}<input id="sx-q" type="search" autocomplete="off" spellcheck="false" placeholder="All" aria-label="Search players" value="${esc(st.q)}"></label>`}
         ${U.select({ label: 'Team', value: st.team, options: [['all', 'All teams']].concat(O.team), name: 'sx-team' })}
@@ -314,9 +318,9 @@
   }
   function outHTML() {
     if (SEAS_ST === 'idle' || SEAS_ST === 'loading') return `<div aria-busy="true">${U.empty("Loading this season's box scores…")}</div>`;
-    if (SEAS_ST === 'none') return U.empty("Season stats did not load: season.json is missing or empty, so there are no tables to show right now. The other screens still work; try again after the next data refresh.");
+    if (SEAS_ST === 'none') return U.empty("Season stats did not load: season.json is missing or empty, so there are no tables to show right now. The other screens still work; reload the page later to try again.");
     const M = model();
-    if (!M) return U.empty(`No ${SPLONG[st.sport]} tables in our data right now (season.json has no ${SPN[st.sport]} section).`);
+    if (!M) return U.empty(`No ${SPLONG[st.sport]} players in our season stats right now, so there is no table to show. The other sports still work.`);
     const { sp, S, view, cols, rows, shown, maxGp, minG } = M;
     const team = st.team === 'all' ? 'All teams' : teamName(S, st.team);
     const what = view.team ? (view.team === 'def' ? 'What opponents gained' : 'Added up from player box lines') : '';
@@ -457,8 +461,13 @@
     }
     remember();
   }
+  // render timing inside the page: start = first Stat Explorer render, table = first table on screen, last = the latest render (ms)
+  const TIM = { start: null, table: null, last: null };
+  const stamp = () => { if (TIM.start != null && TIM.table == null && document.querySelector('#main .sx-root .ui-table')) TIM.table = performance.now(); };
+  let csvBack = false;  // the CSV sheet was open: give focus back to the CSV button once it closes (the sheet re-renders the page)
   function setSport(sp) { st.sport = sp; st.team = 'all'; st.vs = 'all'; st.q = ''; st.sort = null; }
   function render(main, params) {
+    const t0 = performance.now(); if (TIM.start == null) TIM.start = t0;
     css(); needSeason(); applyParams(params);
     main.innerHTML = `<div class="ui-page sx-root" data-sx-sport="${esc(st.sport)}" data-sx-pos="${esc(viewOf(st.sport).k)}">
 ${U.page({ kicker: 'Stat explorer · this season', title: 'Season', accent: 'leaderboards', sub: "Every player and team from this season's box scores. Pick a position, sort any column, and split by opponent, home / away or the last few games." })}
@@ -466,19 +475,30 @@ ${barHTML()}
 <p class="sx-live" role="status" aria-live="polite"></p>
 <section class="sx-out" aria-label="Table">${outHTML()}</section>
 </div>`;
+    TIM.last = performance.now() - t0; stamp();
+    if (csvBack && !document.body.classList.contains('sheet-open')) {
+      csvBack = false;
+      setTimeout(() => { const b = document.querySelector('#main .sx-root [data-sx-csv]'); if (b && !document.body.classList.contains('sheet-open')) b.focus({ preventScroll: true }); }, 0);
+    }
+  }
+  // tell screen readers what the table now shows (after a filter, sort or search)
+  function announce() {
+    const live = document.querySelector('#main .sx-root .sx-live'), M = SEAS_ST === 'ok' ? model() : null;
+    if (live && M) live.textContent = M.rows.length ? `Showing ${M.shown.length} of ${M.rows.length} ${M.view.team ? 'teams' : 'players'}` : 'Nothing matches these filters';
   }
   function paintOut() {
     const o = document.querySelector('#main .sx-root .sx-out'); if (!o) return;
-    o.innerHTML = outHTML();
-    const live = document.querySelector('#main .sx-root .sx-live'), M = SEAS_ST === 'ok' ? model() : null;
-    if (live && M) live.textContent = M.rows.length ? `Showing ${M.shown.length} of ${M.rows.length} ${M.view.team ? 'teams' : 'players'}` : 'Nothing matches these filters';
-    const r = document.querySelector('#main .sx-root .sx-filt'); const any = st.q || st.team !== 'all' || st.vs !== 'all' || st.ha !== 'all' || st.last > 0;
+    o.innerHTML = outHTML(); stamp(); announce();
+    const r = document.querySelector('#main .sx-root .sx-filt'); const any = anyFilter();
     if (r) { const b = r.querySelector('.sx-reset'); if (any && !b) r.insertAdjacentHTML('beforeend', '<button type="button" class="ui-link sx-reset" data-sx-reset="1">Clear filters</button>'); else if (!any && b) b.remove(); }
   }
-  function rerender(sel) {
-    SB.render();
+  function rerender(sel, fallback) {
+    SB.render(); announce();
     if (!sel) return;
-    try { const el = document.querySelector('#main .sx-root ' + sel); if (el) el.focus({ preventScroll: true }); } catch (e) { /* focus is a nicety */ }
+    try {
+      const el = document.querySelector('#main .sx-root ' + sel) || (fallback && document.querySelector('#main .sx-root ' + fallback));
+      if (el) el.focus({ preventScroll: true });
+    } catch (e) { /* focus is a nicety */ }
   }
   const attrSel = (a, v) => `[${a}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
 
@@ -486,11 +506,12 @@ ${barHTML()}
   function csvText() {
     const M = model(); if (!M) return '';
     const q = s => { const t = String(s == null ? '' : s); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const tx = s => { const t = String(s == null ? '' : s); return /^[=+\-@\t\r]/.test(t) ? "'" + t : t; };  // text cells never start a formula
     const head = ['Rank', M.view.team ? 'Team' : 'Player', 'Team', 'Pos', 'GP'].concat(M.cols.map(c => c.label));
     const lines = [head.map(q).join(',')];
     M.shown.forEach((r, i) => {
       const vals = M.cols.map(c => { const v = r[c.k]; if (!num(v)) return ''; if (c.kind === 'pct') return (Math.round(v * 1000) / 10).toFixed(1); if (c.kind === 'r2') return v.toFixed(2); if (c.kind === 'fp' || st.per) return (Math.round(v * 10) / 10).toFixed(1); return String(Math.round(v)); });
-      lines.push([i + 1, r.n, r.team ? r.n : r.tn, r.team ? '' : r.pos, r.gp].concat(vals).map(q).join(','));
+      lines.push([i + 1, tx(r.n), tx(r.team ? r.n : r.tn), tx(r.team ? '' : r.pos), r.gp].concat(vals).map(q).join(','));
     });
     return lines.join('\n');
   }
@@ -499,6 +520,7 @@ ${barHTML()}
     const rows = txt.split('\n').length - 1;
     const sheet = () => {
       if (typeof SB.openSheet !== 'function') return;
+      csvBack = true;
       SB.openSheet(`<div class="sx-csvsheet"><h2 style="font:700 20px 'Rubik',sans-serif">Table as CSV</h2><p class="ui-muted">Copying is blocked here, so select the text below and copy it (${rows} rows).</p><textarea class="sx-csvbox" readonly aria-label="CSV text">${esc(txt)}</textarea></div>`, { label: 'Table as CSV' });
       setTimeout(() => { const t = document.querySelector('.sx-csvbox'); if (t) { try { t.focus(); t.select(); } catch (e) { /* ok */ } } }, 50);
     };
@@ -532,7 +554,7 @@ ${barHTML()}
     }
     if (t.hasAttribute('data-sx-player')) { SB.goTab('players', { name: t.getAttribute('data-sx-player'), sport: st.sport }); return; }
     if (t.hasAttribute('data-sx-csv')) { copyCSV(); return; }
-    if (t.hasAttribute('data-sx-reset')) { st.q = ''; st.team = 'all'; st.vs = 'all'; st.ha = 'all'; st.last = 0; rerender('#sx-q'); }
+    if (t.hasAttribute('data-sx-reset')) { st.q = ''; st.team = 'all'; st.vs = 'all'; st.ha = 'all'; st.last = 0; rerender('#sx-q', 'select[data-ui-select="sx-team"]'); }
   });
   document.addEventListener('change', ev => {
     const s = ev.target; if (!s || !s.matches || !s.matches('.sx-root select[data-ui-select]')) return;
@@ -552,5 +574,5 @@ ${barHTML()}
 
   SB.registerTab({ key: KEY, label: 'Stat Explorer', render });
   // read-only hooks for tests
-  window.__statx = { model, csvText, get state() { return JSON.parse(JSON.stringify(st)); }, get seasonState() { return SEAS_ST; } };
+  window.__statx = { model, csvText, get timing() { return { ...TIM }; }, get state() { return JSON.parse(JSON.stringify(st)); }, get seasonState() { return SEAS_ST; } };
 })();

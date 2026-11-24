@@ -156,7 +156,7 @@
   // Insights board) because box-score logs (season.json and nbalast4.json) are dated by the game's UTC start date: a game counts
   // when its date is before the priced game's UTC date and not after today's UTC date. Cutting at the Los Angeles day would drop
   // last night's game on a back-to-back (a 7 PM PT game on Nov 22 is dated Nov 23). With no box scores, the board's own recent
-  // form (playerform last 5) stays.
+  // form (playerform last 5) stays. NBA games he logged 0 minutes in (listed, did not play) are not counted.
   const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
   function logFor(it) {
     if (SLOG.has(it.id)) return SLOG.get(it.id);
@@ -171,12 +171,12 @@
         let stot = null, sgp = null;
         if (P) {
           const f = X.fi, fv = r => (it.td ? (+r[f.rtd] || 0) + (+r[f.ctd] || 0) : it.stat === 'hpts' ? (+r[f.g] || 0) + (+r[f.a] || 0) : f[it.stat] != null ? +r[f[it.stat]] : NaN);
-          for (const r of P.log) { if (!Array.isArray(r) || !ok(String(r[0]))) continue; const v = fv(r); if (num(v)) by.set(String(r[0]).slice(0, 10), { d: String(r[0]).slice(0, 10), o: r[1], v }); }
+          for (const r of P.log) { if (!Array.isArray(r) || !ok(String(r[0])) || (f.min != null && !(+r[f.min] > 0))) continue; const v = fv(r); if (num(v)) by.set(String(r[0]).slice(0, 10), { d: String(r[0]).slice(0, 10), o: r[1], v }); }
           if (it.td && Array.isArray(P.tot) && f.rtd != null) { stot = (+P.tot[f.rtd - 3] || 0) + (+P.tot[f.ctd - 3] || 0); sgp = P.gp; }
         }
         if (it.sp === 'nba' && (it.stat === 'pts' || it.stat === 'reb' || it.stat === 'ast')) {
           let L = null; try { L = E.last4Of(it.team, it.name); } catch (e) { L = null; }
-          if (L && Array.isArray(L.rows)) for (const r of L.rows) { const d = String((r && r.date) || '').slice(0, 10); if (r && !r.dnp && num(r[it.stat]) && ok(d) && !by.has(d)) by.set(d, { d, o: r.opp, v: r[it.stat] }); }
+          if (L && Array.isArray(L.rows)) for (const r of L.rows) { const d = String((r && r.date) || '').slice(0, 10); if (r && !r.dnp && !(num(r.min) && r.min <= 0) && num(r[it.stat]) && ok(d) && !by.has(d)) by.set(d, { d, o: r.opp, v: r[it.stat] }); }
         }
         const vals = [...by.values()].sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0));
         if (vals.length) out = { vals, src: 'box scores', stot: stot != null ? stot : own.stot, sgp: stot != null ? sgp : own.sgp };

@@ -11,6 +11,26 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - Engine (index.html): soccer and NHL priced from exact score grids; NBA, NFL and college football from 100,000 seeded simulations per game.
   Same-game legs are priced jointly.
 
+## Pro interface (2026-11-24; spec: docs/pro-interface.md)
+- The owner asked for "an exact 1:1 kind of interface" of rotobot.ai, to do what it does. We match its layout and function, keep our own name, logo and words, and never copy RotoBot's branding, images or text.
+- **Shell (index.html):**
+  - left sidebar (260px) with a BETTING / FANTASY switch (`body.mode-fantasy` turns the accent green);
+  - on phones, a top bar (menu, logo, Ask) and the sidebar as a drawer (`SB.openNav` / `SB.closeNav`; tests open it before clicking a tab or the search box);
+  - navy `#030712` with cyan `#00d3f2` / `#3ec4ff`, Rubik + Inter + JetBrains Mono;
+  - default screen: Chat.
+- **Sidebar groups:** Research (the new screens), Safe Bets picks, Your bets, Games, Tools. Fantasy mode shows Chat, Start / Sit, Trade Analyzer, Rate My Team, Rankings, Players, Stat Explorer, Fantasy Parlay.
+- **New screens (one module each, `SB.ui` components from ui.js, `SB.engine` read-only model access):**
+  - ask.js (Chat: the `sample` capability with page tools; a model-only mode when AI isn't available);
+  - insights.js (Insights flip cards + Prop Explorer table);
+  - propan.js (Prop Analyzer), players.js, statx.js (Stat Explorer);
+  - slate.js (Games), sharp.js (Sharp Board: Polymarket vs the books, since we have no money / ticket splits);
+  - news.js (Highlights: ESPN links, tools/news_fetch.py);
+  - builder.js (Parlay: swipe + generate + slip);
+  - ffb.js (fantasy screens).
+- **Honest gaps shown on screen:** no sportsbook prop prices (we show model chance + fair odds), no betting splits, no hosted video, no league sync, no MLB / F1.
+- **season.json** (tools/season_tables.py, from leg_pairs.py's ESPN box-score cache): every player's season totals and game logs for NFL, college, NBA, NHL, soccer. It is loaded only by the screens that need it (`SB.season()`).
+- **Tests for new screens:** tests/lib/harness.mjs (fixtures pinned, clock 2026-11-23T12:00Z).
+
 ## Tabs (Find bets group, roughly in order)
 - **Trending → 🧠 My Parlay Picks.** Chosen once a day for one Los Angeles day:
   - three 3-leg exact-score parlays;
@@ -97,6 +117,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | firsttd.json | tools/leg_pairs.py refreshes every NFL team's season TDs from box scores (game-day "status" notes kept) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
+| season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
 
 ## Scheduled tasks

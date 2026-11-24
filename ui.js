@@ -10,7 +10,8 @@
 //   SB.ui.tone(score)                              'good' (>= 60) | 'mid' | 'bad' (< 40)
 //   SB.ui.verdict({tone, kicker, title, tag})      the verdict band; tone take | lean | coin | pass
 //   SB.ui.factors([{name, tone, status, why}])     2x2 tiles that open to show why (native <details>)
-//   SB.ui.gameLog({title, summary, vals, labels, line}) bar chart of recent games with the line drawn
+//   SB.ui.gameLog({title, summary, vals, labels, line, hits?}) bar chart of recent games with the line drawn (hits: [bool] per
+//                                                bar, e.g. for unders; default: value >= line)
 //   SB.ui.propCard(o)                              the flip card (see the function for its fields); data-ui-flip flips it
 //   SB.ui.team(abbr, big)                          team badge, colour from the abbreviation
 //   SB.ui.split({left, right, rows})               two-sided percentage bars (Sharp Board)
@@ -64,7 +65,7 @@
     const top = Math.max(1, ...vals, line == null ? 0 : line * 1.25) * 1.08;
     const pctOf = v => Math.max(0, Math.min(100, v / top * 100));
     const bars = vals.map((v, i) => {
-      const cls = line == null ? '' : v >= line ? 'hit' : 'miss';
+      const cls = Array.isArray(o.hits) ? (o.hits[i] ? 'hit' : 'miss') : line == null ? '' : v >= line ? 'hit' : 'miss';  // callers pass hits for unders
       return `<div class="b ${cls}"><span class="v" style="bottom:${pctOf(v)}%">${esc(Number.isInteger(v) ? v : v.toFixed(1))}</span><div class="bar" style="height:${pctOf(v)}%"></div><span class="o">${esc(labels[i] || '')}</span></div>`;
     }).join('');
     const ln = line == null ? '' : `<div class="line" style="bottom:calc(24px + (100% - 50px) * ${pctOf(line) / 100})"></div><span class="lv" style="bottom:calc(24px + (100% - 50px) * ${pctOf(line) / 100})">${esc(line)}</span>`;

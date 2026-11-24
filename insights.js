@@ -86,17 +86,21 @@
     if (stat === 'hpts') return (+row[f.g] || 0) + (+row[f.a] || 0);
     return f[stat] != null ? +row[f[stat]] : NaN;
   };
-  // his games before the day being priced, oldest first: [{d, o, v}]
-  function logOf(sp, name, abbr, teamName, stat, day, pl) {
-    const by = new Map(); let src = '';
+  // his games before the game being priced, oldest first: [{d, o, v}]. Box-score dates (season.json, nbalast4.json) are the UTC
+  // date of the start (ESPN), so the cut is the priced game's UTC date, not the Los Angeles day: last night's 7 PM PT game is
+  // dated today and must count. Nothing dated after today (UTC) counts either (a saved file can be newer than the clock).
+  const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
+  function cutOf(g) { const gd = utcDay(SB.startMs(g)), nd = utcDay(Date.now()); return d => { d = String(d); return d < gd && d <= nd; }; }
+  function logOf(sp, name, abbr, teamName, stat, g, pl) {
+    const by = new Map(), before = cutOf(g); let src = '';
     const P = seasonPlayer(sp, name, abbr, teamName), X = SEAS && SEAS[sp];
     if (P) {
-      for (const r of P.log) { if (!Array.isArray(r) || !(String(r[0]) < day)) continue; const v = fieldVal(X, r, stat); if (num(v)) by.set(r[0], { d: r[0], o: r[1], v }); }
+      for (const r of P.log) { if (!Array.isArray(r) || !before(r[0])) continue; const v = fieldVal(X, r, stat); if (num(v)) by.set(r[0], { d: r[0], o: r[1], v }); }
       if (by.size) src = 'box scores';
     }
     if (sp === 'nba' && (stat === 'pts' || stat === 'reb' || stat === 'ast')) {
       let L = null; try { L = E.last4Of(abbr, name); } catch (e) { L = null; }
-      if (L && Array.isArray(L.rows)) for (const r of L.rows) if (r && !r.dnp && num(r[stat]) && String(r.date) < day && !by.has(r.date)) by.set(r.date, { d: r.date, o: r.opp, v: r[stat] });
+      if (L && Array.isArray(L.rows)) for (const r of L.rows) if (r && !r.dnp && num(r[stat]) && before(r.date) && !by.has(r.date)) by.set(r.date, { d: r.date, o: r.opp, v: r[stat] });
       if (by.size && !src) src = 'box scores';
     }
     let vals = [...by.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
@@ -129,6 +133,8 @@
     const pb = num(c.pb) ? c.pb : 0, s = Math.round(clamp(50 + 250 * (c.tf - 1) - 60 * Math.max(0, pb - 0.15), 0, 100));
     return { s, tf: c.tf, pb, label: s >= 60 ? 'Soft matchup' : s < 40 ? 'Tough' : 'Neutral' };
   }
+  // why a card has no matchup score: the engine rates NBA / NFL / college games from their price only
+  const muWhy = g => (!(E.BLOW && E.BLOW[g.sport]) ? `Not rated for ${SPN[g.sport] || g.sport}` : !SB.priced(g) ? 'No game price yet' : 'Not rated');
   const splitName = n => { const w = String(n || '').trim().split(/\s+/); return w.length > 1 ? [w[0], w.slice(1).join(' ')] : ['', w[0] || '']; };
   function posOf(sp, team, name, pl, P) {
     if (pl && pl.pos) return pl.pos;
@@ -148,7 +154,7 @@
   }
   function board(day) {
     if (CACHE.data !== SB.DATA) CACHE = { data: SB.DATA, m: new Map() };
-    const ck = day + '|' + SEAS_ST + '|' + (tdReady() ? 1 : 0);
+    const ck = day + '|' + SEAS_ST + '|' + (tdReady() ? 1 : 0) + '|' + E.dayGames(day).map(g => g.id).join(',');
     if (!CACHE.m.has(ck)) CACHE.m.set(ck, compute(day));
     return CACHE.m.get(ck);
   }
@@ -169,12 +175,12 @@
       const inj = injOf(g.sport, pl.team, pl.name, pl); if (isOut(inj)) continue;   // ruled out: the prop would be void
       const main = legs.reduce((a, b) => (Math.abs(b.p - 0.65) < Math.abs(a.p - 0.65) ? b : a));
       const me = g.home.abbr === pl.team ? g.home : g.away, sp = g.sport;
-      const log = logOf(sp, pl.name, pl.team, me.name, pl.stat, day, pl);
+      const log = logOf(sp, pl.name, pl.team, me.name, pl.stat, g, pl);
       let M = null; try { M = E.playerMeans(pl); } catch (e) { M = null; }
       const [first, last] = splitName(pl.name);
       const base = {
         td: false, pl, g, gid: g.id, sp, stat: pl.stat, name: pl.name, first, last, team: pl.team, opp: me === g.home ? g.away.abbr : g.home.abbr,
-        pos: posOf(sp, pl.team, pl.name, pl, log.P), log, M, mu: matchupOf(g, pl.team), inj, savg: num(pl.avg) ? pl.avg : null,
+        pos: posOf(sp, pl.team, pl.name, pl, log.P), log, M, mu: matchupOf(g, pl.team), muWhy: muWhy(g), inj, savg: num(pl.avg) ? pl.avg : null,
         start: SB.startMs(g), matchup: `${g.away.abbr} @ ${g.home.abbr}`, when: whenOf(g),
       };
       for (const L of legs) {
@@ -195,11 +201,11 @@
             let p = 0; try { p = SB.p1(g, key); } catch (e) { p = 0; }
             if (!(p >= TDMIN) || p >= 0.995) continue;
             const inj = injOf('nfl', me.abbr, name, null, slug); if (isOut(inj)) continue;
-            const log = logOf('nfl', name, me.abbr, me.name, 'td', day, null), [first, last] = splitName(name);
+            const log = logOf('nfl', name, me.abbr, me.name, 'td', g, null), [first, last] = splitName(name);
             const P = log.P, X = SEAS && SEAS.nfl;
             const it = Object.assign({
               td: true, pl: null, g, gid: g.id, sp: 'nfl', stat: 'td', name, first, last, team: me.abbr, opp: me === g.home ? g.away.abbr : g.home.abbr, slug,
-              pos: (v && v.pos) || (P && P.pos) || '', log, M: null, mu: matchupOf(g, me.abbr), inj,
+              pos: (v && v.pos) || (P && P.pos) || '', log, M: null, mu: matchupOf(g, me.abbr), muWhy: muWhy(g), inj,
               savg: P && X && P.gp ? ((+P.tot[X.ti.rtd] || 0) + (+P.tot[X.ti.ctd] || 0)) / P.gp : null, stot: P && X ? (+P.tot[X.ti.rtd] || 0) + (+P.tot[X.ti.ctd] || 0) : null, sgp: P ? P.gp : null,
               start: SB.startMs(g), matchup: `${g.away.abbr} @ ${g.home.abbr}`, when: whenOf(g),
             }, hitsFor(log.vals, 1), { id: g.id + '|' + key, key, thr: 1, p, main: true, lineTxt: 'Yes', marketEm: 'Yes', market: 'Anytime TD' });
@@ -214,10 +220,12 @@
   // ---------- sorting ----------
   const nl = (a, b, f) => { const x = f(a), y = f(b); return x == null && y == null ? 0 : x == null ? 1 : y == null ? -1 : y - x; };
   const rate5 = x => (x.n5 ? x.h5 / x.n5 : null), rate10 = x => (x.n10 ? x.h10 / x.n10 : null), muS = x => (x.mu ? x.mu.s : null);
+  // a 2-of-2 is not a better hit rate than 9 of 10: samples under MINN games rank after the full ones (then no log at all)
+  const MINN5 = 3, MINN10 = 5, tier5 = x => (x.n5 >= MINN5 ? 0 : x.n5 ? 1 : 2);
   const tie = (a, b) => b.p - a.p || a.start - b.start || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
   const SORTS = {
     p: (a, b) => b.p - a.p || nl(a, b, rate5) || tie(a, b),
-    hit: (a, b) => nl(a, b, rate5) || b.n5 - a.n5 || tie(a, b),
+    hit: (a, b) => tier5(a) - tier5(b) || nl(a, b, rate5) || b.n5 - a.n5 || tie(a, b),
     mu: (a, b) => nl(a, b, muS) || tie(a, b),
     time: (a, b) => a.start - b.start || tie(a, b),
   };
@@ -259,6 +267,7 @@
 .ins-root .ins-pbtn:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
 .ins-root .ui-table tbody tr{cursor:pointer}
 .ins-root .ui-table td{padding-top:7px;padding-bottom:7px}
+.ins-root .ins-warn{margin:0;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,184,0,.35);background:rgba(255,184,0,.07);color:#ffe2a3}
 .ins-root .ins-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
 @media(max-width:520px){.ins-root .ui-sel{flex:1 1 auto;min-width:0}.ins-root .ui-sel .v{overflow:hidden;text-overflow:ellipsis}}
 `;
@@ -267,6 +276,8 @@
 
   // ---------- shared pieces ----------
   const honest = () => `<div class="ins-honest" role="note"><span class="i" aria-hidden="true">i</span><span><b>No sportsbook prop prices in our feed.</b> Each prop shows the model's chance and its fair odds, so bet only at that price or better. Every chance is a model estimate, and a player's last 5 games are a small sample.</span></div>`;
+  // season.json failed: say so, the hit rates fall back to what we still have
+  const seasonWarn = () => (SEAS_ST === 'none' ? `<p class="ui-note ins-warn" role="status">This season's game logs didn't load, so hit rates use only the latest NBA box scores and the researched last-5 form file; props without either show no game log.</p>` : '');
   const dayOpts = () => [['today', 'Today'], ['tomorrow', 'Tomorrow']];
   function sportPills(list, active, name) {
     const n = {}; for (const x of list) n[x.sp] = (n[x.sp] || 0) + 1;
@@ -281,7 +292,7 @@
       b.textContent = on ? '✓ In slip' : '+ Slip';
       b.classList.toggle('ui-cta', !on); b.classList.toggle('ui-ghost', on);
       b.setAttribute('aria-pressed', String(on));
-      b.setAttribute('aria-label', (on ? 'Remove from slip: ' : 'Add to slip: ') + (b.getAttribute('data-ins-name') || ''));
+      b.setAttribute('aria-label', 'Add to slip: ' + (b.getAttribute('data-ins-name') || ''));   // aria-pressed says whether it is in
     }
   }
 
@@ -295,7 +306,7 @@
   function gameRows(it) {
     const mu = it.mu, b = E.BLOW && E.BLOW[it.sp];
     return [
-      ['Team points', mu ? `${mu.tf >= 1 ? '+' : '−'}${Math.abs(Math.round((mu.tf - 1) * 100))}% vs league avg` : 'No game price yet'],
+      ['Team points', mu ? `${mu.tf >= 1 ? '+' : '−'}${Math.abs(Math.round((mu.tf - 1) * 100))}% vs league avg` : it.muWhy],
       ['Blowout risk', mu && b ? `${pct(mu.pb)} (${b}+ pts)` : '—'],
       ['Injury report', it.inj ? cap(it.inj.status) + (it.inj.injury ? ' · ' + it.inj.injury : '') : 'Not listed'],
     ];
@@ -337,21 +348,24 @@
   function stripOf(it) {
     const l5 = it.log.vals.slice(-5), ln = it.td ? 'a TD' : it.thr + '+';
     if (!l5.length) return `<div class="ins-l5"><span class="ui-lbl">Last games</span><span class="none">${esc(hitLabel(it))}</span></div>`;
-    const lab = `His last ${l5.length} against ${ln}: ` + l5.map(x => `${x.v}${x.o ? ' vs ' + x.o : ''}`).join(', ');
-    return `<div class="ins-l5" role="img" aria-label="${esc(lab)}"><span class="ui-lbl">Last ${l5.length} · vs ${esc(ln)}</span><span class="g">${l5.map(x => `<span class="${x.v >= it.thr ? 'h' : 'm'}"><b>${esc(Number.isInteger(x.v) ? x.v : f1(x.v))}</b><i>${esc(String(x.o || '').slice(0, 4))}</i></span>`).join('')}</span></div>`;
+    const src = it.log.src === 'recent form' ? ' · form file' : '', hit = l5.filter(x => x.v >= it.thr).length;
+    const lab = `His last ${l5.length}${src ? ' (researched form file, not box scores)' : ''} against ${ln}, cleared ${hit}: ` + l5.map(x => `${x.v}${x.o ? ' vs ' + x.o : ''}`).join(', ');
+    return `<div class="ins-l5" role="img" aria-label="${esc(lab)}"><span class="ui-lbl">Last ${l5.length} · vs ${esc(ln)}${src}</span><span class="g">${l5.map(x => `<span class="${x.v >= it.thr ? 'h' : 'm'}"><b>${esc(Number.isInteger(x.v) ? x.v : f1(x.v))}</b><i>${esc(String(x.o || '').slice(0, 4))}</i></span>`).join('')}</span></div>`;
   }
   function cardHTML(it) {
     const html = U.propCard({
       id: it.id, first: it.first, last: it.last, team: it.team, pos: it.pos, matchup: it.matchup, when: it.when,
       market: it.market, marketEm: it.marketEm, chance: it.p, hits: it.hits5, hitLabel: hitLabel(it),
-      matchupScore: it.mu ? it.mu.s : null, matchupLabel: it.mu ? it.mu.label : 'No game price yet',
+      matchupScore: it.mu ? it.mu.s : null, matchupLabel: it.mu ? it.mu.label : it.muWhy,
       back: { rows: backOf(it), note: noteOf(it) }, flipLabel: 'Full matchup',
       actions: [{ label: '+ Slip', attr: 'ins-slip', value: it.id, cta: true }, { label: 'Analyze', attr: 'ins-an', value: it.id }],
     });
     const nm = esc(`${it.name} ${it.td ? 'anytime TD' : it.thr + '+ ' + (E.STATN[it.stat] || it.stat)}`);
-    return html.replace('class="ui-prop"', `class="ui-prop${it.mu ? '' : ' ins-nomu'}" data-sport="${esc(it.sp)}" data-key="${esc(it.key)}"`)
-      .replace('<div class="ft">', stripOf(it) + '<div class="ft">')   // the first .ft is the front face's footer
-      .replace(/data-ins-slip="/g, `data-ins-name="${nm}" data-ins-slip="`);
+    const cls = `class="ui-prop${it.mu ? '' : ' ins-nomu'}" data-sport="${esc(it.sp)}" data-key="${esc(it.key)}"`, strip = stripOf(it);
+    // function replacements: a "$" in feed text must never be read as a replacement pattern
+    return html.replace('class="ui-prop"', () => cls)
+      .replace('<div class="ft">', () => strip + '<div class="ft">')   // the first .ft is the front face's footer
+      .replace(/data-ins-slip="/g, () => `data-ins-name="${nm}" data-ins-slip="`);
   }
   function renderInsights(main, params) {
     css(); applyParams('insights', params); needSeason(); needFT();
@@ -374,7 +388,7 @@
       body = `<div class="ins-grid">${shown.map(cardHTML).join('')}</div>` +
         (list.length > shown.length ? `<div class="ins-more"><button type="button" class="ui-ghost" data-ins-more="1">Show more (${list.length - shown.length} left)</button></div>` : '');
     }
-    main.innerHTML = `<div class="ui-page ins-root" data-ins="insights">${head}${ctrl}${honest()}${meta}${body}<p class="ui-note">Hit rate: his games this season from ESPN box scores (NBA joined with the latest four box scores), counted against the card's line; a missed game is not counted. Matchup: 50 + 250 × (team's expected points vs league average − 1), minus a blowout penalty, from the game's price; "—" where the game has no price yet.</p></div>`;
+    main.innerHTML = `<div class="ui-page ins-root" data-ins="insights">${head}${ctrl}${honest()}${seasonWarn()}${meta}${body}<p class="ui-note">Hit rate: his games this season from ESPN box scores (NBA joined with the latest four box scores), or his researched last 5 ("form file") where we have no box scores, counted against the card's line; a missed game is not counted. Matchup: 50 + 250 × (team's expected points vs league average − 1), minus a blowout penalty, from the game's price; "—" where the game has no price yet or the sport is not rated (NHL, soccer). Players ruled out are left off, and so are anytime TDs under ${Math.round(TDMIN * 100)}%.</p></div>`;
     syncSlip(main);
   }
 
@@ -404,8 +418,10 @@
     const v = r => (k === 'hit' ? r.hit : r[k]);
     return rows.sort((a, b) => {
       const x = v(a), y = v(b);
-      if (x == null || y == null || x === y) { if (x == null && y != null) return 1; if (y == null && x != null) return -1; }
-      else { const c = typeof x === 'string' ? x.localeCompare(y) : x - y; if (c) return c * d; }
+      if (x == null && y != null) return 1;   // no value: last, either direction
+      if (y == null && x != null) return -1;
+      if (k === 'hit' && x != null && (a.n10 >= MINN10) !== (b.n10 >= MINN10)) return a.n10 >= MINN10 ? -1 : 1;   // small samples after
+      if (x != null && x !== y) { const c = typeof x === 'string' ? x.localeCompare(y) : x - y; if (c) return c * d; }
       if (k === 'hit' && a.n10 !== b.n10) return b.n10 - a.n10;
       return b.p - a.p || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     });
@@ -433,10 +449,10 @@
     const ctrl = `<div class="ins-ctrl">${U.select({ label: 'Day', value: x.day, options: dayOpts(), name: 'exp-day' })}${U.select({ label: 'Stat', value: R.stat, options: statOpts, name: 'exp-stat' })}${U.select({ label: 'Team', value: R.team, options: [['all', 'All teams']].concat(R.teams.map(t => [t, t])), name: 'exp-team' })}${U.select({ label: 'Min chance', value: String(+x.minp || 0), options: [['0', 'Any'], ['0.5', '50%+'], ['0.6', '60%+'], ['0.7', '70%+'], ['0.8', '80%+']], name: 'exp-minp' })}${U.select({ label: 'Lines', value: x.lines, options: [['main', 'Main line'], ['all', 'Every line']], name: 'exp-lines' })}${U.select({ label: 'Rows', value: String(x.rows), options: [['25', '25'], ['50', '50'], ['100', '100']], name: 'exp-rows' })}</div>${sportPills(R.base, x.sport, 'exp-sport')}`;
     const seg = U.seg([{ k: 'hit', label: 'Hit %' }, { k: 'mu', label: 'Matchup' }], x.sort.k === 'mu' ? 'mu' : x.sort.k === 'hit' ? 'hit' : '', 'exp-rank');
     const table = view.length ? U.table({ cols: COLS, rows: view, sort: x.sort, name: 'exp' }) : U.empty('No props match these filters.');
-    main.innerHTML = `<div class="ui-page ins-root" data-ins="explorer">${head}${ctrl}${honest()}
+    main.innerHTML = `<div class="ui-page ins-root" data-ins="explorer">${head}${ctrl}${honest()}${seasonWarn()}
 <section class="ui-card ins-tcard" aria-label="Prop table"><div class="ins-tbar"><span class="ui-lbl">Analyze props<span class="n">${R.rows.length} prop${R.rows.length === 1 ? '' : 's'}</span></span>${seg}</div>${table}
 <div class="ins-foot"><span class="ui-note">Showing ${view.length} of ${R.rows.length}${R.rows.length > view.length ? ' · raise Rows to see more' : ''}. Hit: games cleared at this line, last 5 · last 10 (n shown).</span><span class="ui-row"><button type="button" class="ui-ghost sm" data-ins-copy="1">Copy table</button><button type="button" class="ui-link" data-ins-go="insights">Card board →</button></span></div></section>
-<p class="ui-note">Model % is a model estimate (season average with recent form at 30%, the game's price and blowout risk). Fair odds are what that chance is worth, not a book price. Matchup "—": no game price yet.</p></div>`;
+<p class="ui-note">Model % is a model estimate (season average with recent form at 30%, the game's price and blowout risk). Fair odds are what that chance is worth, not a book price. Hit ranking: samples under ${MINN10} games come after the rest. Matchup "—": no game price yet, or a sport we don't rate (NHL, soccer).</p></div>`;
   }
   function copyTable() {
     const head = ['Player', 'Team', 'Game', 'Market', 'Line', 'Model %', 'Fair odds', 'Hit L5', 'Hit L10', 'Avg L5', 'Season avg', 'Matchup'];
@@ -494,7 +510,7 @@
     }
     if (t.hasAttribute('data-ins-an')) { analyze(itemById(t.getAttribute('data-ins-an'))); return; }
     if (t.hasAttribute('data-ins-more')) { const n = st.shown; st.shown += PAGE; rerender(`.ins-grid > .ui-prop:nth-child(${n + 1}) .front [data-ui-flip]`); return; }
-    if (t.hasAttribute('data-ins-day')) { st.day = t.getAttribute('data-ins-day'); st.shown = PAGE; SB.render(); return; }
+    if (t.hasAttribute('data-ins-day')) { st.day = t.getAttribute('data-ins-day') === 'tomorrow' ? 'tomorrow' : 'today'; st.shown = PAGE; rerender(attrSel('data-ui-select', 'ins-day')); return; }
     if (t.hasAttribute('data-ins-go')) { SB.goTab(t.getAttribute('data-ins-go'), {}); return; }
     if (t.hasAttribute('data-ins-copy')) { copyTable(); return; }
     const row = t.matches('[data-ins-row]') ? t : (t.tagName === 'TR' && t.closest('tbody') ? t.querySelector('[data-ins-row]') : null);
@@ -516,11 +532,11 @@
   });
   if (typeof SB.on === 'function') {
     SB.on('slip', () => syncSlip());
-    SB.on('data', () => { CACHE = { data: null, m: new Map() }; ftWait = false; });
+    SB.on('data', () => { CACHE = { data: null, m: new Map() }; ftWait = false; setTimeout(() => { if (showing() && document.querySelector('.ins-root')) SB.render(); }, 0); });
   }
 
   SB.registerTab({ key: 'insights', label: 'Insights', render: renderInsights });
   SB.registerTab({ key: 'explorer', label: 'Prop Explorer', render: renderExplorer });
   // read-only hooks for tests and other screens
-  window.__insights = { board: day => board(day || dayKey('today')), dayKey, matchupOf, hitsFor, get seasonState() { return SEAS_ST; }, get rows() { return EXROWS; } };
+  window.__insights = { board: day => board(day || dayKey('today')), dayKey, clear() { CACHE = { data: null, m: new Map() }; }, matchupOf, hitsFor, get seasonState() { return SEAS_ST; }, get rows() { return EXROWS; } };
 })();

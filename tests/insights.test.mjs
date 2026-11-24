@@ -5,17 +5,19 @@ import { open, check, done, FX } from './lib/harness.mjs';
 const nameKey = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const SEASON = JSON.parse(FX('season-2026-11-23.json'));
 const L4 = JSON.parse(FX('nbalast4-2026-11-23b.json'));
-const DAY = '2026-11-23';
-// his games before the day, oldest first, straight from the fixture logs (NBA: season log joined with the last-4 box scores)
-function fixtureVals(sp, name, feedTeam, stat) {
+const NOW_UTC = '2026-11-23';   // the clock's UTC date
+// his games before the priced game, oldest first, straight from the fixture logs (NBA: season log joined with the last-4 box
+// scores). Box-score dates are the UTC date of the start, so the cut is the game's UTC date (and nothing after the clock's date).
+function fixtureVals(sp, name, feedTeam, stat, startMs) {
+  const gd = new Date(startMs).toISOString().slice(0, 10), before = d => d < gd && d <= NOW_UTC;
   const S = SEASON.sports[sp], fi = f => 3 + S.fields.indexOf(f);
   let c = S.players.filter(p => nameKey(p.n) === nameKey(name));
   if (c.length > 1) c = c.filter(p => p.t === feedTeam);
   const by = new Map();
-  if (c.length === 1) for (const r of c[0].log) if (r[0] < DAY) by.set(r[0], stat === 'td' ? (r[fi('rtd')] || 0) + (r[fi('ctd')] || 0) : r[fi(stat)]);
+  if (c.length === 1) for (const r of c[0].log) if (before(r[0])) by.set(r[0], stat === 'td' ? (r[fi('rtd')] || 0) + (r[fi('ctd')] || 0) : r[fi(stat)]);
   if (sp === 'nba' && L4.teams[feedTeam]) for (const g of L4.teams[feedTeam].games) {
     const e = Object.entries(g.players).find(([n]) => nameKey(n) === nameKey(name));
-    if (e && !e[1].dnp && g.date < DAY && !by.has(g.date)) by.set(g.date, e[1][stat]);
+    if (e && !e[1].dnp && before(g.date) && !by.has(g.date)) by.set(g.date, e[1][stat]);
   }
   return [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(x => x[1]);
 }
@@ -29,6 +31,9 @@ const fr = await page.evaluate(() => SB.firstRender && SB.firstRender.ms);
 check('first render under 1,500 ms on the fixture slate', fr != null && fr < 1500, `${Math.round(fr)} ms`);
 const rr = await page.evaluate(() => { const t = performance.now(); SB.render(); return performance.now() - t; });
 check('a re-render (board cached per DATA) stays fast', rr < 400, `${Math.round(rr)} ms`);
+// measured inside the page: a cold board (season logs loaded, anytime TDs priced) plus the render
+const cold = await page.evaluate(() => { __insights.clear(); const t = performance.now(); SB.render(); return performance.now() - t; });
+check('cold render with season logs and TDs (board rebuilt) under 1,500 ms', cold < 1500, `${Math.round(cold)} ms`);
 const txt = await page.locator('.ins-root').innerText();
 check('header: kicker and display title', /MODEL PICKS & PROP BOARD/i.test(txt) && /PROP BOARD/i.test(await page.locator('.ins-root .ui-title').innerText()));
 check('honest line: no sportsbook prop prices, model chance + fair odds, bet only at that price or better',
@@ -45,7 +50,7 @@ const F = await nba.evaluate(c => {
     hitBig: f.querySelectorAll('.st2 .ui-big')[0].textContent, hitLbl: f.querySelectorAll('.st2 .ui-muted')[0].textContent, dots: f.querySelectorAll('.st2 .ui-dots i').length,
     muBig: f.querySelectorAll('.st2 .ui-big')[1].textContent, muLbl: f.querySelectorAll('.st2 .ui-muted')[1].textContent, strip: f.querySelectorAll('.ins-l5 .g > span').length };
 });
-const info = await page.evaluate(k => { const i = SB.engine.pLegInfo(k); const g = SB.gameById(i.pl.gid); return { name: i.pl.name, team: i.pl.team, stat: i.pl.stat, thr: i.thr, p: i.p, away: g.away.abbr, home: g.home.abbr, legs: SB.engine.playerLegs(i.pl).map(x => x.p) }; }, F.key);
+const info = await page.evaluate(k => { const i = SB.engine.pLegInfo(k); const g = SB.gameById(i.pl.gid); return { name: i.pl.name, team: i.pl.team, stat: i.pl.stat, thr: i.thr, p: i.p, away: g.away.abbr, home: g.home.abbr, start: SB.startMs(g), legs: SB.engine.playerLegs(i.pl).map(x => x.p) }; }, F.key);
 check('NBA card: first / last name split, position badge, "AWAY @ HOME" and the time',
   `${F.fn} ${F.ln}` === info.name && /^[GFC]/.test(F.pos) && F.mu.includes(`${info.away} @ ${info.home}`) && /\d:\d\d [AP]M PT/.test(F.mu), `${F.fn}|${F.ln}|${F.pos}|${F.mu}`);
 check('NBA card: market "N+ Points/Rebounds/Assists" at the ladder line nearest 65%',
@@ -53,11 +58,18 @@ check('NBA card: market "N+ Points/Rebounds/Assists" at the ladder line nearest 
 const fairTxt = await page.evaluate(p => SB.ui.fair(p), info.p);
 check('NBA card: fair odds from the model chance, and "$100 pays $X at fair odds"',
   F.odds.trim() === fairTxt && F.pay.includes(`Model chance ${Math.round(info.p * 100)}%`) && F.pay.includes(`$100 pays $${Math.round(100 / info.p)} at fair odds`), `${F.odds} · ${F.pay}`);
-const nbaVals = fixtureVals('nba', info.name, info.team, info.stat).slice(-5);
+const nbaVals = fixtureVals('nba', info.name, info.team, info.stat, info.start).slice(-5);
 const nbaHits = nbaVals.filter(v => v >= info.thr).length;
 check('NBA hit rate matches the fixture box scores (season log + last 4) against this line',
   F.hitLbl === `L${nbaVals.length} · ${nbaHits} of ${nbaVals.length}` + (nbaVals.length < 5 ? ' (few games)' : '') && F.dots === nbaVals.length && F.strip === nbaVals.length &&
   F.hitBig.startsWith(String(Math.round(nbaHits / nbaVals.length * 100))), `${info.name} ${info.thr}+ ${info.stat}: [${nbaVals}] -> ${F.hitLbl}`);
+// back-to-back: Chicago played Denver at 4 PM PT on Nov 22 (dated 2026-11-23 UTC) and plays again tonight; that game must count
+const b2b = await page.evaluate(() => { const it = __insights.board().items.find(x => x.sp === 'nba' && x.team === 'CHI' && x.n5 >= 3);
+  if (!it) return null; const c = document.querySelector(`.ui-prop[data-ui-card="${CSS.escape(it.id)}"]`);
+  return { name: it.name, team: it.team, stat: it.stat, thr: it.thr, start: it.start, last: it.log.vals[it.log.vals.length - 1], h5: it.h5, n5: it.n5 }; });
+const b2bVals = b2b ? fixtureVals('nba', b2b.name, b2b.team, b2b.stat, b2b.start).slice(-5) : [];
+check('back-to-back: last night\'s game (UTC-dated today) counts in his hit rate', b2b && b2b.last.d === '2026-11-23' && b2b.last.o === 'DEN' && b2b.n5 === b2bVals.length && b2b.h5 === b2bVals.filter(v => v >= b2b.thr).length,
+  b2b ? `${b2b.name} ${b2b.thr}+ ${b2b.stat}: last ${b2b.last.d} vs ${b2b.last.o}; [${b2bVals}] -> ${b2b.h5}/${b2b.n5}` : 'no CHI card');
 check('matchup: "—" with "No game price yet" when the game has no price (fixture NBA games are unpriced)',
   (await page.evaluate(gid => SB.priced(SB.gameById(gid)), F.id.split('|')[0])) ? /^\d+$/.test(F.muBig) : F.muBig.trim() === '—' && /No game price/.test(F.muLbl), `${F.muBig} ${F.muLbl}`);
 
@@ -94,7 +106,9 @@ const nonInc = a => a.every((v, i) => i === 0 || a[i - 1] >= v), nonDec = a => a
 check('sort "Model chance": chances never go up down the board', nonInc(await pays()));
 await page.selectOption('select[data-ui-select="ins-sort"]', 'hit');
 const hitPct = await page.$$eval('.ins-root .ui-prop .front .st2 > div:first-child .ui-big', a => a.map(x => parseInt(x.textContent, 10)).filter(Number.isFinite));
-check('sort "Hit rate": hit rates never go up', hitPct.length >= 20 && nonInc(hitPct), hitPct.slice(0, 8).join(','));
+const hitN = await page.$$eval('.ins-root .ui-prop', a => a.map(c => __insights.board().byId.get(c.getAttribute('data-ui-card')).n5));
+const fullN = hitPct.filter((_, i) => hitN[i] >= 3);
+check('sort "Hit rate": hit rates never go up among full samples, and samples under 3 games come after them', hitPct.length >= 20 && nonInc(fullN) && hitN.every((n, i) => i === 0 || hitN[i - 1] >= 3 || n < 3), hitPct.slice(0, 8).join(','));
 check('keyboard focus stays on the select after the redraw', await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-ui-select') === 'ins-sort'));
 await page.selectOption('select[data-ui-select="ins-sort"]', 'time');
 const starts = await page.$$eval('.ins-root .ui-prop', a => a.map(c => __insights.board().byId.get(c.getAttribute('data-ui-card')).start));
@@ -111,12 +125,13 @@ const td = page.locator('.ins-root .ui-prop[data-key^="TD:A:"]').first();
 const T = await td.evaluate(c => { const f = c.querySelector('.front'); return { key: c.getAttribute('data-key'), id: c.getAttribute('data-ui-card'), mkt: f.querySelector('.mkt .t').textContent, pay: f.querySelector('.pay').textContent, lbl: f.querySelectorAll('.st2 .ui-muted')[0].textContent, name: f.querySelector('.fn').textContent + ' ' + f.querySelector('.ln').textContent, pos: (f.querySelector('.pos') || {}).textContent }; });
 const tdP = await page.evaluate(id => { const i = id.indexOf('|'); return SB.p1(SB.gameById(id.slice(0, i)), id.slice(i + 1)); }, T.id);
 check('NFL anytime TD card: "Yes Anytime TD", chance via SB.p1, position badge', T.mkt.trim() === 'Yes Anytime TD' && T.pay.includes(`Model chance ${Math.round(tdP * 100)}%`) && /^(QB|RB|WR|TE)$/.test(T.pos), `${T.name} ${T.mkt} ${T.pay}`);
-const tdVals = fixtureVals('nfl', T.name, T.key.split(':')[2], 'td').slice(-5), tdHits = tdVals.filter(v => v >= 1).length;
+const tdStart = await page.evaluate(id => SB.startMs(SB.gameById(id.split('|')[0])), T.id);
+const tdVals = fixtureVals('nfl', T.name, T.key.split(':')[2], 'td', tdStart).slice(-5), tdHits = tdVals.filter(v => v >= 1).length;
 check('TD hit rate = games with a rushing or receiving TD in his last 5 (fixture logs)', T.lbl === `L${tdVals.length} · ${tdHits} of ${tdVals.length}` + (tdVals.length < 5 ? ' (few games)' : ''), `${T.name}: [${tdVals}] -> ${T.lbl}`);
 const yd = page.locator('.ins-root .ui-prop[data-key^="P:"]').first();
 const Y = await yd.evaluate(c => ({ key: c.getAttribute('data-key'), lbl: c.querySelectorAll('.front .st2 .ui-muted')[0].textContent }));
-const yi = await page.evaluate(k => { const i = SB.engine.pLegInfo(k); return { name: i.pl.name, team: i.pl.team, stat: i.pl.stat, thr: i.thr }; }, Y.key);
-const yv = fixtureVals('nfl', yi.name, yi.team, yi.stat).slice(-5), yh = yv.filter(v => v >= yi.thr).length;
+const yi = await page.evaluate(k => { const i = SB.engine.pLegInfo(k); return { name: i.pl.name, team: i.pl.team, stat: i.pl.stat, thr: i.thr, start: SB.startMs(SB.gameById(i.pl.gid)) }; }, Y.key);
+const yv = fixtureVals('nfl', yi.name, yi.team, yi.stat, yi.start).slice(-5), yh = yv.filter(v => v >= yi.thr).length;
 check('NFL yards / receptions hit rate matches the fixture season log', yv.length > 0 && Y.lbl === `L${yv.length} · ${yh} of ${yv.length}` + (yv.length < 5 ? ' (few games)' : ''), `${yi.name} ${yi.thr}+ ${yi.stat}: [${yv}] -> ${Y.lbl}`);
 await page.click('[data-ui-pill="ins-sport|all"]');
 
@@ -153,6 +168,15 @@ check('explorer: HIT % / MATCHUP seg, HIT % on by default', ex.seg.join(',') ===
 const colVals = async label => page.evaluate(l => { const i = [...document.querySelectorAll('.ins-root .ui-table th')].findIndex(t => t.textContent.replace(/[↓↑]/g, '').trim() === l); return [...document.querySelectorAll('.ins-root .ui-table tbody tr')].map(tr => tr.children[i].textContent); }, label);
 const hitCol = (await colVals('Hit L5 · L10')).map(s => { const m = /· (\d+)\/(\d+)/.exec(s); return m ? +m[1] / +m[2] : -1; });
 check('explorer: ranked by hit rate (last 10) by default', nonInc(hitCol), hitCol.slice(0, 6).map(x => x.toFixed(2)).join(','));
+// a 2-of-2 must not outrank 9 of 10: filter to the team of a small-sample prop and check the tiers in the ranking
+const smallIt = await page.evaluate(() => { const it = __insights.board().items.find(x => x.n10 > 0 && x.n10 < 5); return it ? { team: it.team, name: it.name, h: it.h10, n: it.n10 } : null; });
+if (smallIt) {
+  await page.selectOption('select[data-ui-select="exp-team"]', smallIt.team);
+  const ns = await page.evaluate(() => __insights.rows.map(r => r.n10));
+  const firstSmall = ns.findIndex(n => n > 0 && n < 5);
+  check('explorer: samples under 5 games rank after the full ones on hit rate', firstSmall >= 0 && ns.slice(firstSmall).every(n => n < 5), `${smallIt.name} ${smallIt.h}/${smallIt.n}: n10 by rank [${ns.join(',')}]`);
+  await page.selectOption('select[data-ui-select="exp-team"]', 'all');
+} else check('explorer: the fixture has a small-sample prop to rank', false);
 await page.click('.ins-root [data-ui-sort="exp|p"]');
 const pc = (await colVals('Model %')).map(s => parseInt(s, 10));
 check('explorer: sort by Model % is descending', pc.length === 25 && nonInc(pc) && await page.locator('.ins-root th.on [data-ui-sort="exp|p"]').count() === 1, pc.slice(0, 6).join(','));
@@ -204,4 +228,19 @@ const etxt = await page.locator('.ins-root').innerText();
 check('explorer: honest labels (fair odds are not a book price, model estimates)', /No sportsbook prop prices/.test(etxt) && /not a book price/.test(etxt) && !/guarantee|\block\b|sure thing/i.test(etxt));
 
 check('no page errors', errors.length === 0, errors.join(' | '));
-await done(browser);
+await browser.close();
+
+// ---------- season.json missing: both screens still render and say what the hit rates are based on ----------
+const S2 = await open({ width: 390, height: 844, tab: 'insights', pins: { 'season.json': null } });
+await S2.page.waitForFunction(() => window.__insights && __insights.seasonState === 'none' && document.querySelectorAll('.ins-root .ui-prop').length > 0, null, { timeout: 20000 });
+await S2.page.waitForTimeout(200);
+const ns = await S2.page.evaluate(() => { const B = __insights.board(); return { cards: document.querySelectorAll('.ins-root .ui-prop').length, warn: (document.querySelector('.ins-root .ins-warn') || {}).textContent || '',
+  nba: B.items.filter(x => x.sp === 'nba' && x.n5).length, nbaMax: Math.max(...B.items.filter(x => x.sp === 'nba').map(x => x.n5)), form: B.items.filter(x => x.log.src === 'recent form').length,
+  formLbl: (() => { const it = B.items.find(x => x.log.src === 'recent form'); const c = it && document.querySelector(`.ui-prop[data-ui-card="${CSS.escape(it.id)}"] .ins-l5 .ui-lbl`); return c ? c.textContent : null; })() }; });
+check('season.json missing: cards still render, NBA hit rates from the last-4 box scores (4 games at most)', ns.cards === 24 && ns.nba > 0 && ns.nbaMax <= 4, JSON.stringify(ns));
+check('season.json missing: the screen says the game logs did not load', /game logs didn't load/.test(ns.warn), ns.warn);
+await S2.page.evaluate(() => SB.goTab('explorer', {}));
+await S2.page.waitForSelector('.ins-root[data-ins="explorer"] .ui-table');
+check('season.json missing: Prop Explorer renders with the same warning', (await S2.page.locator('.ins-root .ui-table tbody tr').count()) === 25 && (await S2.page.locator('.ins-root .ins-warn').count()) === 1);
+check('no page errors (season.json missing)', S2.errors.length === 0, S2.errors.join(' | '));
+await done(S2.browser);

@@ -108,6 +108,8 @@ def build(sp):
     by = defaultdict(list)  # (team, name) -> [(game, line)]
     for g in games:
         for p in g.get('players', []):
+            if sp == 'nba' and not num(p.get('min')):
+                continue  # a 0-minute appearance is not a game played
             by[(p['team'], p['name'])].append((g, p))
     posf = nfl_positions(games) if sp == 'nfl' else None
     out = []

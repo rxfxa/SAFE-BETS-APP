@@ -533,8 +533,8 @@ h2{font:700 19px/1.2 'Rubik',sans-serif!important;letter-spacing:-.01em}
 .ui-factor .st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .ui-factor p{padding:0 14px 12px;font:400 13px/1.45 var(--fui);color:#ffffffbf}
 .ui-log{position:relative;display:flex;align-items:flex-end;gap:8px;height:150px;padding:26px 4px 24px;overflow:hidden}
-.ui-log .b{position:relative;flex:1 1 0;min-width:0;max-width:52px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
-.ui-log .bar{width:72%;min-height:3px;border-radius:7px 7px 3px 3px;background:rgba(255,255,255,.18)}
+.ui-log .b{position:relative;flex:1 1 0;min-width:0;max-width:52px;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:0;border-radius:0;box-shadow:none;background:none;font:inherit;white-space:normal}
+.ui-log .bar{display:block;margin:0;width:72%;min-height:3px;border-radius:7px 7px 3px 3px;background:rgba(255,255,255,.18)}  /* (the older global .hit / .bar rules must not reach the game log) */
 .ui-log .b.hit .bar{background:linear-gradient(180deg,#3defb6,#00b377)}.ui-log .b.miss .bar{background:linear-gradient(180deg,rgba(241,30,132,.75),rgba(241,30,132,.45))}
 .ui-log .v{position:absolute;font:700 12.5px var(--fui);color:#fff;transform:translateY(-120%)}
 .ui-log .o{position:absolute;bottom:-20px;font:600 10.5px var(--fmono);color:#ffffff80;white-space:nowrap}

@@ -71,22 +71,23 @@ const HB = await page.evaluate(async () => {
     for (const r of P.log) if (r[0] < cut && r[0] <= today && +r[fn.min] > 0) by.set(r[0], +r[fn[b2b.stat]]);   // 0-minute games are not games
     for (const r of E.last4Of(b2b.team, b2b.name).rows) if (!r.dnp && +r.min > 0 && r[b2b.stat] != null && r.date < cut && r.date <= today && !by.has(r.date)) by.set(r.date, +r[b2b.stat]);
     nbaWant = lab([...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, v]) => ({ h: v >= b2b.thr })).slice(-10)); nbaLast = B.log(b2b.id).vals.slice(-1)[0]; }
-  // games he was listed for but played 0 minutes in never count (nbalast4 rows with min 0, season rows with min 0)
-  let zeroRows = 0, zeroBad = [];
-  for (const it of ids.map(B.item).filter(x => x.sp === 'nba')) {
-    const L4 = E.last4Of(it.team, it.name), P = N.players.filter(p => E.nameKey(p.n) === E.nameKey(it.name)), pos = new Set();
-    for (const p of P) for (const r of p.log) if (+r[fn.min] > 0) pos.add(r[0]);
-    const zero = new Set(((L4 && L4.rows) || []).filter(r => !r.dnp && !(+r.min > 0) && !pos.has(r.date)).map(r => r.date));
-    zeroRows += zero.size;
-    for (const v of B.log(it.id).vals) if (zero.has(v.d)) zeroBad.push(it.name + ' ' + v.d);
+  // a game he was listed for but played 0 minutes in never counts: feed one into his box scores and look (and a 12-minute one that does)
+  let zero = null;
+  if (b2b) {
+    const orig = E.last4Of, fake = min => (t, n) => { const L = orig(t, n); return L && E.nameKey(n) === E.nameKey(b2b.name) ? Object.assign({}, L, { rows: L.rows.concat([{ date: '2026-10-01', opp: 'TST', min, pts: 0, reb: 0, ast: 0 }]) }) : L; };
+    const opps = () => B.log(b2b.id).vals.map(v => v.o);
+    E.last4Of = fake(0); B.relog(); const z0 = opps().includes('TST');
+    E.last4Of = fake(12); B.relog(); const z12 = opps().includes('TST');
+    E.last4Of = orig; B.relog();
+    zero = { z0, z12, back: !opps().includes('TST') };
   }
-  return { zeroRows, zeroBad, ins: window.__insights.seasonState, out, n: ids.length, tdWith: ids.filter(id => B.item(id).td && /^L\d/.test(out[id])).length, tdAll: ids.filter(id => B.item(id).td).length,
+  return { zero, ins: window.__insights.seasonState, out, n: ids.length, tdWith: ids.filter(id => B.item(id).td && /^L\d/.test(out[id])).length, tdAll: ids.filter(id => B.item(id).td).length,
     td: td && { name: td.name, got: out[td.id], want: tdWant }, nba: b2b && { name: b2b.name + ' ' + b2b.thr + '+ ' + b2b.stat, got: out[b2b.id], want: nbaWant, last: nbaLast && nbaLast.d, today } };
 });
 check('first visit (Insights never opened): touchdown cards show his recent games from season.json', HB.ins === 'idle' && HB.tdAll > 0 && HB.tdWith === HB.tdAll, `${HB.tdWith} of ${HB.tdAll} TD cards`);
 check('…a TD card\'s count matches a hand recount of his box scores', HB.td && HB.td.want && HB.td.got === HB.td.want, HB.td && `${HB.td.name}: ${HB.td.got} vs ${HB.td.want}`);
 check('back-to-back: last night\'s game (dated today, UTC) counts, and the NBA card matches a hand recount', HB.nba && HB.nba.got === HB.nba.want && HB.nba.last === HB.nba.today, HB.nba && `${HB.nba.name}: ${HB.nba.got} vs ${HB.nba.want}, last game ${HB.nba.last}`);
-check('NBA games he played 0 minutes in are not counted as games', HB.zeroRows > 0 && !HB.zeroBad.length, `${HB.zeroRows} zero-minute rows on deck players${HB.zeroBad.length ? '; counted: ' + HB.zeroBad.slice(0, 3).join(', ') : ''}`);
+check('NBA games he played 0 minutes in are not counted (a 12-minute one is)', HB.zero && !HB.zero.z0 && HB.zero.z12 && HB.zero.back, JSON.stringify(HB.zero));
 await page.evaluate(() => SB.goTab('insights', {}));
 await page.waitForFunction(() => window.__insights.seasonState === 'ok', null, { timeout: 30000 });
 await page.evaluate(() => SB.goTab('builder', {}));

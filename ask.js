@@ -310,10 +310,12 @@
     if (isParlay && players.length && (players.length >= 2 || !build)) return { kind: 'price', legs: players.slice(0, 10).map((_, i) => legOf(i, players.length === 1)), price: price && price.s };
     if (isParlay) return { kind: 'parlay', n: clamp(nLegs || 3, 2, 10), sport, risk, when };
     if (players.length) return { kind: 'prop', ...legOf(0, players.length === 1), price: price && price.s };
-    if (/\b(best|top|good|safest|strongest|favou?rite|smart)\b[^?]*\b(props?|bets?|plays?|picks?|overs?|legs?|receivers?|rushers?|backs?|qbs?|quarterbacks?|scorers?|tight ends?|wrs?|rbs?|tes?)\b/.test(lc) || /\bwho should i bet\b|\bwhat should i bet\b/.test(lc))
+    // a named player with no game on the slate ("Is X a good bet?") is answered as such, never as a list of other props
+    const so = seasonInText(lc); if (so) return { kind: 'seasononly', sp: so.sp, p: so.p };
+    const ranked = /\b(best|top|safest|strongest)\b/.test(lc) || lineOf(clean) == null;  // "a good bet over 24.5" is about one bet
+    if (ranked && (/\b(best|top|good|safest|strongest|favou?rite|smart)\b[^?]*\b(props?|bets?|plays?|picks?|overs?|legs?|receivers?|rushers?|backs?|qbs?|quarterbacks?|scorers?|tight ends?|wrs?|rbs?|tes?)\b/.test(lc) || /\bwho should i bet\b|\bwhat should i bet\b/.test(lc)))
       return { kind: 'top', sport: sport || (/\b(receivers?|rushers?|backs?|qbs?|quarterbacks?|tight ends?|wrs?|rbs?|tes?)\b/.test(lc) ? 'nfl' : null), stat: topStat(lc), when };
     const gs = matchGames(raw); if (gs.length) return { kind: 'game', gid: gs[0].id };
-    const so = seasonInText(lc); if (so) return { kind: 'seasononly', sp: so.sp, p: so.p };
     return { kind: 'help' };
   }
 

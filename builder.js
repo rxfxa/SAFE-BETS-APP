@@ -705,5 +705,5 @@ body:has(.bld-root.bld-side) #slipbar{display:none!important}
   window.__builder = { RISK, optsFor, get state() { return { mode: st.mode, sport: st.sport, day: st.day, n: st.n, risk: st.risk, props: st.props, seed: st.seed, opts: st.opts, T: st.T, cardId: st.cardId }; },
     deck: () => queue().map(x => x.id), list: () => liveList().map(x => x.id), item: id => deckList().find(x => x.id === id) || null, slipText: () => slipText(slipState()),
     hits: id => { const it = deckList().find(x => x.id === id); return it ? hitsOf(it) : null; }, log: id => { const it = deckList().find(x => x.id === id); return it ? logFor(it) : null; },
-    get seasonState() { return SEA.st; } };
+    relog: () => SLOG.clear(), get seasonState() { return SEA.st; } };
 })();

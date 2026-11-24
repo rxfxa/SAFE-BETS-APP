@@ -95,7 +95,8 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
   // the name matcher and the markets the app has no line for (parseIntent on the fixture slate)
   const PI = await page.evaluate(() => { const f = q => { const I = __ask.parseIntent(q); return { kind: I.kind, name: I.e && I.e.name, stat: I.stat, line: I.line, missing: I.missing, amb: I.amb || '', td: I.tdNote || '', legs: I.legs && I.legs.map(L => [L.e.name, L.stat, L.line]), gid: I.gid }; };
     return { naw: f('Nickeil Alexander-Walker over 10.5 points'), sga: f('Gilgeous-Alexander over 30.5 points'), lebron: f('Is LeBron a good over?'), mitch: f('Is Mitchell over 22.5 points?'),
-      lj: f('price a parlay: Maxey over 20.5 points and L.J. Phillips over 40.5 rushing yards'), td2: f('Will Chase Brown score 2 TDs?'), threes: f('Will Maxey make 4 threes?'), hou: f('How does Houston look tonight?'), smith: f('Is Smith over 50.5 receiving yards?') }; });
+      lj: f('price a parlay: Maxey over 20.5 points and L.J. Phillips over 40.5 rushing yards'), td2: f('Will Chase Brown score 2 TDs?'), threes: f('Will Maxey make 4 threes?'), hou: f('How does Houston look tonight?'), smith: f('Is Smith over 50.5 receiving yards?'), off: f('Is Nickeil Alexander-Walker a good bet tonight?'), best: f('Best props tonight?') }; });
+  check('a named player with no game is answered as such, not with a list of other props', PI.off.kind === 'seasononly' && PI.best.kind === 'top', JSON.stringify([PI.off.kind, PI.best.kind]));
   check('"Alexander-Walker" (not on the slate) is never read as Shai Gilgeous-Alexander', PI.naw.name !== 'Shai Gilgeous-Alexander' && PI.naw.kind !== 'prop', JSON.stringify(PI.naw));
   check('"Gilgeous-Alexander" alone finds him', PI.sga.name === 'Shai Gilgeous-Alexander' && PI.sga.line === 30.5, JSON.stringify(PI.sga));
   check('a first name only one slate player has ("LeBron") finds him', PI.lebron.kind === 'prop' && PI.lebron.name === 'LeBron James', JSON.stringify(PI.lebron));
@@ -335,6 +336,31 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
 
   check('no horizontal scroll at 390 (Claude run)', await noHScroll(page));
   check('no page errors (Claude run)', errors.length === 0, errors.join(' | '));
+  await browser.close();
+}
+
+// ---------------------------------------------------------------- 2b. missing data: no season.json, then an empty slate
+{
+  const { page, errors, browser } = await open({ width: 390, tab: 'ask', pins: { 'season.json': null } });
+  await page.evaluate(() => localStorage.removeItem('fm2.chat'));
+  await page.waitForSelector('.ask-chip');
+  await askQ(page, 'Is Tyrese Maxey over 24.5 points a good bet?');
+  let A = await lastA(page);
+  check('no season.json: the prop card still draws (form-file log, 4 factors)', A.pcs.length === 1 && A.pcs[0].factors.length === 4 && /model chance/.test(A.text), JSON.stringify(A.pcs[0] && [A.pcs[0].logSum, A.pcs[0].factors]));
+  await askQ(page, 'Should I take Chase Brown to score a TD?');
+  A = await lastA(page);
+  check('no season.json: a TD card says it has no recent box scores instead of inventing them', A.pcs.length === 1 && A.pcs[0].bars === 0 && A.pcs[0].factorWhy.some(w => /No recent box scores/.test(w)), JSON.stringify(A.pcs[0] && A.pcs[0].factorWhy[1]));
+  await page.route(/\/data\.json(\?.*)?$/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ updated: '2026-11-23T11:00:00Z', games: [] }) }));
+  await page.evaluate(() => localStorage.removeItem('fm2.chat'));
+  await page.reload(); await page.waitForFunction(() => window.SB && SB.firstRender && document.querySelector('.ask-chip'));
+  await askQ(page, 'build me a 3-leg NBA parlay');
+  A = await lastA(page);
+  check('an empty slate: a parlay request gets a plain "no legs qualify" answer, no card', !A.legs && /No NBA legs qualify|couldn't match/.test(A.text), A.text.slice(0, 100));
+  await askQ(page, 'Is Tyrese Maxey over 24.5 points a good bet?');
+  A = await lastA(page);
+  check('an empty slate: a player question says he has no game on the slate', !A.pcs.length && /no game with a model line|couldn't match/.test(A.text), A.text.slice(0, 120));
+  check('no page errors (missing data)', errors.length === 0, errors.join(' | '));
+  await page.evaluate(() => localStorage.removeItem('fm2.chat'));
   await browser.close();
 }
 

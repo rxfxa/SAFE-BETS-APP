@@ -458,6 +458,7 @@ try {
   // ---- boot: module tabs present while the feed is still loading, loading text shown (ux-15); 360px header (ux-14/16) ----
   {
     const ctx = await browser.newContext({ viewport: { width: 360, height: 740 } }), page = await ctx.newPage();
+    await page.addInitScript(() => localStorage.setItem('fm2.tab', JSON.stringify('trending')));  // a screen with filter chips (the default is now Chat)
     await pinFeeds(page);  // every .json is held 1.5 s, then served by the saved-copy routes (fallback) or the server
     await page.route('**/*.json', async r => { await new Promise(x => setTimeout(x, 1500)); r.fallback(); });
     await page.goto(BASE); await page.waitForFunction(() => window.SB && window.__soccer);

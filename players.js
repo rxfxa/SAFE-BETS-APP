@@ -156,7 +156,7 @@
     // a click on the Players item in the menu goes back to the list (the capture listener below)
     if (!prm || typeof prm !== 'object' || !Object.keys(prm).length || seenP === prm) return;
     seenP = prm;
-    if (typeof prm.sport === 'string' && (SPORTS.includes(prm.sport.toLowerCase()) || prm.sport === 'all')) st.sport = prm.sport.toLowerCase();
+    if (typeof prm.sport === 'string' && (SPORTS.includes(prm.sport.toLowerCase()) || prm.sport === 'all')) { st.sport = prm.sport.toLowerCase(); st.sort = null; st.shown = PAGE; st.view = null; st.miss = null; }
     if (typeof prm.name === 'string' && prm.name.trim()) { st.pending = { name: prm.name.trim(), sport: typeof prm.sport === 'string' ? prm.sport.toLowerCase() : null }; st.view = null; st.miss = null; }
   }
   function resolvePending() {
@@ -252,8 +252,9 @@
 .pl-root .pl-hero{padding:0;overflow:hidden}
 .pl-root .pl-hd{display:flex;gap:16px;align-items:center;padding:18px;background:linear-gradient(135deg,hsl(var(--h) 60% 22%),#0b1220 72%)}
 .pl-root .pl-hd>div{min-width:0}
-.pl-root .pl-pnm{font:900 italic clamp(28px,5vw,44px)/1 'Rubik',sans-serif;text-transform:uppercase;letter-spacing:-.01em;overflow-wrap:anywhere}
-.pl-root .pl-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px;font:600 13.5px var(--fui);color:#ffffffcc}
+.pl-root .pl-tn{font:800 21px/1.15 'Rubik',sans-serif;overflow-wrap:anywhere}
+.pl-root .pl-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:8px;font:600 13.5px var(--fui);color:#ffffffcc}
+.pl-root .pl-meta .m+.m::before{content:"·";margin-right:10px;color:#ffffff59}.pl-root .pl-meta .nx{color:var(--acc2)}
 .pl-root .pl-meta .pos{display:inline-grid;place-items:center;min-width:28px;height:21px;padding:0 7px;border-radius:6px;background:rgba(255,255,255,.14);font:800 11px var(--fui)}
 .pl-root .pl-hact{display:flex;flex-wrap:wrap;gap:8px;padding:14px 18px 18px}
 .pl-root .pl-h3{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px;font:700 10.5px var(--fmono);letter-spacing:.16em;text-transform:uppercase;color:#ffffff80}
@@ -345,13 +346,13 @@
   function tilesOf(e) {
     const T = e.T, gp = e.gp, g = f => T(f) / gp, sp = e.sp, t = [['Games', String(gp)]];
     if (sp === 'nba') t.push(['Minutes', f1(g('min'))], ['Points', f1(g('pts')), true], ['Rebounds', f1(g('reb'))], ['Assists', f1(g('ast'))], ['Pts+Reb+Ast', f1(g('pts') + g('reb') + g('ast'))]);
-    else if (sp === 'nhl') t.push(['Goals', fN(T('g'))], ['Assists', fN(T('a'))], ['Points', fN(T('g') + T('a')), true], ['Shots a game', f1(g('sog'))], ['Points a game', f1((T('g') + T('a')) / gp)]);
-    else if (sp === 'soccer') t.push(['Goals', fN(T('g')), true], ['Shots on target', fN(T('sot'))], ['Shots', fN(T('sh'))], ['On target a game', f1(g('sot'))]);
+    else if (sp === 'nhl') t.push(['Goals', fN(T('g'))], ['Assists', fN(T('a'))], ['Points', fN(T('g') + T('a')), true], ['Shots/G', f1(g('sog'))], ['Points/G', f1((T('g') + T('a')) / gp)]);
+    else if (sp === 'soccer') t.push(['Goals', fN(T('g')), true], ['Shots on target', fN(T('sot'))], ['Shots', fN(T('sh'))], ['On target/G', f1(g('sot'))]);
     else {
-      if (T('pa') > 0) t.push(['Pass yds a game', f1(g('pyd')), e.pos === 'QB'], ['Pass TD', fN(T('ptd'))]);
-      if (T('ra') > 0) t.push(['Rush yds a game', f1(g('ryd')), e.pos === 'RB'], ['Carries a game', f1(g('ra'))], ['Rush TD', fN(T('rtd'))]);
-      if (T('tgt') > 0 || T('rec') > 0) t.push(['Catches a game', f1(g('rec')), e.pos === 'WR' || e.pos === 'TE'], ['Rec yds a game', f1(g('recyd'))], ['Targets a game', f1(g('tgt'))], ['Rec TD', fN(T('ctd'))]);
-      if (sp === 'nfl') t.push(['PPR a game', f1(e.top)]); else t.push(['Yards a game', f1(e.top)]);
+      if (T('pa') > 0) t.push(['Pass yds/G', f1(g('pyd')), e.pos === 'QB'], ['Pass TD', fN(T('ptd'))]);
+      if (T('ra') > 0) t.push(['Rush yds/G', f1(g('ryd')), e.pos === 'RB'], ['Carries/G', f1(g('ra'))], ['Rush TD', fN(T('rtd'))]);
+      if (T('tgt') > 0 || T('rec') > 0) t.push(['Catches/G', f1(g('rec')), e.pos === 'WR' || e.pos === 'TE'], ['Rec yds/G', f1(g('recyd'))], ['Targets/G', f1(g('tgt'))], ['Rec TD', fN(T('ctd'))]);
+      if (sp === 'nfl') t.push(['PPR/G', f1(e.top)]); else t.push(['Yards/G', f1(e.top)]);
     }
     return t;
   }
@@ -398,15 +399,15 @@
   }
   function pageHTML(e) {
     const hu = U.hue(e.team), s0 = e.slate[0];
-    const meta = [`<span>${esc(SPLONG[e.sp])}</span>`, `<span>${esc(e.teamName || (s0 && s0.teamName) || e.team)}</span>`];
+    const meta = [`<span class="m">${esc(SPLONG[e.sp])}</span>`];
     if (e.pos) meta.unshift(`<span class="pos">${esc(e.pos)}</span>`);
-    if (e.gp) meta.push(`<span>${e.gp} game${e.gp === 1 ? '' : 's'}</span>`);
-    if (s0) meta.push(`<span style="color:var(--acc2)">Next: ${esc(s0.home ? 'vs' : '@')} ${esc(s0.opp)} · ${esc(whenOf(s0.g))}</span>`);
+    meta.push(`<span class="m">${e.gp ? `${e.gp} game${e.gp === 1 ? '' : 's'} this season` : 'no season box scores'}</span>`);
+    if (s0) meta.push(`<span class="m nx">Next: ${esc(s0.home ? 'vs' : '@')} ${esc(s0.opp)} · ${esc(whenOf(s0.g))}</span>`);
     const q = `How has ${e.name} played lately?`;
-    const hero = `<section class="ui-card pl-hero" style="--h:${hu}" aria-label="${esc(e.name)}"><div class="pl-hd">${U.team(e.team, true)}<div><div class="pl-pnm" role="heading" aria-level="2" data-pl-name>${esc(e.name)}</div><div class="pl-meta">${meta.join('')}</div></div></div>
+    const hero = `<section class="ui-card pl-hero" style="--h:${hu}" aria-label="${esc(e.name)}"><div class="pl-hd">${U.team(e.team, true)}<div><div class="pl-tn" data-pl-team>${esc(e.teamName || (s0 && s0.teamName) || e.team)}</div><div class="pl-meta">${meta.join('')}</div></div></div>
       <div class="pl-hact"><button type="button" class="ui-cta" data-pl-ask="${esc(q)}">Ask about ${esc(e.name.split(' ')[0])}</button>${s0 ? `<button type="button" class="ui-ghost" data-pl-an="${esc(JSON.stringify(Object.keys(s0.stats).length ? { id: s0.stats[MORDER.find(k => s0.stats[k])].id } : { name: s0.name, stat: 'td', team: s0.team, gid: s0.gid }))}">Open in Prop Analyzer</button>` : ''}</div></section>`;
     const avg = e.P ? `<div class="ui-card" data-pl-avgs><div class="pl-h3"><span>Season averages</span><b>${e.P.gp > e.P.log.length ? 'season totals ÷ games' : 'ESPN box scores'}</b></div>${U.tiles(tilesOf(e))}${e.gp < 5 ? '<p class="ui-note" style="margin-top:8px">Fewer than 5 games: a small sample.</p>' : ''}</div>` : '';
-    return `<button type="button" class="ui-link pl-back" data-pl-back="1">← All players</button>${hero}<div class="pl-grid"><div class="pl-col">${avg}${logHTML(e)}</div><div class="pl-col">${propsHTML(e)}</div></div>`;
+    return `${hero}<div class="pl-grid"><div class="pl-col">${avg}${logHTML(e)}</div><div class="pl-col">${propsHTML(e)}</div></div>`;
   }
 
   // ---------- render ----------
@@ -414,13 +415,15 @@
     css(); needSeason(); needFT(); applyParams(params); resolvePending();
     const X = index();
     const total = X.total;
-    const head = U.page({ kicker: SEAS_ST === 'ok' ? `${total.toLocaleString('en-US')} players · ${SPORTS.filter(s => X.counts[s]).length} sports` : 'Players · season box scores', title: 'Season stats', accent: '& props',
+    const e = st.view ? X.byId.get(st.view) : null;
+    if (st.view && !e) st.view = null;
+    let head;
+    if (e && !st.pending) { const w = e.name.split(' '), first = w.length > 1 ? w[0] : '', rest = w.length > 1 ? w.slice(1).join(' ') : e.name; head = U.page({ kicker: `Player page · ${SPLONG[e.sp]} · ${e.team}`, title: first, accent: rest }); }
+    else head = U.page({ kicker: SEAS_ST === 'ok' ? `${total.toLocaleString('en-US')} players · ${SPORTS.filter(s => X.counts[s]).length} sports` : SEAS_ST === 'none' ? `${total.toLocaleString('en-US')} players on the slate` : 'Players · loading the box scores', title: 'Season stats', accent: '& props',
       sub: 'This season\'s box scores for the NFL, college football, NBA, NHL and soccer, and every player\'s props on the slate. Averages show what happened; they are not projections.' });
     const notice = SEAS_ST === 'none' ? `<div class="pl-notice" role="status">The season box scores (season.json) did not load, so there are no season numbers or game logs right now. Players on the slate and their props still work.</div>` : '';
     const miss = st.miss ? `<div class="pl-notice" role="status">${esc(st.miss)}.</div>` : '';
     let body;
-    const e = st.view ? X.byId.get(st.view) : null;
-    if (st.view && !e) st.view = null;
     if (st.pending) body = `<div class="ui-empty" aria-busy="true">Loading ${esc(st.pending.name)}…</div>`;
     else if (e) body = pageHTML(e);
     else {
@@ -433,7 +436,8 @@
       else secs = (sectionHTML(st.sport, true) + tableHTML(st.sport)) || U.empty(`No ${SPLONG[st.sport]} players in our data right now.`);
       body = `${search}${chips}${secs}`;
     }
-    main.innerHTML = `<div class="ui-page pl-root" data-pl="${e ? 'page' : 'list'}">${head}${notice}${miss}${body}</div>`;
+    const back = e && !st.pending ? '<button type="button" class="ui-link pl-back" data-pl-back="1">← All players</button>' : '';
+    main.innerHTML = `<div class="ui-page pl-root" data-pl="${e && !st.pending ? 'page' : 'list'}">${back}${head}${notice}${miss}${body}</div>`;
   }
 
   function rerender(sel) {

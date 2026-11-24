@@ -662,9 +662,11 @@
         <div class="pa-col">${splitsHTML(A)}<div><div class="pa-h3" style="margin-bottom:8px"><span>Factors</span><b>tap a tile for the numbers</b></div>${U.factors(factorsOf(p, A.stat, A.line, A.under, A.L, A.pl))}</div>${ladderHTML(A)}${actionsHTML(A)}</div></div>${notesHTML(A)}`;
     }
     const honest = p ? '' : `<div class="pa-honest"><span class="i" aria-hidden="true">i</span><span><b>No sportsbook prop prices in our feed.</b> The chance and the fair odds are model estimates; type your book's price on any prop to see the edge against it. Coverage: NBA, NFL and college football props, plus NFL anytime touchdowns.</span></div>`;
-    main.innerHTML = `<div class="ui-page pa-root" data-pa="${p ? 'prop' : 'empty'}">${head}${queryHTML(p)}${honest}${body}</div>`;
+    // removing a focused, edited input fires its 'change' while innerHTML is being replaced: the guard keeps that from re-rendering
+    busy = true;
+    try { main.innerHTML = `<div class="ui-page pa-root" data-pa="${p ? 'prop' : 'empty'}">${head}${queryHTML(p)}${honest}${body}</div>`; } finally { busy = false; }
   }
-  let LAST = null;
+  let LAST = null, busy = false;
 
   // re-render, then put keyboard focus back on the control that was used (the old node is gone after the redraw)
   function rerender(sel, caret) {
@@ -721,13 +723,13 @@
     if (t.hasAttribute('data-pa-player')) { let o = {}; try { o = JSON.parse(t.getAttribute('data-pa-player')); } catch (er) { o = {}; } SB.goTab('players', o); }
   });
   document.addEventListener('change', e => {
-    const s = e.target; if (!s || !s.closest || !s.closest('.pa-root')) return;
+    const s = e.target; if (busy || !s || !s.isConnected || !s.closest || !s.closest('.pa-root')) return;
     if (s.matches('select[data-ui-select="pa-mkt"]')) {
       const p = current(); if (!p || !markets(p).includes(s.value)) return;
       st.stat = s.value; st.line = defaultLine(p, st.stat); if (st.stat === 'td') st.under = false;
       rerender('select[data-ui-select="pa-mkt"]'); return;
     }
-    if (s.id === 'pa-line') { setLine(s.value); rerender('#pa-line'); }
+    if (s.id === 'pa-line') { const L = normLine(s.value); if (L == null || L === st.line) return; setLine(s.value); rerender('#pa-line'); }
   });
   let priceT = null;
   document.addEventListener('input', e => {

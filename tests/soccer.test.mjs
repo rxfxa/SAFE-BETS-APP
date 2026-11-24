@@ -73,7 +73,7 @@ try {
   // ---------- tab ----------
   const tabs = await page.evaluate(() => [...document.querySelectorAll('#tabs .tab')].map(b => [b.dataset.t, b.textContent.trim()]));
   const ti = tabs.findIndex(t => t[0] === 'soccerparlays');
-  check('tab "⚽ Soccer Parlays" exists right after Trending', ti === 1 && tabs[0][0] === 'trending' && tabs[ti][1] === '⚽ Soccer Parlays', tabs.map(t => t[0]).join(','));
+  check('tab "⚽ Soccer Parlays" exists right after Trending', ti > 0 && tabs[ti - 1][0] === 'trending' && tabs[ti][1] === '⚽ Soccer Parlays', tabs.map(t => t[0]).join(','));
   check('tab is active and rendered', await page.evaluate(() => !!document.querySelector('#tabs .tab.on[data-t="soccerparlays"]') && !!document.querySelector('#main .spnav')));
 
   // ---------- league chips ----------

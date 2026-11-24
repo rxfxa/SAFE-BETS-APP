@@ -29,7 +29,13 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - ffb.js (fantasy screens).
 - **Honest gaps shown on screen:** no sportsbook prop prices (we show model chance + fair odds), no betting splits, no hosted video, no league sync, no MLB / F1.
 - **season.json** (tools/season_tables.py, from leg_pairs.py's ESPN box-score cache): every player's season totals and game logs for NFL, college, NBA, NHL, soccer. It is loaded only by the screens that need it (`SB.season()`).
-- **Tests for new screens:** tests/lib/harness.mjs (fixtures pinned, clock 2026-11-23T12:00Z).
+- **Tests for new screens:** tests/lib/harness.mjs (fixtures pinned, clock 2026-11-23T12:00Z): ask, insights, propan, players, slate, sharp, news, builder, statx, ffb.
+- **Box-score dates are UTC** (a 4 PM PT game is dated the next day). A logged game counts when it is before the priced game's UTC date and not after today's UTC date; cutting at the Los Angeles day drops last night's game on back-to-backs.
+- **Chat safety:**
+  - Card numbers come from the engine only.
+  - A price counts only if the viewer typed it.
+  - A line counts only if the viewer typed it or it is the app's own.
+- **Polymarket matching** (Sharp Board, Games leans, Polymarket tab): a strict matcher, `__sharp.match`. A bare college nickname counts only when the abbreviation runs through the full name, and ties don't match.
 
 ## Tabs (Find bets group, roughly in order)
 - **Trending → 🧠 My Parlay Picks.** Chosen once a day for one Los Angeles day:
@@ -117,7 +123,8 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | firsttd.json | tools/leg_pairs.py refreshes every NFL team's season TDs from box scores (game-day "status" notes kept) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
-| season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports |
+| season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports (NBA 0-minute games skipped) |
+| news.json | tools/news_fetch.py (3:47 AM and 7:32 AM runs; ESPN news API): headlines and videos for Highlights |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
 
 ## Scheduled tasks
@@ -166,7 +173,11 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Search box:** does nothing on most module tabs.
 - **Missing soccer leagues:** Europa League, Eredivisie and Primeira Liga aren't in data.json (the hourly feed), so the Soccer tabs can't price them.
 - **pattern.json:** results come only from the CSVs (finished games in data.json carry no pre-match chance), so it lags until football-data.co.uk updates.
-- **Pro interface:** the research screens (Chat, Insights, Prop Explorer, Prop Analyzer, Players, Games, Sharp Board, Highlights, Parlay, Stat Explorer, fantasy) are mid-build (workflow wf_ce6c447b-516). Once all are built and reviewed: full suite, screenshots, commit, publish (the artifact already declares `sample` for Chat), add the new tests and news_fetch.py to the 3:47 AM run.
+- **Pro interface follow-ups:**
+  - Highlights images come from ESPN's image servers; the artifact may block them, in which case sport tiles show.
+  - season.json lacks full names for a few college teams (ALB, RGV, WES).
+  - A traded player shows one row per team.
+  - insights.js could share its season index (`__insights.needSeason`) with builder.js; both work without it.
 - **Keyboard access:** on phones the menu is a closed drawer now, so content comes first. On desktop the sidebar's ~30 items still come before the page: a skip link would fix that.
 - **tests/sim.test.mjs:** failed once in a full-suite run on 2026-11-23, then passed 5 times in a row on its own. It looks like a timing problem; if it fails again, capture which check fails.
 

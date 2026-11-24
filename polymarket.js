@@ -58,6 +58,12 @@ function teamScore(pt, gt) {
 }
 function matchOf(pg) {
   if (MATCH.has(pg.slug)) return MATCH.get(pg.slug);
+  // the Sharp Board's stricter matcher when it is loaded: a bare college nickname ("Broncos") counts only when the
+  // Polymarket abbreviation runs through the feed's full name, one side must be identified firmly, and ties don't match
+  if (window.__sharp && typeof window.__sharp.match === 'function') {
+    let sm = null; try { sm = window.__sharp.match(pg); } catch (e) { sm = null; }
+    const m = sm && sm.g ? { g: sm.g, swap: !!sm.swap } : null; MATCH.set(pg.slug, m); return m;
+  }
   const t = Date.parse(pg.start); let best = null, bs = 0;
   for (const g of (SB.DATA && SB.DATA.games) || []) {
     if (g.sport !== pg.sport || Math.abs(SB.startMs(g) - t) > 6 * 3600e3) continue;

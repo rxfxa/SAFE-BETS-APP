@@ -121,7 +121,7 @@
     const g = c.g;
     return `<div class="sh-teams${big ? ' sh-big' : ''}"><div class="sh-sd">${U.team(g.away.abbr, big)}<div><b>${esc(g.away.name)}</b><span>away</span></div></div>
       <div class="sh-mid"><span class="sh-k">${esc(g.comp || SPN[g.sport])}</span><span class="sh-t">${esc(when(c.start))}</span></div>
-      <div class="sh-sd sh-r"><div><b>${esc(g.home.name)}</b><span>home</span></div>${U.team(g.home.abbr, big)}</div></div>`;
+      <div class="sh-sd">${U.team(g.home.abbr, big)}<div><b>${esc(g.home.name)}</b><span>home</span></div></div></div>`;
   }
   function metaHTML(c) {
     const bits = [`${money(c.vol)} traded on the moneyline`];
@@ -156,7 +156,7 @@
     if (params !== lastParams) { lastParams = params; if (params.gid) focus = String(params.gid); if (params.sport && (params.sport === 'all' || SPN[params.sport])) st.sport = params.sport; }
     if (LOAD === 'idle') load();
     const head = U.page({ kicker: 'Sharp board · market vs market', title: 'Polymarket vs', accent: 'the books', sub: 'Two real-money prices for every game we can match, side by side, with the biggest disagreements first.' });
-    const note = `<div class="ui-card sh-note" role="note"><b>Not a betting split.</b> We have no feed of ticket or money percentages, so nothing here says where the bets or the big money are. Each game puts two real-money markets side by side instead: Polymarket's price (the middle of its bid and ask, scaled to add up to 100%) and the sportsbook consensus in our feed. A gap is a disagreement between markets, not a guaranteed edge: either one can be wrong, and the two prices were taken at different times${PM && PM.updated ? ` (Polymarket ${esc(when(Date.parse(PM.updated)))}; the feed ${esc(when(Date.parse((SB.DATA && SB.DATA.updated) || '')))})` : ''}.</div>`;
+    const note = `<div class="ui-card sh-note" role="note"><b>Not a betting split.</b> We have no ticket or money percentages, so nothing here shows where the bets or the big money are. Each game compares two real-money prices instead: Polymarket's (the middle of its bid and ask, scaled to add up to 100%) and the sportsbook consensus in our feed. A gap is a disagreement between markets, not a guaranteed edge: either one can be wrong, and the prices were taken at different times${PM && PM.updated ? ` (Polymarket ${esc(when(Date.parse(PM.updated)))}; the feed ${esc(when(Date.parse((SB.DATA && SB.DATA.updated) || '')))})` : ''}.</div>`;
     let body;
     if (!PM && LOAD !== 'done') body = U.empty('Loading Polymarket prices…');
     else if (!PM) body = U.empty('Polymarket prices are not available right now (polymarket.json did not load), so there is nothing to compare. The sportsbook side of every game is still on the Games tab.') + `<div class="ui-row"><button type="button" class="ui-cta sm" data-sh-games>Open Games</button></div>`;
@@ -209,6 +209,7 @@
 .sh-root .sh-scroll{max-width:100%;overflow-x:auto;scrollbar-width:none}.sh-root .sh-scroll::-webkit-scrollbar{display:none}
 .sh-root .sh-scroll .ui-pills{flex-wrap:nowrap;width:max-content;max-width:none}
 .sh-root .sh-sum{margin:0}
+.sh-root .ui-seg button{min-height:40px}
 .sh-root .sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,400px),1fr));gap:16px;align-items:start}
 .sh-card{min-width:0;padding:16px;border-radius:22px;border:1px solid var(--hair2);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012)),#080d19;scroll-margin-top:72px}
 .sh-card.sh-strong{border-color:rgba(62,196,255,.55);box-shadow:0 0 0 1px rgba(62,196,255,.25),0 24px 60px -30px rgba(62,196,255,.7)}
@@ -217,11 +218,11 @@
 .sh-hd .sh-k{font:500 10.5px var(--fmono);letter-spacing:.16em;text-transform:uppercase;color:#ffffff99}
 .sh-hd .sh-gap{flex:none;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.07);font:700 12px var(--fui);color:#ffffffcc;font-variant-numeric:tabular-nums}
 .sh-hd .sh-gap.sh-gmid{background:rgba(255,184,0,.14);color:var(--mid)}.sh-hd .sh-gap.sh-gon{background:rgba(62,196,255,.18);color:#7fdcff}
-.sh-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;margin:12px 0 4px}
-.sh-teams .sh-sd{display:flex;align-items:center;gap:8px;min-width:0}.sh-teams .sh-sd.sh-r{justify-content:flex-end;text-align:right}
+.sh-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:start;margin:12px 0 4px}
+.sh-teams .sh-sd{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;min-width:0}
 .sh-teams .sh-sd>div{min-width:0}.sh-teams b{display:block;font:700 14px/1.2 'Rubik',sans-serif;overflow-wrap:anywhere}
-.sh-teams .sh-sd span{display:block;font:500 10px var(--fmono);letter-spacing:.14em;text-transform:uppercase;color:#ffffff80}
-.sh-teams .sh-mid{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;max-width:96px}
+.sh-teams .sh-sd>div span{display:block;font:500 10px var(--fmono);letter-spacing:.14em;text-transform:uppercase;color:#ffffff80}
+.sh-teams .sh-mid{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;max-width:110px;padding-top:6px}
 .sh-teams .sh-mid .sh-k{font:500 9.5px var(--fmono);letter-spacing:.14em;text-transform:uppercase;color:#ffffff80;overflow-wrap:anywhere}
 .sh-teams .sh-mid .sh-t{font:600 11.5px/1.25 var(--fui);color:#ffffffcc}
 .sh-card .ui-split .pct{font-size:26px}
@@ -244,6 +245,7 @@
 .sh-hero .sh-hsplit{max-width:760px;margin:10px auto 0}
 .sh-hero .ui-split .pct{font-size:clamp(30px,7vw,56px)}
 .sh-sig{margin-top:20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.sh-sig .ui-kick{justify-content:center;text-align:center}
 .sh-sig .ui-kick::before{background:#2b7fff;box-shadow:0 0 8px #2b7fff}
 .sh-sig .sh-tt{font:900 italic clamp(30px,7vw,60px)/1 'Rubik',sans-serif;text-transform:uppercase;letter-spacing:-.015em;overflow-wrap:anywhere}
 .sh-sig p{max-width:52ch;margin:0;font:400 14.5px/1.5 var(--fui);color:#ffffffbf}

@@ -68,13 +68,13 @@ check('one card per game on the day', await page.locator('.sl-card').count() ===
 // ---------- model numbers on the cards (recomputed from SB.fit / SB.p1 / the game's simulations) ----------
 const nums = await page.evaluate(([nba, nfl, nhl]) => {
   const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
-  const Phi = z => 0.5 * (1 + erf(z / Math.SQRT2)), P = p => Math.round(p * 100) + '%';
+  const Phi = z => 0.5 * (1 + erf(z / Math.SQRT2)), P = p => Math.round(p * 100) + '%', F = p => SB.ui.fair(p).replace('-', '−');
   const tiles = id => [...document.querySelectorAll(`#sl-${CSS.escape(id)} .sl-tile`)].map(t => [...t.children].map(x => x.textContent.trim()).join(' '));
   const out = {};
   { const g = SB.gameById(nba), m = SB.fit(g), L = Math.round(Math.abs(m.mu) * 2) / 2, fav = m.mu >= 0 ? g.home.abbr : g.away.abbr;
     const cover = 1 - Phi((L - Math.abs(m.mu)) / m.sd), s = SB.simGame(g); let c = 0; for (let i = 0; i < s.N; i++) if ((m.mu >= 0 ? s.mg[i] : -s.mg[i]) > L) c++;
     const ph = g.prob.home / (g.prob.home + g.prob.away);
-    out.nba = { tiles: tiles(nba), want: [`Spread ${fav} −${L} covers ${P(cover)}`, `Money ${g.home.abbr} ${SB.ui.fair(ph)} ${g.away.abbr} ${SB.ui.fair(1 - ph)} · fair`, `Total O/U 231.5 over 50%`], sim: c / s.N, cover, wp: [...document.querySelectorAll(`#sl-${CSS.escape(nba)} .sl-wp`)].map(x => x.innerText.replace(/\s/g, '')), wpw: [P(1 - ph), P(ph)] }; }
+    out.nba = { tiles: tiles(nba), want: [`Spread ${fav} −${L} covers ${P(cover)}`, `Money ${g.home.abbr} ${F(ph)} ${g.away.abbr} ${F(1 - ph)} · fair`, `Total 231.5 over 50%`], sim: c / s.N, cover, wp: [...document.querySelectorAll(`#sl-${CSS.escape(nba)} .sl-wp`)].map(x => x.innerText.replace(/\s/g, '')), wpw: [P(1 - ph), P(ph)] }; }
   { const g = SB.gameById(nfl), m = SB.fit(g), L = Math.round(Math.abs(m.mu) * 2) / 2; let cover = 0, push = 0;
     for (let i = 0; i < m.pm.length; i++) { const d = i - m.kmax; if (-d > L) cover += m.pm[i]; else if (-d === L) push += m.pm[i]; }
     const s = SB.simGame(g); let c = 0; for (let i = 0; i < s.N; i++) if (-s.mg[i] > L) c++;
@@ -83,7 +83,7 @@ const nums = await page.evaluate(([nba, nfl, nhl]) => {
     out.nhl = { tiles: tiles(nhl), want: `Puck line ${fav} −1.5 covers ${P(SB.p1(g, fh ? 'H2' : 'A2'))}` }; }
   { const g = SB.gameById('soccer-BRE-EVE-2026-11-23'), card = document.getElementById('sl-' + g.id);
     out.soc = { wp: [...card.querySelectorAll('.sl-wp')].map(x => x.innerText.replace(/\s/g, '')), dr: card.querySelector('.sl-dr').innerText, want: [P(SB.p1(g, 'A')), P(SB.p1(g, 'H'))], wantD: P(SB.p1(g, 'D')),
-      tot: card.querySelectorAll('.sl-tile')[2].innerText.replace(/\s+/g, ' '), wantT: `over ${P(SB.p1(g, 'O2.5'))}`, draw: card.querySelectorAll('.sl-tile')[1].innerText.replace(/\s+/g, ' '), wantDr: SB.ui.fair(SB.p1(g, 'D')) }; }
+      tot: card.querySelectorAll('.sl-tile')[2].innerText.replace(/\s+/g, ' '), wantT: `over ${P(SB.p1(g, 'O2.5'))}`, draw: card.querySelectorAll('.sl-tile')[1].innerText.replace(/\s+/g, ' '), wantDr: F(SB.p1(g, 'D')) }; }
   return out;
 }, [NBA.id, NFL.id, NHL.id]);
 check('NBA card: spread = fair line (mean margin to the half point) with the normal cover chance; money = fair odds; game total used', JSON.stringify(nums.nba.tiles) === JSON.stringify(nums.nba.want), JSON.stringify(nums.nba.tiles) + ' vs ' + JSON.stringify(nums.nba.want));
@@ -120,9 +120,9 @@ check('Polymarket lean bands exactly on games 3+ points away from the books (gap
 check('Team Trends lean bands exactly on the flagged games (not on a game whose trend has no lean)', !wrongTR.length, wrongTR.map(c => c.gid).join(','));
 check('every other priced card says "No lean: the model is priced from the market"', priced.filter(c => !c.leans.includes('pm') && !c.leans.includes('trends')).every(c => c.leans.join() === 'none' && /No lean: the model is priced from the market/.test(c.text)) && priced.length > 40, `${priced.length} priced cards`);
 const nbaL = cards.find(c => c.gid === NBA.id), socL = cards.find(c => c.gid === SOC.id), arsL = cards.find(c => c.gid === ars.id);
-check('trends upset band: underdog, wins vs prices, sample and its reason', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.name} to win`) && /\+1\.9/.test(nbaL.text) && /9 games · small sample/.test(nbaL.text), nbaL.text.slice(0, 220));
+check('trends upset band: underdog, wins vs prices, sample and its reason', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.abbr} to win`) && nbaL.text.includes(`${NBA.away.name}, the underdog`) && /\+1\.9/.test(nbaL.text) && /9 games · small sample/.test(nbaL.text), nbaL.text.slice(0, 220));
 check('trends total band: under 2.5 with the rate and the sample', /Under 2\.5 goals/.test(socL.text) && /60%/.test(socL.text) && /20 games/.test(socL.text), socL.text.slice(0, 200));
-check('Polymarket band: "Polymarket 6.0 pts higher on Arsenal", strong signal, volume', /Polymarket higher on Arsenal/i.test(arsL.text) && /\+6\.0/.test(arsL.text) && /Strong signal/i.test(arsL.text) && /traded/.test(arsL.text), arsL.text.slice(0, 220));
+check('Polymarket band: "Polymarket 6.0 pts higher on Arsenal", strong signal, volume', /ARS to win/.test(arsL.text) && /Polymarket 6\.0 pts higher on Arsenal FC/.test(arsL.text) && /\+6\.0/.test(arsL.text) && /Strong signal/i.test(arsL.text) && /traded/.test(arsL.text), arsL.text.slice(0, 220));
 check('no horizontal page scroll at 390px on any day', cards.every(c => c.hscroll <= 390), Math.max(...cards.map(c => c.hscroll)) + 'px');
 
 // ---------- the {gid} param, key props, buttons ----------

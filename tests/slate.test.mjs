@@ -141,6 +141,8 @@ check('Team Trends lean bands exactly on the flagged games (not on a game whose 
 check('every other priced card says "No lean: the model is priced from the market"', priced.filter(c => !c.leans.includes('pm') && !c.leans.includes('trends')).every(c => c.leans.join() === 'none' && /No lean: the model is priced from the market/.test(c.text)) && priced.length > 40, `${priced.length} priced cards`);
 const nbaL = cards.find(c => c.gid === NBA.id), socL = cards.find(c => c.gid === SOC.id), arsL = cards.find(c => c.gid === ars.id);
 check('trends upset band: underdog, wins vs prices, its reasons, and the sample counted once per team (9, not 9 + 5) with its caveats', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.abbr} to win`) && nbaL.text.includes(`${NBA.away.name}, the underdog`) && /\+1\.9/.test(nbaL.text) && /\b9 games · small sample · could be chance/.test(nbaL.text) && nbaL.leans.join() === 'trends', nbaL.text.slice(0, 260));
+await page.evaluate(id => SB.goTab('slate', { gid: id }), SOC.id);
+await page.waitForTimeout(150);
 const drawHl = await page.evaluate(id => { const c = document.getElementById('sl-' + id); return c ? [...c.querySelectorAll('.sl-tile')].map(t => t.classList.contains('sl-hl')) : null; }, SOC.id);
 check('a Polymarket lean on the draw lights the Draw tile, not Money', socL.leans.includes('pm') && /Draw/.test(socL.text) && /Polymarket 4\.0 pts higher on the draw/.test(socL.text) && JSON.stringify(drawHl) === '[false,true,true]', JSON.stringify(drawHl) + ' ' + socL.text.slice(0, 120));
 check('trends total band: under 2.5 with the rate and the sample', /Under 2\.5 goals/.test(socL.text) && /60%/.test(socL.text) && /20 games/.test(socL.text), socL.text.slice(0, 200));

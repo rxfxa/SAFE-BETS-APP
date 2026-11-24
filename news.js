@@ -45,7 +45,8 @@
     }
     items.sort((a, b) => b.t - a.t);
     const up = Date.parse(d.updated);
-    return { items, updated: num(up) ? up : null, missing: (Array.isArray(d.missing) ? d.missing : []).filter(s => typeof s === 'string') };
+    const cover = (Array.isArray(d.feeds) ? d.feeds : []).filter(f => f && f.ok && typeof f.league === 'string').map(f => f.league);
+    return { items, updated: num(up) ? up : null, cover, missing: (Array.isArray(d.missing) ? d.missing : []).filter(s => typeof s === 'string') };
   }
   function load() {
     if (LOAD === 'loading' || (LOAD === 'done' && Date.now() - FETCHED < 3600e3)) return;
@@ -176,7 +177,7 @@
   function chips(it) {
     const m = matchOf(it), out = [];
     for (const x of m.players.slice(0, 5)) {
-      if (x.p) {
+      if (x.p && SB.openG(x.p.g)) {
         const mk = markets(x.p)[0];
         out.push(`<button type="button" class="nw-chip nw-on" data-nw-prop="${esc(x.p.pk)}" data-nw-stat="${esc(mk)}" aria-label="${esc(x.p.name)}: ${esc(statName(mk))} prop in Prop Analyzer"><span class="nw-dot" aria-hidden="true"></span>${esc(x.p.name)}<span class="nw-tg">Props</span></button>`);
       } else {
@@ -220,7 +221,7 @@
   }
   function strip(list) {
     const X = slate(), agg = new Map();
-    for (const it of list) for (const x of matchOf(it).players) if (x.p) { const a = agg.get(x.p.pk) || { p: x.p, n: 0 }; a.n++; agg.set(x.p.pk, a); }
+    for (const it of list) for (const x of matchOf(it).players) if (x.p && SB.openG(x.p.g)) { const a = agg.get(x.p.pk) || { p: x.p, n: 0 }; a.n++; agg.set(x.p.pk, a); }
     const all = [...agg.values()].sort((a, b) => b.n - a.n || SB.startMs(a.p.g) - SB.startMs(b.p.g) || (a.p.name < b.p.name ? -1 : 1)), rows = all.slice(0, 16);
     const dayName = X.ahead ? `the ${dateFmt.format(new Date(Date.parse(X.day + 'T12:00:00Z')))} slate` : "today's slate";
     const head = `<div class="nw-shead"><h2 class="nw-h2">On ${esc(dayName)}</h2><span class="ui-muted">${all.length ? `${all.length} player${all.length === 1 ? '' : 's'} in these headlines with a prop in the app${all.length > rows.length ? `, the ${rows.length} most mentioned shown` : ''}` : ''}</span></div>`;
@@ -254,7 +255,7 @@
     const nv = bySport.filter(it => it.video).length;
     const age = NEWS.updated ? now - NEWS.updated : null;
     const fresh = age == null ? '' : age < -10 * MIN ? `updated ${dateFmt.format(new Date(NEWS.updated))}` : `updated ${ago(NEWS.updated)}`;
-    let notes = `<div class="nw-src ui-note"><span>Source: ESPN</span>${fresh ? `<span>${esc(fresh)}</span>` : ''}<span>${all.length} items, ${all.filter(it => it.video).length} videos</span></div>`;
+    let notes = `<div class="nw-src ui-note"><span>Source: ESPN</span>${fresh ? `<span>${esc(fresh)}</span>` : ''}<span>${all.length} items, ${all.filter(it => it.video).length} videos</span>${NEWS.cover.length ? `<span>Coverage: ${esc(NEWS.cover.join(', '))}</span>` : ''}</div>`;
     if (age != null && age > DAY) notes += `<div class="nw-stale" role="note"><b>These headlines are ${esc(ageText(age))} old.</b> The daily run has not refreshed news.json since ${esc(dateFmt.format(new Date(NEWS.updated)))}, so newer stories and injuries are missing.</div>`;
     else if (age == null) notes += `<div class="nw-stale" role="note"><b>We can't tell how old these headlines are</b> (news.json has no update time).</div>`;
     if (NEWS.missing.length) notes += `<p class="ui-note">ESPN's ${esc(NEWS.missing.join(', '))} feed${NEWS.missing.length > 1 ? 's' : ''} did not load on the last run, so ${NEWS.missing.length > 1 ? 'those leagues are' : 'that league is'} missing here.</p>`;

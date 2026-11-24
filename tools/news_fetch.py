@@ -36,7 +36,7 @@ def get(url):
     for i in range(3):
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'safe-bets-app', 'Accept': 'application/json'})
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with urllib.request.urlopen(req, timeout=20) as r:
                 return json.loads(r.read().decode('utf-8'))
         except Exception:  # noqa: BLE001  (network, HTTP or JSON error: retry, then give up on this feed)
             time.sleep(1.2 * (i + 1))
@@ -49,10 +49,11 @@ def https_url(u, host_re):
         return None
     try:
         p = urllib.parse.urlsplit(u.strip())
+        port = p.port
     except ValueError:
         return None
     host = (p.hostname or '').lower()
-    if p.scheme not in ('http', 'https') or not host_re.match(host) or p.username or p.password or (p.port not in (None, 443, 80)):
+    if p.scheme not in ('http', 'https') or not host_re.match(host) or p.username or p.password or port not in (None, 443, 80):
         return None
     return urllib.parse.urlunsplit(('https', host, p.path or '/', p.query, ''))
 

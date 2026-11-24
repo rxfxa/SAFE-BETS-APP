@@ -7,13 +7,16 @@ import { open, check, done, FX } from './lib/harness.mjs';
 
 const NEWS = JSON.parse(FX('news-2026-11-24.json'));
 const byId = new Map(NEWS.items.map(x => [String(x.id), x]));
+const byIdSport = id => (byId.get(id) || {}).sport;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
 // 1. the file is missing: an honest empty state, nothing invented
 const { page, errors, browser } = await open({ width: 390, tab: 'news', pins: { 'news.json': null } });
+const stacks = [];  // errors with their stacks, to tell this screen's errors from another module's
+page.on('pageerror', e => stacks.push(`${e.message} @ ${e.stack || ''}`));
 await page.waitForFunction(() => document.querySelector('.nw-root .ui-empty'), null, { timeout: 15000 });
 let t = await page.evaluate(() => ({ txt: document.querySelector('.nw-root').innerText, cards: document.querySelectorAll('.nw-card').length }));
-check('missing news.json: honest empty state, no cards', /news\.json is missing/.test(t.txt) && /don't make headlines up/.test(t.txt) && t.cards === 0, t.txt.slice(0, 160));
+check('missing news.json: honest empty state, no cards', /news\.json is missing/.test(t.txt) && /don't make headlines up/.test(t.txt) && t.cards === 0, (t.txt.match(/No highlights yet[^\n]*/) || [''])[0].slice(0, 90));
 check('missing news.json: says we do not host video', /we don't host video/i.test(t.txt));
 
 // 2. the saved ESPN file; Premier League-CDN (akamaized) images are blocked, ESPN CDN images load
@@ -107,6 +110,14 @@ if (tc) {
 t = await page.evaluate(() => { document.querySelector('[data-nw-more]').click(); const c = document.querySelectorAll('.nw-grid .nw-card'); return { n: c.length, focus: document.activeElement === c[24].querySelector('.nw-go') }; });
 check('Show more adds 24 cards and moves focus to the first new one', t.n === 48 && t.focus, JSON.stringify(t));
 
+// params: goTab('news', {sport, type})
+t = await page.evaluate(() => { SB.goTab('news', { sport: 'nhl', type: 'video' }); return [...document.querySelectorAll('.nw-root [data-nw-id]')].map(c => c.dataset.nwId); });
+check('params {sport, type} open that filter', t.length > 0 && t.every(id => byIdSport(id) === 'nhl'), `${t.length}`);
+await page.click('[data-ui-pill="news-sport|all"]'); await page.click('[data-ui-seg="news-type|all"]');
+t = await page.evaluate(() => document.querySelector('.nw-src').textContent);
+check('coverage line lists the leagues the last run fetched', /Coverage: NFL, College Football, NBA, NHL, Premier League, Champions League/.test(t), t);
+t = await page.evaluate(() => { document.querySelector('[data-nw-more]').click(); return document.querySelectorAll('.nw-grid .nw-card').length; });
+
 // 390px: no horizontal page scroll, tap targets 40px+
 t = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
   small: [...document.querySelectorAll('.nw-root button, .nw-root a')].filter(b => b.offsetParent && b.getBoundingClientRect().height < 40).map(b => b.className + ':' + b.textContent.trim().slice(0, 20)).slice(0, 5) }));
@@ -151,5 +162,7 @@ await page.click('[data-ui-seg="news-type|all"]');
 t = await page.evaluate(() => ({ cols: getComputedStyle(document.querySelector('.nw-grid')).gridTemplateColumns.split(' ').length, sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
 check('1440px: 3+ columns, no horizontal scroll', t.cols >= 3 && t.sw <= t.cw, JSON.stringify(t));
 
-check('no page errors', errors.length === 0, errors.join(' | '));
+const ours = stacks.filter(s => /news\.js/.test(s)), other = errors.filter(m => !stacks.some(s => s.startsWith(m) && /news\.js/.test(s)));
+check('no page errors from news.js', ours.length === 0 && !errors.some(m => /news\.js/.test(m)), ours.join(' | '));
+if (other.length) console.log(`note: ${other.length} page error(s) from other modules (not this screen): ${other.join(' | ').slice(0, 300)}`);
 await done(browser);

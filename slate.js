@@ -98,20 +98,32 @@
     return TRIDX;
   }
   const ofN = s => { const m = /won \d+ of (\d+)/.exec(s) || /: (\d+) of (\d+)/.exec(s); return m ? +(m[2] || m[1]) : 0; };
+  // games behind the reasons: per team the largest count (its season and last-30-day lines share games), summed over the teams
+  const sampleN = why => { const by = new Map(); for (const w of why) { const k = (/^(.*?) (?:as an? |in the last )/.exec(w) || [, w])[1]; by.set(k, Math.max(by.get(k) || 0, ofN(w))); } let n = 0; for (const v of by.values()) n += v; return n; };
+  const NK = s => String(s == null ? '' : s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  // a trends.json team really is the side its "home" flag says (abbreviation, or the opponent when the abbreviation is missing);
+  // anything else (a stale or mismatched entry, swapped sides) is dropped rather than shown as a lean
+  function sideOk(t, g) {
+    const n = t.next, me = g[n.home ? 'home' : 'away'], op = g[n.home ? 'away' : 'home'];
+    if (t.abbr) return String(t.abbr).toUpperCase() === String(me.abbr).toUpperCase();
+    return (n.oppAbbr && String(n.oppAbbr).toUpperCase() === String(op.abbr).toUpperCase()) || (!!n.opp && NK(n.opp) === NK(op.name)) || (!!t.name && NK(t.name) === NK(me.name));
+  }
   function trendLeans(g, M) {
-    const T = trendIdx().get(g.id); if (!T || !T.length) return [];
+    const T = (trendIdx().get(g.id) || []).filter(t => sideOk(t, g)); if (!T.length) return [];
     const out = [];
     const up = T.filter(t => t.next.lean.upset && t.next.lean.upset.flag);
     if (up.length) {
       const dogT = up.find(t => t.next.lean.upset.role === 'underdog'), favT = up.find(t => t.next.lean.upset.role === 'favourite');
       const dogHome = dogT ? !!dogT.next.home : favT ? !favT.next.home : null;
-      if (dogHome != null) {
+      // the flag was made with the morning's prices: if the "underdog" is now the model's favourite (or level), there is no upset to watch
+      const stillDog = dogHome != null && (!M || (dogHome ? M.pH < M.pA : M.pA < M.pH));
+      if (stillDog) {
         const side = dogHome ? 'H' : 'A', team = g[dogHome ? 'home' : 'away'];
         const why = [...new Set(up.flatMap(t => t.next.lean.upset.why || []).map(String))];
-        const n = why.reduce((a, w) => a + ofN(w), 0), small = why.some(w => /small sample/.test(w));
+        const n = sampleN(why), small = why.some(w => /small sample/.test(w)), chance = why.some(w => /could be chance/.test(w));
         const st = +((dogT || favT).next.lean.upset.strength || 0);
         if (M) why.push(`The model gives ${team.name} ${pct(dogHome ? M.pH : M.pA)} to win${M.pD ? ` (draw ${pct(M.pD)})` : ''}: the prices already lean the other way, and most underdogs on this list still lose.`);
-        out.push({ src: 'trends', tile: 'money', kicker: ['Team Trends', 'Upset watch', 'Moneyline'], title: `${team.abbr} to win`, sub: `${team.name}, the underdog${M ? ` (model ${pct(dogHome ? M.pH : M.pA)})` : ''}, has beaten its prices`, big: (st >= 0 ? '+' : MINUS) + Math.abs(st).toFixed(1), bigSub: 'wins vs prices', why, tag: `${n} games${small ? ' · small sample' : ''}`, side });
+        out.push({ src: 'trends', tile: 'money', kicker: ['Team Trends', 'Upset watch', 'Moneyline'], title: `${team.abbr} to win`, sub: `${team.name}, the underdog${M ? ` (model ${pct(dogHome ? M.pH : M.pA)})` : ''}, has beaten its prices`, big: (st >= 0 ? '+' : MINUS) + Math.abs(st).toFixed(1), bigSub: 'wins vs prices', why, tag: `${n} games${small ? ' · small sample' : ''}${chance ? ' · could be chance' : ''}`, side });
       }
     }
     const tl = T.map(t => t.next.lean.total).find(x => x && (x.side === 'over' || x.side === 'under'));
@@ -122,21 +134,35 @@
       const why = (tl.why || []).map(String);
       if (M && g.sport === 'soccer') why.push(`The model prices ${tl.side} 2.5 goals at ${pct(tl.side === 'over' ? M.total.p : 1 - M.total.p)}.`);
       out.push({ src: 'trends', tile: 'total', kicker: ['Team Trends', `${tl.side === 'over' ? 'Over' : 'Under'} lean`, 'Total'], title: `${tl.side === 'over' ? 'Over' : 'Under'} ${line != null ? line : 'the total'}`, sub: `${g.home.name} and ${g.away.name} games${M && g.sport === 'soccer' ? ` · model ${tl.side} ${pct(tl.side === 'over' ? M.total.p : 1 - M.total.p)}` : ''}`,
-        big: rate != null ? rate + '%' : '—', bigSub: `${tl.side} in ${tl.n} games`, why, tag: `${tl.n} games${tl.n < 20 ? ' · small sample' : ''}` });
+        big: rate != null ? rate + '%' : '—', bigSub: `${tl.side} in ${tl.n} games`, why, tag: `${tl.n} games${tl.n < 20 ? ' · small sample' : ''}${why.some(w => /could be chance/.test(w)) ? ' · could be chance' : ''}` });
     }
     return out;
   }
   // ---------- evidence: Polymarket vs the feed (window.__sharp, sharp.js) ----------
+  // A lean needs the Sharp Board's strong signal: the side itself priced 3+ points higher on Polymarket than at the books, a
+  // two-sided quote no wider than 12¢, $10k+ traded on that moneyline, and not a likely data problem (15+ points apart).
+  // A thin or wide market is mentioned under "No lean" instead, never shown as one.
   const SH = () => window.__sharp || null;
+  const pmOf = g => { const S = SH(); try { return S && S.forGame ? S.forGame(g.id) : null; } catch (e) { return null; } };
+  const tStamp = s => { const t = Date.parse(s || ''); return isFinite(t) ? `${wFmt.format(new Date(t))} ${tFmt.format(new Date(t))} PT` : 'an unknown time'; };
   function pmLean(g) {
-    const S = SH(); const c = S && S.forGame ? S.forGame(g.id) : null;
-    if (!c || !c.live || !(c.gap >= 0.03) || !c.lead) return null;
+    const S = SH(), c = pmOf(g), GAP = (S && S.GAP) || 0.03;
+    if (!c || !c.strong || c.odd || !c.lead || !(c.lead.gap >= GAP - 1e-12)) return null;
     const L = c.lead, why = c.sides.map(s => `${s.name}: Polymarket ${pct(s.pm)} · books ${pct(s.book)}`);
-    why.push(`${money(c.vol)} traded on Polymarket's moneyline${c.vol < 1e4 ? ' (a thin market)' : ''}. Two markets disagreeing is not a guaranteed edge: either can be wrong.`);
+    why.push(`${money(c.vol)} traded on Polymarket's moneyline. Polymarket's price is from ${tStamp(S.PM && S.PM.updated)}, the books' from ${tStamp(SB.DATA && SB.DATA.updated)}: some of a gap can be news in between.`);
+    why.push('Two markets disagreeing is not a guaranteed edge: either can be wrong.');
     const gp = (Math.round(L.gap * 1000) / 10).toFixed(1);
-    return { src: 'pm', tile: 'money', kicker: ['Polymarket', 'Moneyline', c.strong ? 'Strong signal' : 'Thin market'], title: L.side === 'D' ? 'Draw' : `${L.abbr} to win`,
+    return { src: 'pm', tile: 'money', kicker: ['Polymarket', 'Moneyline', 'Strong signal'], title: L.side === 'D' ? 'Draw' : `${L.abbr} to win`,
       sub: `Polymarket ${gp} pts higher on ${L.side === 'D' ? 'the draw' : L.name}: ${pct(L.pm)} vs ${pct(L.book)} at the books`,
-      big: '+' + gp, bigSub: 'pts vs books', why, tag: c.strong ? `${money(c.vol)} traded` : `thin: ${money(c.vol)} traded`, side: L.side, gid: g.id };
+      big: '+' + gp, bigSub: 'pts vs books', why, tag: `${money(c.vol)} traded`, side: L.side, gid: g.id };
+  }
+  // what Polymarket says when it is not a lean (shown in the "No lean" band)
+  function pmQuiet(g) {
+    const c = pmOf(g); if (!c) return '';
+    const p = (Math.round(c.gap * 1000) / 10).toFixed(1);
+    if (c.odd) return `Polymarket is ${p} pts away from the books here, which looks like a data problem (an old price or a mismatched game), so it is not used.`;
+    if (c.gap < 0.03) return `Polymarket agrees: within ${p} pts of the books.`;
+    return `Polymarket is ${p} pts away from the books, but ${!c.live ? 'its quote is too wide to read' : `on a thin market (${money(c.vol)} traded)`}, so that is not enough for a lean.`;
   }
 
   // ---------- key props: the likeliest player legs of the game ----------
@@ -160,7 +186,7 @@
   }
 
   // ---------- page ----------
-  const st = { day: null, sport: store.get('slate.sport', 'all'), focus: null };
+  const st = { day: null, sport: store.get('slate.sport', 'all'), focus: null, jump: null, miss: '' };
   if (!['all', ...SPORDER].includes(st.sport)) st.sport = 'all';
   let lastParams = null;
   function days() {
@@ -190,21 +216,21 @@
     const leans = ev.get(g.id) || [];
     const hl = { money: leans.some(l => l.tile === 'money'), total: leans.some(l => l.tile === 'total'), spread: false };
     const side = (t, p, home) => `<div class="sl-side">${team(t, true)}<div class="sl-nm">${esc(t.name)}</div><div class="sl-ab">${home ? 'home' : 'away'}</div>${M ? `<div class="sl-wp">${esc(pct(p).replace('%', ''))}<small>%</small></div><div class="sl-ab">win chance</div>` : ''}</div>`;
-    const tm = tFmt.format(new Date(ms)).split(' ');
+    const tp = tFmt.formatToParts(new Date(ms)), tm = [tp.filter(x => x.type !== 'dayPeriod').map(x => x.value).join('').trim(), (tp.find(x => x.type === 'dayPeriod') || {}).value || ''];
     let body;
     if (!SB.openG(g)) body = `<div class="sl-lean sl-none"><div class="sl-lk">${SB.isFinal(g) ? 'Final' : 'Started'}</div><div class="sl-lt">${SB.isFinal(g) && g.score ? esc(`${A.abbr} ${g.score.away} – ${g.score.home} ${H.abbr}`) : 'This game has started, so there are no pre-game lines here.'}</div></div>`;
     else if (!M) body = `<div class="sl-lean sl-none"><div class="sl-lk">No prices yet</div><div class="sl-lt">No sportsbook prices in the feed for this game yet, so there are no model lines.</div></div>`;
     else {
       const wb = `<div class="sl-wbar" role="img" aria-label="${esc(`Model win chances: ${A.name} ${pct(M.pA)}${M.pD ? `, draw ${pct(M.pD)}` : ''}, ${H.name} ${pct(M.pH)}`)}"><i style="width:${(M.pA * 100).toFixed(1)}%;--h:${U.hue(A.abbr)}"></i>${M.pD ? `<i class="sl-wd" style="width:${(M.pD * 100).toFixed(1)}%"></i>` : ''}<i style="width:${(M.pH * 100).toFixed(1)}%;--h:${U.hue(H.abbr)}"></i></div>`;
-      const lean = leans.length ? leans.map(leanHTML).join('') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p></div>`;
+      const lean = leans.length ? leans.map(leanHTML).join('') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p>${(q => (q ? `<p class="sl-pmq">${esc(q)}</p>` : ''))(pmQuiet(g))}</div>`;
       const ctx = `<div class="sl-ctx">${M.ctx.map(([l, p]) => `<div class="sl-r"><span>${esc(l)}</span><span class="sl-bar"><i style="width:${clamp(p * 100, 0, 100).toFixed(1)}%"></i></span><b>${esc(pct(p))}</b></div>`).join('')}</div>`;
       body = wb + lean + tilesHTML(g, M, hl) + ctx;
     }
-    const kp = keyProps(g);
+    const kp = SB.openG(g) ? keyProps(g) : [];   // no + Slip on a game that has started
     const props = `<div class="sl-props"><div class="ui-lbl">Key props · likeliest legs</div>${kp.length ? kp.map(x => {
       const inS = SB.inSlip(g.id, x.key);
       return `<div class="sl-prop">${U.team(x.pl.team)}<div class="sl-pn"><b>${esc(x.pl.name)}</b><span>${esc(x.thr)}+ ${esc(E.STATN[x.pl.stat] || x.pl.stat)}${x.pl.est ? ' · season avg' : ''}</span></div><div class="sl-pc"><b>${esc(pct(x.p))}</b><span>${esc(fair(x.p))}</span></div><button type="button" class="ui-ghost sm sl-add${inS ? ' sl-on' : ''}" data-sl-add="${esc(g.id + '|' + x.key)}" aria-pressed="${inS}" aria-label="${esc(`${inS ? 'Remove from' : 'Add to'} slip: ${x.pl.name} ${x.thr}+ ${E.STATN[x.pl.stat] || x.pl.stat}`)}">${inS ? '✓ Slip' : '+ Slip'}</button></div>`;
-    }).join('') : `<p class="ui-note">No player lines for this game yet.</p>`}</div>`;
+    }).join('') : `<p class="ui-note">${SB.openG(g) ? 'No player lines for this game yet.' : 'No player legs once a game has started.'}</p>`}</div>`;
     const q = `Break down ${A.name} at ${H.name}`;
     const acts = `<div class="sl-acts"><button type="button" class="ui-cta sm" data-sl-deep="${esc(g.id)}">Deep dive</button><button type="button" class="ui-ghost sm" data-sl-sim="${esc(g.id)}">Simulate</button><button type="button" class="ui-ghost sm" data-sl-ask="${esc(q)}">Ask</button></div>`;
     return `<article class="sl-card${st.focus === g.id ? ' sl-focus' : ''}"${st.focus === g.id ? ' tabindex="-1"' : ''} id="sl-${esc(g.id)}" data-sl-gid="${esc(g.id)}" data-sport="${esc(g.sport)}" style="--ha:${U.hue(A.abbr)};--hh:${U.hue(H.abbr)}">
@@ -216,16 +242,18 @@
     params = params || {};
     needTrends();
     const S = SH(); if (S && S.state === 'idle' && S.load) S.load().then(() => { if (SB.tab === KEY) SB.render(); });
-    let jump = null;
     if (params !== lastParams) {
-      lastParams = params;
+      lastParams = params; st.miss = '';
       const g = params.gid && SB.gameById(params.gid);
-      if (g) { st.day = E.dayOf(SB.startMs(g)); if (st.sport !== 'all' && st.sport !== g.sport) st.sport = 'all'; st.focus = g.id; jump = g.id; }
+      // {gid}: that game's day, its card highlighted; the scroll is repeated until Team Trends and Polymarket have loaded
+      // (their lean bands change the height of the cards above it)
+      if (g) { st.day = E.dayOf(SB.startMs(g)); if (st.sport !== 'all' && st.sport !== g.sport) st.sport = 'all'; st.focus = g.id; st.jump = g.id; }
+      else if (params.gid) { st.focus = st.jump = null; st.miss = 'That game is not in the feed any more, so here is the slate.'; }
     }
     const D = days();
     if (!st.day || !D.some(d => d.k === st.day)) st.day = (D.find(d => d.n > 0) || D[0]).k;
     const all = E.dayGames(st.day);
-    if (jump && !all.some(g => g.id === jump)) { const g = SB.gameById(jump); if (g) all.push(g); }  // a game that has started still shows when asked for
+    if (st.focus && !all.some(g => g.id === st.focus)) { const g = SB.gameById(st.focus); if (g) all.push(g); }  // a game that has started still shows when asked for
     const sports = SPORDER.filter(s => all.some(g => g.sport === s));
     if (st.sport !== 'all' && !sports.includes(st.sport)) st.sport = 'all';
     const list = all.filter(g => st.sport === 'all' || g.sport === st.sport);
@@ -233,14 +261,16 @@
     const ev = new Map();
     for (const g of list) { const M = modelOf(g); if (!M) continue; const L = [...(TR ? trendLeans(g, M) : [])]; const p = pmLean(g); if (p) L.unshift(p); if (L.length) ev.set(g.id, L); }
     const priced = list.filter(g => modelOf(g)).length, loadingEv = (TR_ST !== 'done' && !TR) || !S || (S.state !== 'done' && !S.PM);
+    const jump = st.jump; if (!loadingEv) st.jump = null;
     const dayName = D.find(d => d.k === st.day) || { label: dayLabel(st.day) };
     main.innerHTML = `<div class="ui-page sl-root">
       ${U.page({ kicker: 'Games · the slate', title: 'Every matchup,', accent: 'by the numbers', sub: 'Win chances, fair lines and the likeliest player legs for each game on the board. Every number is a model estimate built from the sportsbook prices in our feed.' })}
       <div class="sl-bar"><div class="sl-scroll">${U.pills(D.map(d => ({ k: d.k, label: d.label, n: d.n })), st.day, 'sl-day')}</div>
         <div class="sl-scroll">${U.pills([{ k: 'all', label: 'All', n: all.length }, ...sports.map(s => ({ k: s, label: SPN[s], n: all.filter(g => g.sport === s).length }))], st.sport, 'sl-sport')}</div></div>
+      ${st.miss ? `<p class="ui-note" role="status">${esc(st.miss)}</p>` : ''}
       <p class="ui-muted sl-sum">${esc(`${list.length} game${list.length === 1 ? '' : 's'} on ${dayLabel(st.day)} · ${priced} with sportsbook prices · ${ev.size} with a lean backed by evidence${loadingEv ? ' (still checking Team Trends and Polymarket)' : ''}`)}</p>
       ${list.length ? `<div class="sl-grid">${list.map(g => card(g, ev)).join('')}</div>` : U.empty(`No games left on ${dayName.label === 'Today' ? 'today’s' : dayLabel(st.day) + '’s'} board${st.sport !== 'all' ? ' for ' + SPN[st.sport] : ''}. Pick another day above.`)}
-      <p class="ui-note">How these are made: each game's model is fitted to the sportsbook win chances in our feed, so the model's favourite is the market's favourite. Spread is the model's fair line (its average margin rounded to the half point), not a book's posted line. The feed has no game totals, so NBA, football and NHL totals sit on a league average and say so. Fair odds are what a chance is worth, not a price you can bet: bet only at that price or better. A lean needs outside evidence: a Team Trends flag (past results, with its sample) or a Polymarket price 3+ points away from the books. Past patterns and market gaps are not guarantees.</p>
+      <p class="ui-note">How these are made: each game's model is fitted to the sportsbook win chances in our feed, so the model's favourite is the market's favourite. Spread is the model's fair line (its average margin rounded to the half point), not a book's posted line. When the feed has no game total, NBA, football and NHL totals sit on a league average and the tile says so. Fair odds are what a chance is worth, not a price you can bet: bet only at that price or better. A lean needs outside evidence: a Team Trends flag (past results, with its sample) or a Polymarket price 3+ points higher than the books on a market with $10k+ traded and a two-sided quote. Past patterns and market gaps are not guarantees.</p>
     </div>`;
     const root = main.querySelector('.sl-root');
     root.addEventListener('click', onClick);
@@ -251,7 +281,7 @@
     const pill = t.dataset.uiPill;
     if (pill) {
       const [n, k] = pill.split('|');
-      if (n === 'sl-day') { st.day = k; st.focus = null; }
+      if (n === 'sl-day') { st.day = k; st.focus = st.jump = null; st.miss = ''; }
       else if (n === 'sl-sport') { st.sport = k; store.set('slate.sport', k); }
       else return;
       SB.render();
@@ -321,6 +351,7 @@
 .sl-lean.sl-none{display:block;border:1px dashed var(--hair2);background:rgba(255,255,255,.02)}
 .sl-lean.sl-none .sl-lk{color:#ffffff80}.sl-lean.sl-none .sl-lt{font:600 15px/1.3 var(--fui);margin-top:6px}
 .sl-lean.sl-none p{margin:6px 0 0;font:400 12.5px/1.45 var(--fui);color:#ffffff99}
+.sl-lean.sl-none p.sl-pmq{color:#ffffffbf}
 .sl-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 14px 0}
 .sl-tile{min-width:0;padding:10px 11px;border-radius:14px;border:1px solid var(--hair2);background:rgba(255,255,255,.03)}
 .sl-tile .ui-lbl{display:block;margin-bottom:6px;font-size:9.5px}

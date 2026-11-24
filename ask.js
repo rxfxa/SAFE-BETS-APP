@@ -89,22 +89,75 @@
       if (e.sport !== 'nfl' || e.team !== team || e.gid !== g.id) continue;
       e.td = { gid: g.id, key: `TD:A:${team}:${slug}` }; if (!e.pos) e.pos = x.pos || null;
     }
-    const list = [...by.values()], last = new Map();
-    for (const e of list) { const t = e.nm.split(' '), ln = t[t.length - 1]; if (!ln) continue; if (!last.has(ln)) last.set(ln, []); last.get(ln).push(e); }
-    return (PX = { D, by, list, last, nextG });
+    const list = [...by.values()];
+    // name keys: the full name, a surname of 2+ words ("gilgeous alexander", "st brown"), the last word and each part of a
+    // hyphenated surname, and a first name ("lebron") that only one slate player has and nobody has as a surname
+    const K = { full: new Map(), sur: new Map(), last: new Map(), first: new Map() };
+    const add = (M, k, e) => { if (!k) return; if (!M.has(k)) M.set(k, []); const L = M.get(k); if (!L.includes(e)) L.push(e); };
+    for (const e of list) {
+      const words = lcName(e.name).split(/\s+/).filter(w => w && !SUFFIX.has(w.replace(/-/g, '')));
+      e.lc = lcName(e.name); e.first = norm(words[0] || '');
+      const sur = norm(words.slice(1).join(' ')), st = sur.split(' ');
+      add(K.full, e.nm, e);
+      if (st.length >= 2) add(K.sur, sur, e);
+      if (st[st.length - 1]) add(K.last, st[st.length - 1], e);
+      for (const w of words.slice(1)) if (w.includes('-')) for (const part of w.split('-')) { const p = norm(part); if (p.length >= 4) add(K.last, p, e); }
+      if (e.first && !e.first.includes(' ')) add(K.first, e.first, e);
+    }
+    const teamW = new Set();
+    for (const g of D.games || []) for (const t of [g.home, g.away]) for (const w of norm(t && t.name).split(' ')) if (w.length >= 4) teamW.add(w);
+    return (PX = { D, by, list, K, teamW, nextG });
   }
-  // names in a question: full names first, then a last name that is not an everyday word ("Maxey", "Gilgeous-Alexander")
+  // lower case, accents and apostrophes / dots dropped, hyphens kept ("Shai Gilgeous-Alexander" -> "shai gilgeous-alexander")
+  function lcName(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’`.]/g, ''); }
+  // the sport a question points at, from its words: league names first, then the stat named
+  function hintOf(lc) {
+    const sp = sportOf(lc); if (sp) return [sp];
+    const st = statFrom(lc);
+    if (st === 'pts' || st === 'reb' || st === 'ast') return ['nba'];
+    if (st && st !== 'sog') return ['nfl', 'ncaaf'];
+    return null;
+  }
+  // names in a question. Every key that appears is a candidate; the longest wins where two overlap (so "Alexander-Walker"
+  // is never read as Gilgeous-Alexander plus a Walker). A last or first name alone must not be an everyday word or a team
+  // word, and a hyphenated word must belong to that player ("alexander-walker" is not Shai Gilgeous-Alexander).
+  // Two players with that surname: a first name in the question decides, else the sport / stat named, else the bigger
+  // role; the answer then says who it picked (amb).
   function matchPlayers(lc) {
-    const X = pIndex(), qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ', out = new Map();
-    const at = words => { const m = new RegExp('(^|[^a-z0-9])' + words.split(' ').join('[^a-z0-9]+') + '(?![a-z0-9])').exec(lc); return m ? m.index + m[1].length : 0; };
-    for (const e of X.list) if (e.nm.length >= 5 && qn.includes(' ' + e.nm + ' ')) out.set(e.k, { e, at: at(e.nm), len: e.nm.length });
-    for (const [ln, L] of X.last) {
-      if (ln.length < 4 || COMMON.has(ln) || !qn.includes(' ' + ln + ' ')) continue;
-      if (L.some(e => out.has(e.k))) continue;
-      const i = at(ln);
-      if ([...out.values()].some(o => i >= o.at && i <= o.at + o.len + 2)) continue;
-      const pick = L.length === 1 ? L[0] : (L.find(e => { const f = e.nm.split(' ')[0]; return f.length >= 2 && qn.includes(' ' + f + ' '); }) || L.slice().sort((a, b) => a.start - b.start)[0]);
-      out.set(pick.k, { e: pick, at: i, len: ln.length });
+    const X = pIndex(), qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+    const spans = key => {  // where a key ("lj phillips") sits in the question: dots between letters and any separator between words allowed
+      const rx = new RegExp('(^|[^a-z0-9])(' + key.split(' ').map(w => w.split('').join('\\.?')).join('[^a-z0-9]+') + ')(?![a-z0-9])', 'g');
+      const r = []; let m; while ((m = rx.exec(lc))) { r.push({ at: m.index + m[1].length, len: m[2].length }); if (!m[2].length) break; } return r;
+    };
+    const compound = (at, len) => { let s = at, t = at + len; while (s > 0 && /[a-z-]/.test(lc[s - 1])) s--; while (t < lc.length && /[a-z-]/.test(lc[t])) t++; return lc.slice(s, t).replace(/^-+|-+$/g, ''); };
+    const C = [];
+    const cand = (type, w, M, ok) => { for (const [k, L] of M) if (ok(k, L) && qn.includes(' ' + k + ' ')) for (const s of spans(k)) C.push({ type, w, k, L, at: s.at, len: s.len }); };
+    cand('full', 3, X.K.full, k => k.length >= 5);
+    cand('sur', 2, X.K.sur, () => true);
+    const solo = k => k.length >= 4 && !COMMON.has(k) && !TEAMSTOP.has(k) && !X.teamW.has(k);
+    cand('last', 1, X.K.last, solo);
+    cand('first', 0, X.K.first, (k, L) => L.length === 1 && k.length >= 5 && solo(k) && !X.K.last.has(k));
+    C.sort((a, b) => b.len - a.len || b.w - a.w || a.at - b.at);
+    const taken = [], out = new Map();
+    for (const c of C) {
+      if (taken.some(t => c.at < t.at + t.len && t.at < c.at + c.len)) continue;
+      let L = c.L.filter(e => !out.has(e.k));
+      if (c.type === 'last' || c.type === 'first') { const cp = compound(c.at, c.len); if (/[a-z]-[a-z]/.test(cp)) L = L.filter(e => e.lc.includes(cp)); }
+      if (!L.length) continue;
+      let pick = L[0], amb = null;
+      if (L.length > 1) {
+        const byFirst = L.filter(e => e.first && qn.includes(' ' + e.first + ' '));
+        if (byFirst.length === 1) pick = byFirst[0];
+        else {
+          const hint = hintOf(lc), st = statFrom(lc);
+          let pool = hint ? L.filter(e => hint.includes(e.sport)) : L; if (!pool.length) pool = L;
+          const size = e => { const s = st && e.stats[st]; if (s) return s.avg || 0; const m = e.sport === 'nba' ? e.stats.pts : e.stats.recyd || e.stats.ryd || e.stats.pyd; return m ? (m.avg || 0) / (e.sport === 'nba' ? 1 : 4) : 0; };
+          pick = pool.slice().sort((a, b) => size(b) - size(a) || a.start - b.start)[0];
+          amb = L.filter(e => e !== pick);
+        }
+      }
+      out.set(pick.k, { e: pick, at: c.at, len: c.len, word: lc.slice(c.at, c.at + c.len), amb });
+      taken.push(c);
     }
     if (!out.size) {  // "Ja Marr Chase" / "JaMarr Chase": spacing that differs from the feed's
       const sq = qn.replace(/ /g, '');
@@ -112,13 +165,14 @@
     }
     return [...out.values()].sort((a, b) => a.at - b.at);
   }
+  const ambNote = p => (p && p.amb && p.amb.length ? `Reading "${p.word}" as ${p.e.name} (${p.e.team}). Also on the slate: ${p.amb.slice(0, 3).map(e => `${e.name} (${e.team})`).join(', ')}. Use the full name for another player.` : '');
   function seasonByName(text, sport) {
     const X = sIndex(); if (!X) return null; const k = E.nameKey(text);
     for (const sp of sport ? [sport] : ['nba', 'nfl', 'ncaaf', 'nhl', 'soccer']) { const S = X[sp]; const L = S && S.m.get(k); if (L && L.length) return { sp, p: L.slice().sort((a, b) => (b.gp || 0) - (a.gp || 0))[0] }; }
     return null;
   }
   function seasonInText(lc) {  // a full name of a player who has no game on the slate (season box scores only)
-    const X = sIndex(); if (!X) return null; const qn = ' ' + lc.replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+    const X = sIndex(); if (!X) return null; const qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
     for (const sp of ['nba', 'nfl', 'ncaaf', 'nhl', 'soccer']) { const S = X[sp]; if (!S) continue; for (const L of S.m.values()) { const p = L[0], n = nmOf(p.n); if (n.length >= 6 && n.includes(' ') && qn.includes(' ' + n + ' ')) return { sp, p }; } }
     return null;
   }
@@ -144,16 +198,23 @@
     return best ? best.st : null;
   }
   const yardsFor = e => { const p = String(e.pos || '').toUpperCase(); const pref = p === 'QB' ? ['pyd', 'ryd'] : p === 'RB' ? ['ryd', 'recyd'] : ['recyd', 'rec', 'ryd']; return pref.find(s => e.stats[s]) || ['recyd', 'ryd', 'pyd'].find(s => e.stats[s]) || null; };
+  // markets the app has no line for: named so the answer can say so instead of quietly pricing another stat
+  const UNSUP = [[/\b(threes?|3s|treys?|three[- ]pointers?|3[- ]?pointers?|3pm|3pt)\b/, 'three-pointers made'], [/\bsteals?\b/, 'steals'], [/\bblocks?\b/, 'blocks'], [/\bturnovers?\b/, 'turnovers'],
+    [/\bpra\b|\b(pts|points|reb|rebs|rebounds|ast|asts|assists|p|r|a)\s*\+\s*(pts|points|reb|rebs|rebounds|ast|asts|assists|p|r|a)\b|\bpoints,? rebounds,? (and|&) assists\b/, 'combined points / rebounds / assists'],
+    [/\b(double|triple)[- ]doubles?\b/, 'double-doubles'], [/\bsacks?\b/, 'sacks'], [/\b(interceptions?|ints)\b/, 'interceptions'], [/\bcompletions?\b/, 'completions'], [/\blongest\b/, 'longest plays'], [/\bfirst basket\b/, 'first basket']];
+  const unsupOf = s => { for (const [rx, n] of UNSUP) if (rx.test(s)) return n; return null; };
   // the stat for one player: the words he was asked with, else his main market
   function pickStat(e, seg, all, hasLine) {
     let s = statFrom(seg) || statFrom(all);
+    const un = unsupOf(seg) || (statFrom(seg) ? null : unsupOf(all));
     const score = /\bscor(e|es|ing)\b/.test(seg) || /\bscor(e|es|ing)\b/.test(all);
-    if (!s && score) s = e.sport === 'nfl' ? 'td' : e.sport === 'nba' ? 'pts' : null;
-    if (s === 'td' && e.sport !== 'nfl') s = e.sport === 'nba' ? 'pts' : null;
+    if (!s && !un && score) s = e.sport === 'nfl' || e.sport === 'ncaaf' ? 'td' : e.sport === 'nba' ? 'pts' : null;
     if (s === 'yds') s = yardsFor(e);
-    if (s === 'td' && e.td) return { stat: 'td' };
-    if (s && e.stats[s]) return { stat: s };
-    const missing = s;
+    if (!un) {
+      if (s === 'td' && e.td) return { stat: 'td' };
+      if (s && e.stats[s]) return { stat: s };
+    } else if (s && s !== 'td' && e.stats[s]) return { stat: s, missing: un };
+    const missing = un || s;
     let d = null;
     if (e.sport === 'nba') d = ['pts', 'reb', 'ast'].find(x => e.stats[x]);
     else if (e.sport === 'nfl' || e.sport === 'ncaaf') d = !hasLine && e.td ? 'td' : yardsFor(e) || (e.stats.rec ? 'rec' : e.td ? 'td' : null);
@@ -224,7 +285,12 @@
       const p = players[i], seg = solo ? clean : clean.slice(p.at, i + 1 < players.length ? players[i + 1].at : clean.length);
       const line = lineOf(seg);
       const st = pickStat(p.e, seg, clean, line != null);
-      return { e: p.e, stat: st.stat, missing: st.missing, line: st.stat === 'td' ? null : line, under: isUnder(seg) };
+      const L = { e: p.e, stat: st.stat, missing: st.missing, line: st.stat === 'td' ? null : line, under: isUnder(seg), amb: ambNote(p), tdNote: '' };
+      if (st.stat === 'td') {  // the app prices an anytime TD (1 or more) only
+        if (/\b(2|two|3|three)\s*\+?\s*(or more )?(tds?|touchdowns?)\b|\bmultiple (tds?|touchdowns?)\b/.test(seg)) L.tdNote = 'The app prices an anytime TD (one or more). Two or more touchdowns is much less likely than the chance shown.';
+        else if (/\b(first|1st) (td|touchdown)\b|\bfirst to score\b/.test(seg)) L.tdNote = 'This is the anytime TD chance. Scoring the first TD of the game is far less likely (see the First TD tab).';
+      }
+      return L;
     };
     const isParlay = /\b(parlay|parley|sgp|same game|ticket|accumulator|acca)\b/.test(lc);
     if (/\b(this|my) (parlay|slip|ticket|bet)\b/.test(lc) && !players.length) return { kind: 'slipq' };
@@ -254,10 +320,12 @@
       if (edge >= 0) return { tone: 'lean', title: 'Lean', kicker: 'Safe Bets verdict · vs your price', edge, imp };
       return { tone: 'pass', title: 'Pass', kicker: 'Safe Bets verdict · vs your price', edge, imp };
     }
-    if (p >= .7) return { tone: 'take', title: 'Strong lean', kicker: 'Safe Bets verdict' };
-    if (p >= .58) return { tone: 'lean', title: 'Lean', kicker: 'Safe Bets verdict' };
-    if (p >= .45) return { tone: 'coin', title: 'Coin flip', kicker: 'Safe Bets verdict' };
-    return { tone: 'pass', title: 'Long shot', kicker: 'Safe Bets verdict' };
+    // no price: a read of the chance only, so the kicker says the price it needs (a 75% leg at -500 is still a bad bet)
+    const k = `Safe Bets verdict · only at ${U.fair(p)} or better`;
+    if (p >= .7) return { tone: 'take', title: 'Strong lean', kicker: k };
+    if (p >= .58) return { tone: 'lean', title: 'Lean', kicker: k };
+    if (p >= .45) return { tone: 'coin', title: 'Coin flip', kicker: k };
+    return { tone: 'pass', title: 'Long shot', kicker: k };
   }
   const FLIP = { good: 'bad', bad: 'good', mid: 'mid' };
   const FLIPS = { Favorable: 'Unfavorable', Unfavorable: 'Favorable', Hot: 'Hot (hurts the under)', Cold: 'Cold (helps the under)', Rising: 'Rising (hurts the under)', Falling: 'Falling (helps the under)', 'Close game': 'Close game (hurts the under)', 'Blowout risk': 'Blowout risk (helps the under)' };
@@ -338,7 +406,8 @@
       const sc = Math.round(clamp(50 + 250 * (c.tf - 1) - 60 * Math.max(0, c.pb - .15), 0, 100));
       F.push({ name: 'Matchup', tone: sc >= 60 ? 'good' : sc < 40 ? 'bad' : 'mid', status: sc >= 60 ? 'Favorable' : sc < 40 ? 'Unfavorable' : 'Neutral',
         why: `${e.team} are expected to score ${f1(tp)} points from the game's total and spread, ${sg(((tp || avg) / avg - 1) * 100)}% vs a typical team (${f1(avg)}). Matchup score ${sc} of 100 (model estimate${c.gen ? '; no posted total, so a league-average total is used' : ''}).` });
-    } else F.push({ name: 'Matchup', tone: 'mid', status: 'Unknown', why: `The feed has no price for ${g.away.abbr} @ ${g.home.abbr} yet, so ${e.team}'s expected points are unknown. ${td ? 'The TD model uses an even game (52% home).' : `The chance uses his season average${M && M.rf ? ' and recent form (30%)' : ''} only.`}` });
+    } else if (TOT[sp] && !SB.priced(g)) F.push({ name: 'Matchup', tone: 'mid', status: 'Unknown', why: `The feed has no price for ${g.away.abbr} @ ${g.home.abbr} yet, so ${e.team}'s expected points are unknown. ${td ? 'The TD model uses an even game (52% home).' : `The chance uses his season average${M && M.rf ? ' and recent form (30%)' : ''} only.`}` });
+    else F.push({ name: 'Matchup', tone: 'mid', status: 'Unknown', why: `The app has no team-points read for this ${SPN[sp] || sp} game, so the matchup is not scored. The chance uses his season average${M && M.rf ? ' and recent form (30%)' : ''}.` });
     // Trends: his recent games vs his season
     if (log && log.n) {
       if (td) {
@@ -453,12 +522,24 @@
     if (ST_NAME[t]) return t;
     const x = statFrom(t); return x === 'yds' ? (e ? yardsFor(e) : 'recyd') : x;
   }
-  function mkCtx(a, q) {
+  // said: the viewer's own messages, set only when Claude calls the tools. A price or line Claude passes must come from them
+  // (or, for a line, from the app's own lines), so a card never shows a number that only Claude wrote.
+  function mkCtx(a, q, signal, said) {
     return {
-      card(spec) { const sig = JSON.stringify(spec); if (a.cards.length >= 4 || a.cards.some(c => JSON.stringify(c) === sig)) return; a.cards.push(spec); },
-      step(s) { a.step = s; paintMsg(a); },
-      q,
+      card(spec) { if (signal && signal.aborted) return; const sig = JSON.stringify(spec); if (a.cards.length >= 4 || a.cards.some(c => JSON.stringify(c) === sig)) return; a.cards.push(spec); },
+      step(s) { if (signal && signal.aborted) return; a.step = s; paintMsg(a); },
+      q, said,
     };
+  }
+  const PRICE_RX = /(?:^|[\s(@:,=])([+\-−–]\s?\d{3,5})(?![\d.])/g;
+  const pricesIn = t => { const r = []; for (const m of String(t || '').toLowerCase().matchAll(PRICE_RX)) { const v = +m[1].replace(/[−–]/, '-').replace(/\s/g, ''); if (Math.abs(v) >= 100) r.push(v); } if (/\b(even money|evens)\b/i.test(t)) r.push(100); return r; };
+  const amNum = s => { const v = +String(s).replace(/[−–]/, '-').replace(/\s/g, ''); return isFinite(v) ? v : NaN; };
+  function priceSaid(ctx, price) { return !ctx || !ctx.said || ctx.said.some(t => pricesIn(t).includes(amNum(price))); }
+  function lineSaid(ctx, line, stat) {
+    if (!ctx || !ctx.said) return true;
+    if (ctx.said.some(t => (String(t).match(/\d+(?:\.\d+)?/g) || []).some(n => Math.abs(+n - line) <= .5))) return true;
+    if ((E.LADDER[stat] || []).some(t => Math.abs(t - .5 - line) < 1e-9)) return true;  // one of the app's own lines
+    return ST.msgs.some(m => (m.cards || []).some(c => c.line === line || (c.items || []).some(x => x.line === line)));
   }
   const factorLine = f => `${f.name}: ${f.status}. ${f.why}`.slice(0, 260);
   function propResult(A) {
@@ -491,16 +572,21 @@
     if (stat === 'td' && !e.td) return { error: `The app has no anytime-TD model for ${e.name}${e.sport === 'ncaaf' ? ' (college players have yards and catches only)' : ''}.` };
     if (!stat) stat = pickStat(e, '', '', a.line != null).stat;
     if (stat !== 'td' && !e.stats[stat]) return { error: `The app has no ${ST_NAME[stat] || String(a.stat)} line for ${e.name}. It has: ${[...Object.keys(e.stats).map(s => ST_NAME[s]), ...(e.td ? ['anytime TD'] : [])].join(', ') || 'nothing'}.` };
-    const line = a.line != null && isFinite(+a.line) && +a.line > 0 ? +a.line : null;
+    let line = a.line != null && a.line !== '' && isFinite(+a.line) && +a.line > 0 ? +a.line : null;
     const under = String(a.side || '').toLowerCase() === 'under';
-    const price = a.price != null && String(a.price).trim() ? String(a.price).trim() : null;
+    let price = a.price != null && String(a.price).trim() ? String(a.price).trim() : null;
+    const dropped = [];
+    if (price != null && !priceSaid(ctx, price)) { dropped.push(`price ${price} ignored: the viewer did not give it, so there is no edge read`); price = null; }
+    if (line != null && stat !== 'td' && !lineSaid(ctx, line, stat)) { dropped.push(`line ${line} ignored: not from the viewer or the app, so the app's own line is used`); line = null; }
     const spec = { t: 'prop', k: e.k, gid: stat === 'td' ? e.td.gid : e.gid, stat, line, under, price, name: e.name, mk: marketOf(stat, line == null ? 0 : line, under) };
     if (ctx) ctx.step(`Pricing ${e.name} · ${stat === 'td' ? 'anytime TD' : ST_NAME[stat]}`);
     const A = analyzeProp(spec);
     if (!A.ok) return { error: A.why };
     spec.line = stat === 'td' ? null : A.line; spec.mk = A.market; if (A.defaulted && stat !== 'td') spec.dl = 1;
     if (ctx) ctx.card(spec);
-    return propResult(A);
+    const r = propResult(A);
+    if (dropped.length) r.ignored = dropped;
+    return r;
   }
   async function tGameReport(a, ctx) {
     await loadSeason();
@@ -535,14 +621,16 @@
     return { title, risk, legs: T.legs.map(L => { const g = SB.gameById(L.gid); return `${L.label} (${g.away.abbr} @ ${g.home.abbr}): ${pc(L.p)}`; }), joint_chance: pc(pr.p), if_unrelated: pc(pr.indep), fair_odds: U.fair(pr.p),
       note: T.legs.length < n ? `Only ${T.legs.length} legs qualified.` : 'Same-game legs are priced together from the game simulations.' };
   }
-  function resolveLeg(x) {
+  function resolveLeg(x, ctx) {
     x = x || {};
     if (x.player) {
       const r = resolvePlayer(String(x.player)); if (!r || !r.e) return { error: `No slate player "${x.player}".` };
       const e = r.e; let stat = statNorm(x.stat, e) || pickStat(e, '', '', x.line != null).stat;
       if (stat === 'td' && !e.td) stat = pickStat(e, '', '', true).stat;
       if (!stat || (stat !== 'td' && !e.stats[stat])) return { error: `No ${ST_NAME[stat] || 'model'} line for ${e.name}.` };
-      const A = analyzeProp({ t: 'prop', k: e.k, stat, line: x.line != null && +x.line > 0 ? +x.line : null, under: String(x.side || '').toLowerCase() === 'under', name: e.name });
+      let line = x.line != null && x.line !== '' && +x.line > 0 ? +x.line : null;
+      if (line != null && stat !== 'td' && !lineSaid(ctx, line, stat)) line = null;  // a line only Claude named: the app's own line instead
+      const A = analyzeProp({ t: 'prop', k: e.k, stat, line, under: String(x.side || '').toLowerCase() === 'under', name: e.name });
       if (!A.ok) return { error: A.why };
       return { gid: A.g.id, key: A.key, label: `${e.name} ${A.market}`, p: A.p, sport: A.sp };
     }
@@ -562,7 +650,7 @@
     const raw = Array.isArray(a.legs) ? a.legs.slice(0, 12) : [];
     if (ctx) ctx.step(`Pricing ${raw.length} legs together`);
     const legs = [], miss = [];
-    for (const x of raw) { const r = resolveLeg(x); if (r.error) miss.push(r.error); else if (!legs.some(L => L.gid === r.gid && L.key === r.key)) legs.push(r); }
+    for (const x of raw) { const r = resolveLeg(x, ctx); if (r.error) miss.push(r.error); else if (!legs.some(L => L.gid === r.gid && L.key === r.key)) legs.push(r); }
     if (!legs.length) return { error: `None of those legs matched a bet on the app's slate. ${miss.join(' ')}`.trim() };
     const title = `Your ${legs.length}-leg parlay`;
     if (ctx) ctx.card({ t: 'parlay', title, legs: legs.map(L => ({ gid: L.gid, key: L.key, label: L.label })), sub: 'yours' });
@@ -598,7 +686,7 @@
     const items = pick.map(x => ({ t: 'prop', k: x.e.k, gid: x.stat === 'td' ? x.e.td.gid : x.e.gid, stat: x.stat, line: x.stat === 'td' ? null : x.line, under: false, name: x.e.name, mk: marketOf(x.stat, x.line, false) }));
     const title = `Top ${items.length} ${sport ? SPN[sport] + ' ' : ''}props ${label}`;
     if (ctx) ctx.card({ t: 'list', title, items });
-    return { title, ranked_by: 'model chance at the highest ladder line with a 65%+ chance, recent box scores as a tie-break. The app has no sportsbook prop prices, so there is no edge figure.',
+    return { title, ranked_by: 'model chance at the highest ladder line with a 65%+ chance; points legs get a small preference (the owner\'s rule) and recent box scores break near-ties. The app has no sportsbook prop prices, so there is no edge figure.',
       props: pick.map(x => `${x.e.name} (${x.e.team}) ${marketOf(x.stat, x.line, false)}: ${pc(x.p)}, fair ${U.fair(x.p)}`) };
   }
   async function tStartSit(a, ctx) {
@@ -630,12 +718,17 @@
     ['start_sit', 'Fantasy football start / sit: compares players\' projected PPR points (season, last 3 games, the game\'s price) and TD chances. Adds a comparison card.',
       { type: 'object', properties: { players: { type: 'array', items: { type: 'string' }, maxItems: 4 } }, required: ['players'] }],
   ];
-  function toolsFor(a) {
-    const ctx = mkCtx(a);
-    return TOOL_DEF.map(([name, description, inputSchema]) => ({ name, description, inputSchema, async execute(input, c) {
-      if (c && c.signal && c.signal.aborted) throw new Error('Stopped by the viewer.');
+  // most useful first, so a view that allows fewer tools (limits().tools.maxCount) keeps the ones that draw cards
+  const TOOL_RANK = ['prop_report', 'build_parlay', 'game_report', 'top_props', 'price_parlay', 'find_players', 'start_sit'];
+  function toolsFor(a, q, signal) {
+    const said = [q, ...ST.msgs.filter(m => m.role === 'user').map(m => m.text)];
+    const defs = TOOL_DEF.slice().sort((x, y) => TOOL_RANK.indexOf(x[0]) - TOOL_RANK.indexOf(y[0])).slice(0, ST.maxTools || TOOL_DEF.length);
+    return defs.map(([name, description, inputSchema]) => ({ name, description, inputSchema, async execute(input, c) {
+      const sig = (c && c.signal) || signal;
+      if ((sig && sig.aborted) || (signal && signal.aborted)) throw new Error('Stopped by the viewer.');
+      const ctx = mkCtx(a, q, { get aborted() { return !!((sig && sig.aborted) || (signal && signal.aborted)); } }, said);
       const r = await TOOL_FN[name](input && typeof input === 'object' ? input : {}, ctx);
-      a.step = ''; paintMsg(a);
+      if (!(signal && signal.aborted)) { a.step = ''; paintMsg(a); }
       if (r && r.error) throw new Error(r.error);
       return r;
     } }));
@@ -707,7 +800,7 @@
   }
 
   // ---------------------------------------------------------------- Claude (the `sample` capability)
-  const ST = { msgs: [], busy: false, ctl: null, draft: '', ai: 'checking', toolsOk: true, offWhy: '', seq: 0, live: '' };
+  const ST = { msgs: [], busy: false, ctl: null, draft: '', ai: 'checking', toolsOk: true, maxTools: 0, offWhy: '', seq: 0, live: '', gen: 0 };
   let sampleFn = null, aiInit = null;
   function initAI() {
     if (aiInit) return aiInit;
@@ -717,7 +810,10 @@
         const f = await window.claude.use('sample');
         if (typeof f !== 'function') { ST.ai = 'off'; return; }
         sampleFn = f; ST.ai = 'ready';
-        if (typeof f.limits === 'function') { const lim = await f.limits().catch(() => null); if (lim && typeof lim === 'object' && !lim.tools) ST.toolsOk = false; }
+        if (typeof f.limits === 'function') {  // cheap and local: no usage, no prompt
+          const lim = await Promise.resolve().then(() => f.limits()).catch(() => null);
+          if (lim && typeof lim === 'object') { if (!lim.tools) ST.toolsOk = false; else if (num(lim.tools.maxCount)) { ST.maxTools = Math.max(0, Math.floor(lim.tools.maxCount)); if (ST.maxTools < 1) ST.toolsOk = false; } }
+        }
       } catch (e) { ST.ai = 'off'; }
     })().then(() => { if (SB.tab === KEY) paintFoot(); });
     return aiInit;
@@ -737,6 +833,7 @@
       '- Chances are model estimates from the app\'s own simulations. Say so. Never call a bet guaranteed, a lock or due; a 90% chance can still miss.',
       '- The app has no sportsbook prices for player props; it shows fair odds from the model chance. If the viewer gives their book\'s price, pass it to prop_report as price to get the edge.',
       '- If a tool returns an error or no data, say so plainly and suggest something the app can answer.',
+      '- Pass a price or line only when the viewer typed it (or a tool returned that line); the app ignores any other and says so in "ignored".',
       '- Call samples under 10 games small.',
       '- The app shows a card under your answer for each prop_report, game_report, build_parlay, price_parlay, top_props and start_sit call (chart, factors, buttons). Point to the card instead of repeating every number.',
       '- Keep it under about 150 words: the verdict first, then 2-4 short bullets with the key numbers. Plain text with **bold** and "- " bullets only: no tables, headings or links.',
@@ -748,12 +845,12 @@
     return prev.filter(m => !m.busy && ((m.text || '').trim() || (m.cards || []).length)).slice(-10)
       .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: (m.role === 'assistant' ? (m.text || '(cards only)') + cardsLine(m) : m.text).slice(0, 1500) }));
   }
-  async function aiAnswer(a, q) {
-    const ctl = new AbortController(); ST.ctl = ctl;
+  // one sample call per answer, with the AbortController made for this answer (answer() creates it); tools mean no cache option
+  async function aiAnswer(a, q, ctl) {
     const input = [{ role: 'user', content: rules() }, ...historyTurns(a), { role: 'user', content: q }];
     const onText = ({ text }) => { if (ctl.signal.aborted) return; a.text = text; paintMsg(a); };
     let opts;
-    if (ST.toolsOk) opts = { signal: ctl.signal, tools: toolsFor(a), onText };
+    if (ST.toolsOk) opts = { signal: ctl.signal, tools: toolsFor(a, q, ctl.signal), onText };
     else {  // this view can't run page tools: gather the numbers here and send them with the question
       const loc = await runLocal(a, q);
       if (ctl.signal.aborted) { a.note = 'Stopped.'; return; }
@@ -793,14 +890,18 @@
     await answer(a, q, true);
   }
   async function answer(a, q, fresh) {
-    ST.busy = true; a.busy = true; a.err = ''; a.note = ''; a.retry = false; a.step = '';
-    save(); redraw(fresh ? 'bottom' : null);
+    const gen = ST.gen, ctl = new AbortController();  // a new controller for every answer: Stop works from the first moment
+    ST.busy = true; ST.ctl = ctl; a.busy = true; a.err = ''; a.note = ''; a.retry = false; a.step = '';
+    save(); redraw(fresh ? 'bottom' : 'keep');
     try {
-      if (ST.ai === 'checking') { initAI(); await Promise.race([aiInit, wait(10000)]); }
-      if (ST.ai === 'ready' && sampleFn) await aiAnswer(a, q);
+      if (ST.ai === 'checking') { initAI(); await Promise.race([aiInit, wait(10000), new Promise(r => ctl.signal.addEventListener('abort', r, { once: true }))]); }
+      if (ctl.signal.aborted) a.note = 'Stopped.';
+      else if (ST.ai === 'ready' && sampleFn) await aiAnswer(a, q, ctl);
       else await offlineAnswer(a, q, ST.ai === 'checking' ? 'checking' : 'off');
     } catch (e) { console.error(e); if (!a.text) a.err = 'Something went wrong building this answer.'; }
-    a.busy = false; a.step = ''; ST.busy = false; ST.ctl = null;
+    a.busy = false; a.step = '';
+    if (gen !== ST.gen) return;  // New chat was pressed meanwhile: this answer is gone and a newer one may be running
+    ST.busy = false; ST.ctl = null;
     ST.live = a.err ? 'The answer could not finish.' : 'Answer ready.';
     save(); redraw('answer:' + a.id);
   }
@@ -812,7 +913,7 @@
   }
   function newChat() {
     if (ST.ctl) try { ST.ctl.abort(); } catch (e) { /* already settled */ }
-    ST.msgs = []; ST.busy = false; ST.draft = ''; save(); redraw('focus');
+    ST.gen++; ST.msgs = []; ST.busy = false; ST.ctl = null; ST.draft = ''; ST.live = ''; save(); redraw('focus');
   }
 
   // ---------------------------------------------------------------- history (localStorage 'fm2.chat')
@@ -894,6 +995,13 @@
   }
 
   // ---------------------------------------------------------------- cards (HTML strings, every value escaped)
+  // SB.ui.gameLog colours a bar green at or above the line; for an under (and a push on a whole line) that is backwards,
+  // so the bars take their colour from the hits counted in the summary
+  function logHTML(A) {
+    let i = 0;
+    return U.gameLog({ title: A.log.title, summary: A.log.summary, vals: A.log.vals, labels: A.log.labels, line: A.line })
+      .replace(/class="b (hit|miss)"/g, () => `class="b ${A.log.hits[i++] ? 'hit' : 'miss'}"`);
+  }
   const slipBtn = (gid, key, label) => { const on = SB.inSlip(gid, key); return `<button type="button" class="${on ? 'ui-ghost' : 'ui-cta'} sm" data-ask-slip="${esc(gid + '|' + key)}" aria-pressed="${on}" aria-label="${esc((on ? 'Remove from slip: ' : 'Add to slip: ') + label)}">${on ? '✓ In slip' : '+ Slip'}</button>`; };
   function propCardHTML(spec) {
     if (!SEASON_DONE) return `<div class="ask-card ask-wait" aria-busy="true">Loading box scores for ${esc(spec.name || 'this player')}…</div>`;
@@ -902,7 +1010,7 @@
     const odds = A.price ? amOf(A.price) : A.fair;
     const tiles = [['Model chance', pc(A.p)], ['Fair odds', A.fair]];
     if (A.proj != null) tiles.push(['Model average', `${f1(A.proj)} ${ST_SHORT[A.stat]}`]);
-    if (A.price) tiles.push(['Your price', amOf(A.price)], ['Implied', pc(1 / A.price)], ['Edge', `${sg(A.V.edge)} pts`, A.V.edge >= 3]);
+    if (A.price) tiles.push(['Your price', amOf(A.price)], ['Implied', pc(1 / A.price)], ['Edge', `${sg(A.V.edge)}%`, A.V.edge >= 3]);
     const an = A.td ? { name: A.e.name, stat: 'td' } : { id: A.pl.id, line: A.line, under: A.under };
     return `<article class="ask-pc" aria-label="${esc(A.e.name + ', ' + A.market)}">
   <header class="ask-pc-hd">${U.team(A.team, true)}<div class="ask-pc-id">
@@ -911,7 +1019,7 @@
     <div class="ask-pc-mu">${A.home ? 'vs' : '@'} <b>${esc(A.opp.abbr)}</b> · ${esc(SB.when(A.g))}</div></div></header>
   ${U.verdict({ tone: A.V.tone, kicker: A.V.kicker, title: A.V.title, tag: 'Model estimate' })}
   <div class="ask-pc-bd">
-    ${A.log ? U.gameLog({ title: A.log.title, summary: A.log.summary, vals: A.log.vals, labels: A.log.labels, line: A.line }) : '<p class="ui-note">No recent box scores for him in the app\'s data.</p>'}
+    ${A.log ? logHTML(A) : '<p class="ui-note">No recent box scores for him in the app\'s data.</p>'}
     ${U.factors(A.factors)}
     ${U.tiles(tiles)}
     ${A.notes.map(n => `<p class="ui-note">${esc(n)}</p>`).join('')}

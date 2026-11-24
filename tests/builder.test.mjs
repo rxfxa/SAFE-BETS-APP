@@ -298,10 +298,36 @@ for (const mode of ['swipe', 'gen']) {
       if (r.height < 40 || r.width < 40) small.push((b.textContent || b.getAttribute('aria-label') || '').trim().slice(0, 24) + ` ${Math.round(r.width)}x${Math.round(r.height)}`);
     }
     const sl = document.querySelector('.bld-root .bld-slip').getBoundingClientRect(), mn = document.querySelector('.bld-root .bld-main').getBoundingClientRect();
-    return { sw, small, below: sl.top >= mn.bottom - 1 };
+    const bar = document.getElementById('slipbar');
+    return { sw, small, below: sl.top >= mn.bottom - 1, bar: !bar.classList.contains('on') || getComputedStyle(bar).display !== 'none' };
   });
-  check(`390px ${mode}: no horizontal scroll, tap targets 40px+, slip panel below`, L.sw <= 390 && !L.small.length && L.below, `${L.sw}px ${L.small.join('; ')}`);
+  check(`390px ${mode}: no horizontal scroll, tap targets 40px+, slip panel below (the app's slip bar still shows)`, L.sw <= 390 && !L.small.length && L.below && L.bar, `${L.sw}px ${L.small.join('; ')}`);
 }
+
+// ---------- the deck without insights.js (its own fallback board) ----------
+await page.click('[data-ui-seg="bld-mode|swipe"]');
+const FBk = await page.evaluate(() => { window.__insSaved = window.__insights; window.__insights = undefined; SB.render();
+  const L = window.__builder.list(), top = document.querySelector('.bld-root .bld-top'); const r = { n: L.length, top: !!top, nba: L.filter(id => window.__builder.item(id).sp === 'nba').length, txt: document.querySelector('.bld-root .bld-main').innerText };
+  window.__insights = window.__insSaved; SB.render(); return r; });
+check('without insights.js the deck still deals player props (its own board at the line nearest 65%)', FBk.top && FBk.n > 40 && FBk.nba > 0 && !/could not load/i.test(FBk.txt), `${FBk.n} cards`);
+
+// ---------- a game kicks off while the screen is open ----------
+const KO = await page.evaluate(() => {
+  const L = window.__builder.list().map(id => window.__builder.item(id)), first = L.slice().sort((a, b) => a.start - b.start)[0];
+  SB.setSlip([{ gid: first.gid, key: first.key }, ...L.filter(x => x.gid !== first.gid).slice(0, 2).map(x => ({ gid: x.gid, key: x.key }))]);
+  return { gid: first.gid, start: first.start, n: L.length, kicked: L.filter(x => x.start <= first.start).length };
+});
+await page.clock.setFixedTime(new Date(KO.start + 60000));
+await page.evaluate(() => SB.render());
+const KO2 = await page.evaluate(gid => {
+  const L = window.__builder.list().map(id => window.__builder.item(id)), off = document.querySelectorAll('.bld-root .bld-leg.off'), sum = document.querySelector('.bld-root .bld-sum');
+  const live = SB.slip.filter(l => l.gid !== gid), pr = SB.parlayProb(live);
+  return { n: L.length, any: L.some(x => x.gid === gid), off: off.length, offTxt: off[0] ? off[0].innerText : '', dp: sum ? +sum.getAttribute('data-p') : null, p: pr.p, lbl: sum ? sum.querySelector('.ui-lbl').textContent : '' };
+}, KO.gid);
+check('a started game leaves the deck', !KO2.any && KO2.n === KO.n - KO.kicked, `${KO.n} -> ${KO2.n}`);
+check('…and its slip leg is marked started and left out of the joint chance', KO2.off === 1 && /Started/.test(KO2.offTxt) && Math.abs(KO2.dp - KO2.p) < 1e-12 && KO2.lbl === '2 legs', `${KO2.lbl} ${KO2.dp}`);
+await page.clock.setFixedTime(new Date('2026-11-23T12:00:00Z'));
+await page.evaluate(() => SB.setSlip([]));
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 check('no console errors', cons.length === 0, cons.join(' | '));
@@ -310,12 +336,27 @@ await browser.close();
 
 // ---------- wide screens: the slip sits beside the deck and stays in view ----------
 {
-  const { page, errors, browser } = await open({ width: 1440, height: 900, tab: 'builder', init: INIT });
+  // season.json missing here, and the screen opened cold from another tab: time the first render inside the page
+  const { page, errors, browser } = await open({ width: 1440, height: 900, tab: 'slipcheck', init: INIT, pins: { 'season.json': null } });
+  await page.waitForTimeout(300);
+  const cold = await page.evaluate(() => { const t = performance.now(); SB.goTab('builder', {}); return { ms: performance.now() - t, top: !!document.querySelector('.bld-root .bld-top') }; });
+  check('cold first render (SB.goTab from another tab, Insights never shown) under 1,500 ms', cold.top && cold.ms < 1500, `${Math.round(cold.ms)} ms`);
   await page.waitForSelector('.bld-root .bld-top');
+  await page.waitForFunction(() => window.__builder.seasonState === 'none', null, { timeout: 20000 });
+  const SN = await page.evaluate(() => { const ids = window.__builder.list(), td = ids.filter(id => window.__builder.item(id).td); SB.render();
+    return { n: ids.length, td: td.length, lbl: td.map(id => window.__builder.hits(id).label), txt: document.querySelector('.bld-root').innerText }; });
+  check('season.json missing: the deck still renders; TD cards say no recent games instead of inventing a hit rate', SN.n > 40 && SN.td > 0 && SN.lbl.every(l => l === 'No recent games logged') && !/could not load/i.test(SN.txt), `${SN.n} cards, ${SN.td} TD`);
   await page.evaluate(() => { const q = window.__builder.deck().slice(0, 3); SB.setSlip(q.map(id => { const i = id.indexOf('|'); return { gid: id.slice(0, i), key: id.slice(i + 1) }; })); });
   const W = await page.evaluate(() => { const sl = document.querySelector('.bld-root .bld-slip'), st = document.querySelector('.bld-root .bld-stack'), a = sl.getBoundingClientRect(), b = st.getBoundingClientRect();
     return { beside: a.left >= b.right && Math.abs(a.top - document.querySelector('.bld-root .bld-main').getBoundingClientRect().top) < 30, pos: getComputedStyle(sl).position, legs: sl.querySelectorAll('.bld-leg').length, sw: document.documentElement.scrollWidth }; });
   check('1440px: the slip panel sits beside the deck, sticky, with the legs', W.beside && W.pos === 'sticky' && W.legs === 3 && W.sw <= 1440, JSON.stringify(W));
+  // bug: the app's floating slip bar sat over the bottom of the sticky panel (its book note and buttons)
+  const bar = () => page.evaluate(() => { const b = document.getElementById('slipbar'); return { on: b.classList.contains('on'), d: getComputedStyle(b).display }; });
+  const b1 = await bar();
+  await page.evaluate(() => SB.goTab('insights', {})); await page.waitForTimeout(50);
+  const b2 = await bar();
+  await page.evaluate(() => SB.goTab('builder', {})); await page.waitForSelector('.bld-root .bld-top');
+  check('…the floating slip bar steps aside while the panel is beside the deck, and comes back on other screens', b1.on && b1.d === 'none' && b2.on && b2.d !== 'none' && (await bar()).d === 'none', JSON.stringify([b1, b2]));
   // a 10-leg card makes the left column long: the panel should ride along beside it
   await page.click('[data-ui-seg="bld-mode|gen"]');
   for (let i = 0; i < 6; i++) await page.click('[data-bld-n="1"]');
@@ -324,6 +365,6 @@ await browser.close();
   await page.waitForTimeout(80);
   const top = await page.evaluate(() => document.querySelector('.bld-root .bld-slip').getBoundingClientRect().top);
   check('…and stays in view when the page scrolls', top >= 0 && top <= 40, `${Math.round(top)}px`);
-  check('1440px: no page errors', errors.length === 0, errors.join(' | '));
+  check('1440px (season.json missing): no page errors', errors.length === 0, errors.join(' | '));
   await done(browser);
 }

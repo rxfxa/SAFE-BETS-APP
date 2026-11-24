@@ -109,7 +109,7 @@
       const s = F.INJ.get(team + '|' + E.tdSlug(name).replace(/-/g, ' ')); if (s && s.status) return { status: s.status, injury: s.note || '' };
     }
     const I = E.injuries;
-    if (INJD !== I) { INJD = I; INJX = new Map(); for (const x of (I && Array.isArray(I.injuries) ? I.injuries : [])) if (x && x.player) { const k = x.sport + '|' + E.nameKey(x.player); if (!INJX.has(k)) INJX.set(k, []); INJX.get(k).push(x); } }
+    if (INJD !== I || !INJX) { INJD = I; INJX = new Map(); for (const x of (I && Array.isArray(I.injuries) ? I.injuries : [])) if (x && x.player) { const k = x.sport + '|' + E.nameKey(x.player); if (!INJX.has(k)) INJX.set(k, []); INJX.get(k).push(x); } }
     const c = INJX.get(sp + '|' + E.nameKey(name)) || [];
     const hit = c.find(x => x.team === team) || (c.length === 1 ? c[0] : null);
     if (hit) return { status: String(hit.status || ''), injury: hit.injury || '' };
@@ -238,6 +238,7 @@
   }
   function parsePrice(s) {
     s = String(s || '').trim(); if (!s) return null;
+    if (/^\d{1,2}$/.test(s)) return NaN;   // "50" is not an American price (parseOdds would read it as decimal 50.0)
     let d = null; try { d = SB.parseOdds(s, 'american'); } catch (e) { d = null; }
     return num(d) && d > 1.001 && d < 1001 ? d : NaN;
   }
@@ -492,6 +493,9 @@
 .pa-root .pa-lb{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;min-height:40px;justify-content:center;text-align:left}
 .pa-root .pa-lb .a{font:700 14px var(--fui);color:#fff}.pa-root .pa-lb .b{font:600 10.5px var(--fmono);letter-spacing:.1em;color:#ffffff80}
 .pa-root .pa-lb:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:6px}
+/* the app's older .hit (pill) and .bar (strip) rules also match ui.js's game-log bars: undo them here */
+.pa-root .ui-log .b{padding:0;border-radius:0;box-shadow:none;background:none;font:inherit;white-space:normal}
+.pa-root .ui-log .bar{display:block;margin:0}
 .pa-root tr.cur td{background:rgba(var(--acc-rgb),.1)!important}
 .pa-root tr.cur .pa-lb .a{color:var(--acc2)}
 .pa-root .pa-notice{padding:12px 14px;border-radius:14px;border:1px solid rgba(255,184,0,.4);background:rgba(255,184,0,.07);font:500 13.5px/1.45 var(--fui);color:#ffe2a3}
@@ -507,10 +511,11 @@
 .pa-root .pa-trow:first-of-type{border-color:rgba(var(--acc-rgb),.5);box-shadow:0 0 40px -18px rgba(var(--acc-rgb),.8)}
 .pa-root .pa-trow .ui-team{grid-area:tm;width:44px;height:44px}
 .pa-root .pa-trow .who{grid-area:who;min-width:0}
-.pa-root .pa-trow .who b{display:block;font:700 16px/1.2 'Rubik',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-root .pa-trow .who b{display:block;font:700 16px/1.2 'Rubik',sans-serif;overflow-wrap:anywhere}
 .pa-root .pa-trow .who small{display:block;margin-top:2px;font:600 12px/1.35 var(--fui);color:#ffffffa6}
 .pa-root .pa-trow .dots{grid-area:dots;min-width:0}
-.pa-root .pa-trow .hit{grid-area:hit;justify-self:end;font:900 italic 28px/1 'Rubik',sans-serif;font-variant-numeric:tabular-nums}
+.pa-root .pa-trow .hit{grid-area:hit;justify-self:end;text-align:right;padding:0;border-radius:0;box-shadow:none;background:none;white-space:nowrap;font:900 italic 28px/1 'Rubik',sans-serif;font-variant-numeric:tabular-nums}
+.pa-root .pa-trow .hit em{display:block;margin-top:4px;font:600 11px var(--fui);font-style:normal;color:#ffffff99}
 .pa-root .pa-trow .hit small{font:700 .5em 'Rubik',sans-serif;font-style:normal;color:#ffffffa6;margin-left:1px}
 .pa-root .pa-trow .mu{grid-area:mu;display:flex;align-items:center;gap:8px;justify-self:end;width:118px}
 .pa-root .pa-trow .mu b{font:800 15px var(--fui);min-width:22px;text-align:right}
@@ -547,7 +552,7 @@
     const pr = A.pr;
     const projTxt = !pr ? '—' : stat === 'td' ? (Math.round(pr.v * 100) / 100).toFixed(2) : f1(pr.v);
     let projNote = '';
-    if (pr && pr.td) projNote = `Expected touchdowns from the First TD model (his share of ${p.team}'s scoring), not a box-score average.`;
+    if (pr && pr.td) projNote = `Expected touchdowns implied by the First TD model's anytime chance (his share of ${p.team}'s scoring), not a box-score average.`;
     else if (pr && pr.M) {
       const M = pr.M, bl = (E.BLOW || {})[p.sp];
       projNote = M.c ? (bl && M.pb > 0 ? `Normal game ${f1(M.an)} · blowout ${f1(M.ab)} · blowout chance ${pct(M.pb)} (${bl}+ points)` : `Normal game ${f1(M.an)} · from the game's price`) : 'No game price yet, so no game-script adjustment';
@@ -556,7 +561,7 @@
     const tiles = [];
     if (num(A.dec)) tiles.push(['Your price', amOf(A.dec)], ['Implied', pct1(1 / A.dec)], ['Edge', `${sg(V.edge)} pts`, V.edge >= 3]);
     else if (A.dec !== null && st.price.trim()) tiles.push(['Your price', 'not read']);
-    const inj = A.inj ? `<div class="pa-inj">Injury report: ${esc(A.inj.status)}${A.inj.injury ? ' (' + esc(A.inj.injury) + ')' : ''}.${isOut(A.inj) ? ' If he is out, the prop would be void.' : ''}</div>` : '';
+    const inj = A.inj ? `<div class="pa-inj">Injury report: ${esc(A.inj.status)}${A.inj.injury ? ' · ' + esc(A.inj.injury) : ''}.${isOut(A.inj) ? ' If he is out, the prop would be void.' : ''}</div>` : '';
     return `<section class="ui-card pa-hero" style="--h:${hu}" aria-label="${esc(p.name + ', ' + (stat === 'td' ? 'anytime TD' : (A.under ? 'under ' : 'over ') + fmtL(A.line) + ' ' + WORD[stat]))}">
       <div class="pa-hd">${U.team(p.team, true)}<div><div class="pa-nm">${esc(p.name)}</div>
         <div class="pa-mu">${A.pos ? `<span class="pos">${esc(A.pos)}</span>` : ''}<span>${esc(p.teamName)}</span><span>· ${esc(p.g.away.abbr)} @ ${esc(p.g.home.abbr)}</span><span style="color:#ffffff99">· ${esc(whenOf(p.g))}</span></div></div></div>
@@ -572,7 +577,7 @@
     const V = A.V; if (!V) return '';
     const fair = U.fair(A.P);
     let why;
-    if (num(A.dec)) why = `Model ${pct1(A.P)} vs ${pct1(1 / A.dec)} implied by ${amOf(A.dec)}: an edge of ${sg(V.edge)} points. ${V.tone === 'take' ? 'Worth it by this estimate.' : V.tone === 'lean' ? (V.edge >= 3 ? 'Value by this estimate, but it loses more often than it wins.' : 'A thin edge; small model errors would erase it.') : 'Your price pays less than the model thinks it should.'}`;
+    if (num(A.dec)) why = `Model ${pct1(A.P)} vs ${pct1(1 / A.dec)} implied by ${amOf(A.dec)}: an edge of ${sg(V.edge)} points. ${V.tone === 'take' ? 'Worth it by this estimate.' : V.tone === 'lean' ? (V.edge >= 3 ? 'Value by this estimate, but it loses more often than it wins.' : 'A thin edge; small model errors would erase it.') : 'Your price pays less than the model thinks it should.'}${V.edge >= 10 ? ' An edge this big is rare against a real book: it more often means the model is missing news (minutes, role, injury) than that the line is wrong. Check before you bet.' : ''}`;
     else why = `Model chance ${pct(A.P)}. Fair odds ${fair}: bet only at ${fair} or better. Type your book's price above for the edge.`;
     return `<div class="pa-verd">${U.verdict({ tone: V.tone, kicker: num(A.dec) ? 'Safe Bets verdict · vs your price' : 'Safe Bets verdict', title: V.title, tag: 'Model estimate' })}<p>${esc(why)}</p></div>`;
   }
@@ -637,7 +642,7 @@
       return `<button type="button" class="pa-trow" data-pa-top="${i}" aria-label="${esc(`Analyze ${p.name} ${t.stat === 'td' ? 'anytime TD' : 'over ' + fmtL(t.line) + ' ' + WORD[t.stat]}: model ${pct(t.ch)}, hit ${t.n ? t.h + ' of ' + t.n : 'no recent games'}, matchup ${mu ? mu.s : 'unknown'}`)}">
         ${U.team(p.team)}<span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}</small></span>
         <span class="dots">${U.dots(t.hits)}</span>
-        <span class="hit">${rate == null ? '—' : rate}<small>${rate == null ? '' : '%'}</small></span>
+        <span class="hit">${rate == null ? '—' : rate}<small>${rate == null ? '' : '%'}</small>${t.n ? `<em>${t.h} of ${t.n}</em>` : ''}</span>
         <span class="mu">${U.meter(mu ? mu.s : null, 8)}<b class="tone-${U.tone(mu ? mu.s : null)}">${mu ? mu.s : '—'}</b></span></button>`;
     }).join('');
     return `<section class="ui-card pa-top" aria-label="Top props on the slate"><div class="pa-tophd"><span class="ui-lbl">Analyze props · top ${T.length}</span>${U.seg([{ k: 'hit', label: 'Hit %' }, { k: 'mu', label: 'Matchup' }], st.sort, 'pa-sort')}</div>
@@ -645,7 +650,12 @@
       <p class="ui-note" style="margin-top:12px">One prop per player at the line our model rates nearest 65%, from today's and tomorrow's slate. Hit rate: his last ${10} games against that line (${SEAS_ST === 'ok' ? 'ESPN box scores' : SEAS_ST === 'loading' ? 'loading the box scores…' : 'box scores unavailable, so it shows the model chance order'}); fewer than 5 games are not ranked by hit rate. Matchup: a 0-100 estimate from the game's price, "—" where the game has no price yet.</p></section>`;
   }
 
+  const RMS = { last: 0, max: 0, n: 0 };
   function render(main, params) {
+    const t0 = performance.now();
+    try { draw(main, params); } finally { const ms = performance.now() - t0; RMS.last = ms; RMS.max = Math.max(RMS.max, ms); RMS.n++; }
+  }
+  function draw(main, params) {
     css(); needSeason(); needFT(); applyParams(params);
     const head = U.page({ kicker: 'Prop deep-dive', title: 'Prop', accent: 'Analyzer', sub: 'Pick any player prop on the slate and see the whole picture: recent games against the line, splits, the matchup, the model\'s projection and its chance, and the edge against your own price.' });
     let p = current();
@@ -668,8 +678,19 @@
   }
   let LAST = null, busy = false;
 
-  // re-render, then put keyboard focus back on the control that was used (the old node is gone after the redraw)
+  // re-render, then put keyboard focus back (the old nodes are gone after the redraw): on `sel` when given, else on whatever
+  // control of this screen had focus (so a debounced redraw never pulls focus back to a box the viewer has left)
+  const FOCUS_ATTRS = ['data-ui-seg', 'data-ui-select', 'data-pa-step', 'data-pa-line', 'data-pa-slip', 'data-pa-ask', 'data-pa-player', 'data-pa-clear', 'data-pa-top'];
+  function focusSel(el) {
+    if (!el || !el.closest || !el.closest('.pa-root')) return null;
+    if (el.id) return '#' + el.id;
+    for (const a of FOCUS_ATTRS) if (el.hasAttribute(a)) return attrSel(a, el.getAttribute(a));
+    return null;
+  }
+  let pending = false, ptrDown = false, ptrT = null;
   function rerender(sel, caret) {
+    pending = false;
+    if (sel === undefined) { const a = document.activeElement; sel = focusSel(a); if (sel && caret == null && a && (a.id === 'pa-price' || a.id === 'pa-q')) caret = a.selectionStart; }
     SB.render();
     if (!sel) return;
     try {
@@ -679,6 +700,18 @@
     } catch (e) { /* focus is a nicety */ }
   }
   const attrSel = (a, v) => `[${a}="${String(v).replace(/["\\]/g, '\\$&')}"]`;
+  // A box that loses focus fires 'change' on mousedown, before the click: redrawing then would swap the control under the
+  // pointer and the click would be lost. So a redraw asked for while a pointer is down waits for its release (the clicked
+  // control's own handler usually redraws first, with the new line already in the state).
+  function later() {
+    if (!showing()) { pending = false; return; }
+    if (ptrDown) { pending = true; clearTimeout(ptrT); ptrT = setTimeout(() => { ptrDown = false; if (pending) later(); }, 1500); return; }
+    rerender();
+  }
+  document.addEventListener('pointerdown', () => { ptrDown = true; }, true);
+  const ptrUp = () => setTimeout(() => { ptrDown = false; clearTimeout(ptrT); if (pending) later(); }, 0);
+  document.addEventListener('pointerup', ptrUp, true);
+  document.addEventListener('pointercancel', ptrUp, true);
   function pick(pk, stat) {
     const p = slate().people.get(pk); if (!p) return;
     select(p, stat || null, null, false); st.price = '';
@@ -729,7 +762,11 @@
       st.stat = s.value; st.line = defaultLine(p, st.stat); if (st.stat === 'td') st.under = false;
       rerender('select[data-ui-select="pa-mkt"]'); return;
     }
-    if (s.id === 'pa-line') { const L = normLine(s.value); if (L == null || L === st.line) return; setLine(s.value); rerender('#pa-line'); }
+    if (s.id === 'pa-line') {
+      const L = normLine(s.value);
+      if (L == null || L === st.line) { s.value = fmtL(st.line); return; }   // unreadable, or the same line: show the line in use
+      setLine(s.value); setTimeout(later, 0);   // after the blur, so focus stays where the viewer moved it (Tab or a click)
+    }
   });
   let priceT = null;
   document.addEventListener('input', e => {
@@ -739,7 +776,7 @@
     if (s.id === 'pa-price') {
       st.price = s.value.slice(0, 12);
       clearTimeout(priceT);
-      priceT = setTimeout(() => { if (!showing()) return; const el = document.getElementById('pa-price'); const c = el && document.activeElement === el ? el.selectionStart : null; rerender('#pa-price', c == null ? st.price.length : c); }, 260);
+      priceT = setTimeout(later, 260);
     }
   });
   document.addEventListener('keydown', e => {
@@ -759,11 +796,11 @@
   let inToggle = false;
   const drawn = () => showing() && !!document.querySelector('#main .pa-root');
   if (typeof SB.on === 'function') {
-    SB.on('slip', () => { if (!inToggle && drawn() && current()) { const a = document.activeElement, id = a && a.id; SB.render(); if (id) { const el = document.getElementById(id); if (el) el.focus({ preventScroll: true }); } } });
+    SB.on('slip', () => { if (!inToggle && drawn() && current()) rerender(); });
     SB.on('data', () => { IDX = null; TOP = null; ftWait = false; if (drawn()) SB.render(); });
   }
 
   SB.registerTab({ key: KEY, label: 'Prop Analyzer', render });
   // read-only hooks for tests and other screens
-  window.__propan = { normLine, chance: (pk, stat, line, under) => { const p = slate().people.get(pk); return p ? chance(p, stat, line, under) : null; }, slate, topProps, get state() { return { ...st }; }, get last() { return LAST; }, get seasonState() { return SEAS_ST; } };
+  window.__propan = { normLine, chance: (pk, stat, line, under) => { const p = slate().people.get(pk); return p ? chance(p, stat, line, under) : null; }, slate, topProps, get state() { return { ...st }; }, get last() { return LAST; }, get seasonState() { return SEAS_ST; }, get renderMs() { return { ...RMS }; } };
 })();

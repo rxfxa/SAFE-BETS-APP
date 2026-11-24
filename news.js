@@ -123,7 +123,11 @@
     for (const a of it.athletes) take(E.nameKey(a), a);
     const txt = '-' + E.nameKey(it.headline + ' ' + it.desc) + '-';
     for (const nk of X.full[it.sport] || []) if (!seen.has(nk) && txt.includes('-' + nk + '-')) take(nk, nk);
-    const tm = it.teams.map(t => ({ name: t.name, abbr: t.abbr, g: X.teams.get(it.sport + '|n|' + E.nameKey(t.name)) || (t.abbr ? X.teams.get(it.sport + '|a|' + t.abbr) : null) || null }));
+    const tm = it.teams.map(t => {
+      const tk = E.nameKey(t.name), g = X.teams.get(it.sport + '|n|' + tk) || (t.abbr ? X.teams.get(it.sport + '|a|' + t.abbr) : null) || null;
+      const side = g && ([g.home, g.away].find(s => E.nameKey(s.name) === tk) || [g.home, g.away].find(s => s.abbr === t.abbr));
+      return { name: t.name, abbr: side ? side.abbr : t.abbr, g };  // the feed's abbreviation once matched (ESPN WSH = feed WAS)
+    });
     m = { X, players: pl.filter(x => x.p || it.athletes.some(a => E.nameKey(a) === x.nk)), teams: tm };
     MATCH.set(it, m);
     return m;
@@ -161,10 +165,10 @@
   const ext = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
 
   function media(it, big) {
-    return `<div class="nw-media${it.image ? '' : ' noimg'}" style="--h:${TILE[it.sport] || 210}">
-      <div class="nw-tile" aria-hidden="true"><span class="sp">${esc(lbl(it.sport))}</span><span class="lg">${esc(it.league)}</span></div>
+    return `<div class="nw-media${it.image ? '' : ' nw-noimg'}" style="--h:${TILE[it.sport] || 210}">
+      <div class="nw-tile" aria-hidden="true"><span class="nw-tsp">${esc(lbl(it.sport))}</span>${it.league && it.league !== lbl(it.sport) ? `<span class="nw-tlg">${esc(it.league)}</span>` : ''}</div>
       ${it.image ? `<img class="nw-img" src="${esc(it.image)}" alt="" loading="${big ? 'eager' : 'lazy'}" decoding="async" referrerpolicy="no-referrer">` : ''}
-      <span class="nw-badge ${it.video ? 'v' : 's'}">${it.video ? playSm + 'Video' : 'Story'}</span>
+      <span class="nw-badge${it.video ? ' nw-v' : ''}">${it.video ? playSm + 'Video' : 'Story'}</span>
       ${it.premium ? '<span class="nw-plus">ESPN+</span>' : ''}
       ${it.video ? `<span class="nw-play" aria-hidden="true">${playIc}</span>` : ''}
     </div>`;
@@ -174,14 +178,14 @@
     for (const x of m.players.slice(0, 5)) {
       if (x.p) {
         const mk = markets(x.p)[0];
-        out.push(`<button type="button" class="nw-chip on" data-nw-prop="${esc(x.p.pk)}" data-nw-stat="${esc(mk)}" aria-label="${esc(x.p.name)}: ${esc(statName(mk))} prop in Prop Analyzer"><span class="dot" aria-hidden="true"></span>${esc(x.p.name)}<span class="tg">Props</span></button>`);
+        out.push(`<button type="button" class="nw-chip nw-on" data-nw-prop="${esc(x.p.pk)}" data-nw-stat="${esc(mk)}" aria-label="${esc(x.p.name)}: ${esc(statName(mk))} prop in Prop Analyzer"><span class="nw-dot" aria-hidden="true"></span>${esc(x.p.name)}<span class="nw-tg">Props</span></button>`);
       } else {
         out.push(`<button type="button" class="nw-chip" data-nw-player="${esc(x.name)}" data-nw-sport="${esc(it.sport)}" aria-label="${esc(x.name)}: player page">${esc(x.name)}</button>`);
       }
     }
     for (const t of m.teams.slice(0, 3)) {
-      if (t.g) out.push(`<button type="button" class="nw-chip tm" data-nw-game="${esc(t.g.id)}" aria-label="${esc(t.name)}: open their game on the slate">${esc(t.abbr || t.name)}<span class="tg">Game</span></button>`);
-      else out.push(`<span class="nw-chip tm off" title="${esc(t.name)}">${esc(t.abbr || t.name)}</span>`);
+      if (t.g) out.push(`<button type="button" class="nw-chip nw-tm" data-nw-game="${esc(t.g.id)}" aria-label="${esc(t.name)}: open their game on the slate">${esc(t.abbr || t.name)}<span class="nw-tg">Game</span></button>`);
+      else out.push(`<span class="nw-chip nw-tm nw-off" title="${esc(t.name)}">${esc(t.abbr || t.name)}</span>`);
     }
     return out.length ? `<div class="nw-chips">${out.join('')}</div>` : '';
   }
@@ -217,16 +221,16 @@
   function strip(list) {
     const X = slate(), agg = new Map();
     for (const it of list) for (const x of matchOf(it).players) if (x.p) { const a = agg.get(x.p.pk) || { p: x.p, n: 0 }; a.n++; agg.set(x.p.pk, a); }
-    const rows = [...agg.values()].sort((a, b) => b.n - a.n || SB.startMs(a.p.g) - SB.startMs(b.p.g) || (a.p.name < b.p.name ? -1 : 1)).slice(0, 16);
+    const all = [...agg.values()].sort((a, b) => b.n - a.n || SB.startMs(a.p.g) - SB.startMs(b.p.g) || (a.p.name < b.p.name ? -1 : 1)), rows = all.slice(0, 16);
     const dayName = X.ahead ? `the ${dateFmt.format(new Date(Date.parse(X.day + 'T12:00:00Z')))} slate` : "today's slate";
-    const head = `<div class="nw-shead"><h2 class="nw-h2">On ${esc(dayName)}</h2><span class="ui-muted">${rows.length ? `${rows.length} player${rows.length === 1 ? '' : 's'} in these headlines with a prop in the app` : ''}</span></div>`;
+    const head = `<div class="nw-shead"><h2 class="nw-h2">On ${esc(dayName)}</h2><span class="ui-muted">${all.length ? `${all.length} player${all.length === 1 ? '' : 's'} in these headlines with a prop in the app${all.length > rows.length ? `, the ${rows.length} most mentioned shown` : ''}` : ''}</span></div>`;
     if (!X.games.length) return `<section class="nw-slate" aria-label="On the slate">${head}<p class="ui-note">No open games in the feed for the next few days, so no player here links to props.</p></section>`;
     if (!rows.length) return `<section class="nw-slate" aria-label="On the slate">${head}<p class="ui-note">None of the players in these ${st.sport === 'all' ? '' : esc(lbl(st.sport)) + ' '}headlines has a prop on ${esc(dayName)}.</p></section>`;
     const cards = rows.map(({ p, n }) => {
       const M = markets(p);
-      return `<button type="button" class="nw-sp" data-nw-prop="${esc(p.pk)}" data-nw-stat="${esc(M[0])}" aria-label="${esc(`${p.name}, ${p.team} ${p.home ? 'vs' : 'at'} ${p.opp}: open his ${statName(M[0])} prop in Prop Analyzer`)}">
-        ${U.team(p.team)}<span class="tx"><b>${esc(p.name)}</b><span class="mu">${esc(p.team)} ${p.home ? 'vs' : '@'} ${esc(p.opp)} · ${esc(SB.when(p.g))}</span>
-        <span class="mk">${esc(M.slice(0, 3).map(statName).join(' · '))}</span></span><span class="n">${n} ${n === 1 ? 'story' : 'stories'}<i aria-hidden="true">›</i></span></button>`;
+      return `<button type="button" class="nw-sp" data-nw-prop="${esc(p.pk)}" data-nw-stat="${esc(M[0])}" aria-label="${esc(`${p.name}, ${p.team} ${p.home ? 'vs' : 'at'} ${p.opp}, in ${n} ${n === 1 ? 'story' : 'stories'}: open his ${statName(M[0])} prop in Prop Analyzer`)}">
+        ${U.team(p.team)}<span class="nw-tx"><b>${esc(p.name)}</b><span class="nw-mu">${esc(p.team)} ${p.home ? 'vs' : '@'} ${esc(p.opp)} · ${esc(SB.when(p.g))}</span>
+        <span class="nw-mk">${esc(M.slice(0, 3).map(statName).join(' · '))}</span></span><span class="nw-n">${n} ${n === 1 ? 'story' : 'stories'}<i aria-hidden="true">›</i></span></button>`;
     }).join('');
     return `<section class="nw-slate" aria-label="Players on the slate">${head}<div class="nw-srow">${cards}</div></section>`;
   }
@@ -271,9 +275,9 @@
     for (const img of root.querySelectorAll('img.nw-img')) {
       if (img.dataset.w) continue;
       img.dataset.w = '1';
-      const fail = () => { const m = img.closest('.nw-media'); if (m) m.classList.add('noimg'); img.remove(); };
+      const fail = () => { const m = img.closest('.nw-media'); if (m) m.classList.add('nw-noimg'); img.remove(); };
       img.addEventListener('error', fail, { once: true });
-      img.addEventListener('load', () => { if (!img.naturalWidth) fail(); else { const m = img.closest('.nw-media'); if (m) m.classList.add('ok'); } }, { once: true });
+      img.addEventListener('load', () => { if (!img.naturalWidth) fail(); else { const m = img.closest('.nw-media'); if (m) m.classList.add('nw-ok'); } }, { once: true });
       if (img.complete && !img.naturalWidth) fail();
     }
   }
@@ -324,12 +328,14 @@
     const s = document.createElement('style'); s.id = 'news-css';
     s.textContent = `
 .nw-root{gap:16px}
+.nw-root h2{display:block;margin:0;text-wrap:balance}.nw-root h2::before{content:none;display:none}
 .nw-honest{margin-top:-6px}
 .nw-src{display:flex;flex-wrap:wrap;gap:4px 14px;font-family:var(--fmono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#ffffff80}
 .nw-stale{padding:12px 14px;border-radius:14px;border:1px solid rgba(255,184,0,.45);background:linear-gradient(180deg,rgba(255,184,0,.1),rgba(255,184,0,.02));font:400 13.5px/1.45 var(--fui);color:#ffffffd9}
 .nw-stale b{color:var(--mid)}
 .nw-ctrl{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
 .nw-ctrl .ui-pills{flex:0 1 auto}
+.nw-root .ui-seg button{min-height:40px}
 .nw-loading{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:14px}
 .nw-loading .sk{height:220px;border-radius:20px;background:linear-gradient(100deg,rgba(255,255,255,.03) 30%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.03) 70%) 0 0/200% 100%;animation:nwsk 1.4s linear infinite}
 .nw-loading b{grid-column:1/-1;font:500 14px var(--fui);color:#ffffffa6}
@@ -338,14 +344,14 @@
 .nw-media{position:relative;aspect-ratio:16/9;overflow:hidden;background:#070c16}
 .nw-tile{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;padding:14px 16px;
  background:radial-gradient(120% 90% at 85% 10%,hsl(var(--h) 80% 45% / .55),transparent 60%),linear-gradient(135deg,hsl(var(--h) 65% 24%),#060a14 78%)}
-.nw-tile .sp{font:900 italic clamp(26px,5vw,40px)/1 'Rubik',sans-serif;text-transform:uppercase;letter-spacing:-.01em;color:#fff}
-.nw-tile .lg{font:600 11px var(--fmono);letter-spacing:.16em;text-transform:uppercase;color:#ffffffb3}
-.nw-media.ok .nw-tile{visibility:hidden}
+.nw-tile .nw-tsp{font:900 italic clamp(26px,5vw,40px)/1 'Rubik',sans-serif;text-transform:uppercase;letter-spacing:-.01em;color:#fff}
+.nw-tile .nw-tlg{font:600 11px var(--fmono);letter-spacing:.16em;text-transform:uppercase;color:#ffffffb3}
+.nw-media.nw-ok .nw-tile{visibility:hidden}
 .nw-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .nw-media::after{content:"";position:absolute;inset:auto 0 0 0;height:45%;background:linear-gradient(0deg,rgba(3,7,18,.7),transparent);pointer-events:none}
 .nw-badge{position:absolute;z-index:2;top:10px;left:10px;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font:700 10.5px var(--fmono);letter-spacing:.12em;text-transform:uppercase;
  background:rgba(3,7,18,.78);color:#fff;border:1px solid var(--hair2);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-.nw-badge.v{color:var(--acc-ink);background:var(--acc2);border-color:transparent}
+.nw-badge.nw-v{color:var(--acc-ink);background:var(--acc2);border-color:transparent}
 .nw-plus{position:absolute;z-index:2;top:10px;right:10px;padding:4px 8px;border-radius:999px;font:800 10.5px var(--fui);background:rgba(255,184,0,.9);color:#1d1400}
 .nw-play{position:absolute;z-index:2;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;display:grid;place-items:center;border-radius:50%;background:rgba(3,7,18,.6);border:1.5px solid rgba(255,255,255,.7);color:#fff;
  box-shadow:0 0 30px -6px rgba(var(--acc-rgb),.8)}
@@ -362,11 +368,11 @@
 .nw-sp{flex:none;scroll-snap-align:start;display:flex;align-items:center;gap:10px;width:min(290px,80vw);min-height:64px;padding:10px 12px;border-radius:16px;border:1px solid var(--hair2);
  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.015));color:#fff;text-align:left;cursor:pointer;font:inherit}
 .nw-sp:hover{border-color:rgba(var(--acc-rgb),.5)}
-.nw-sp .tx{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.nw-sp .nw-tx{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .nw-sp b{font:700 15px 'Rubik',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nw-sp .mu{font:500 12px var(--fui);color:#ffffffa6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nw-sp .mk{font:700 10.5px var(--fmono);letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nw-sp .n{flex:none;display:flex;align-items:center;gap:6px;font:600 12px var(--fui);color:#ffffffb3}.nw-sp .n i{font:400 20px var(--fui);color:var(--acc2);font-style:normal}
+.nw-sp .nw-mu{font:500 12px var(--fui);color:#ffffffa6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nw-sp .nw-mk{font:700 10.5px var(--fmono);letter-spacing:.1em;text-transform:uppercase;color:var(--acc2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nw-sp .nw-n{flex:none;display:flex;align-items:center;gap:6px;font:600 12px var(--fui);color:#ffffffb3}.nw-sp .nw-n i{font:400 20px var(--fui);color:var(--acc2);font-style:normal}
 .nw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:14px}
 .nw-card{display:flex;flex-direction:column;min-width:0;border-radius:20px;overflow:hidden;border:1px solid var(--hair2);background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))}
 .nw-body{display:flex;flex-direction:column;gap:8px;padding:14px 16px 16px;flex:1;min-width:0}
@@ -376,11 +382,11 @@
 .nw-chips{display:flex;flex-wrap:wrap;gap:6px}
 .nw-chip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:999px;border:1px solid var(--hair2);background:rgba(255,255,255,.04);color:#ffffffd9;font:600 13px var(--fui);cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nw-chip:hover{border-color:rgba(255,255,255,.35)}
-.nw-chip.on{border-color:rgba(var(--acc-rgb),.55);background:rgba(var(--acc-rgb),.1);color:#fff}
-.nw-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--acc);flex:none}
-.nw-chip .tg{font:700 10px var(--fmono);letter-spacing:.1em;text-transform:uppercase;color:var(--acc2)}
-.nw-chip.tm{font-family:var(--fmono);font-size:12px;letter-spacing:.06em}
-.nw-chip.off{cursor:default;color:#ffffff99;border-style:dashed}
+.nw-chip.nw-on{border-color:rgba(var(--acc-rgb),.55);background:rgba(var(--acc-rgb),.1);color:#fff}
+.nw-chip .nw-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);flex:none}
+.nw-chip .nw-tg{font:700 10px var(--fmono);letter-spacing:.1em;text-transform:uppercase;color:var(--acc2)}
+.nw-chip.nw-tm{font-family:var(--fmono);font-size:12px;letter-spacing:.06em}
+.nw-chip.nw-off{cursor:default;color:#ffffff99;border-style:dashed}
 .nw-ft{margin-top:auto;padding-top:4px;display:flex;gap:8px;flex-wrap:wrap}
 .nw-go svg{flex:none}
 .nw-more{display:flex;justify-content:center;padding:6px 0 10px}

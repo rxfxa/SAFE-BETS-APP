@@ -1,16 +1,17 @@
 // sharp.js: Sharp Board ('sharp'), docs/pro-interface.md screen 5. The reference compares the share of money with the share of
 // bets on each side. We have no betting-split feed, so this board compares two real-money markets instead: Polymarket's price
 // (the middle of its bid and ask, scaled so the sides add up to 100%) against the sportsbook consensus in our feed (game.prob),
-// for every upcoming feed game matched to a polymarket.json game (window.__polymarket.matchOf, the Polymarket tab's matcher).
+// for every upcoming feed game matched to a polymarket.json game (our own strict matcher below: both teams identified, a tie is
+// no match, home / away taken from the teams). Prices 15+ points apart are flagged as a likely data problem, never a signal.
 // Per game: the two markets as split bars, the gap in points, Polymarket volume and liquidity, the start time; the strongest
 // signals first (gap of 3+ points on a market with $10k+ traded, two-sided quote) with a highlighted band. Margin sports also
 // compare a Polymarket spread whose line equals the model's fair line. A gap is a disagreement between markets, not an edge.
-// window.__sharp = {load, state, PM, rows(), forGame(gid)} also feeds the Games tab's lean band (slate.js).
+// window.__sharp = {load, state, PM, rows(), forGame(gid), match(pg)} also feeds the Games tab's lean band (slate.js).
 (function () {
   const SB = window.SB;
   if (!SB || !(SB.version >= 2) || typeof SB.registerTab !== 'function' || !SB.ui) { console.warn('sharp.js: window.SB v2 API (with SB.ui) not found'); return; }
   const U = SB.ui, esc = U.esc, KEY = 'sharp';
-  const GAP = 0.03, VOL = 10000, WIDE = 0.12;
+  const GAP = 0.03, VOL = 10000, WIDE = 0.12, ODD = 0.15;
   const num = x => typeof x === 'number' && isFinite(x);
   const pct = p => (num(p) ? Math.round(p * 100) + '%' : '—');
   const pts = x => (Math.round(Math.abs(x) * 1000) / 10).toFixed(1);
@@ -34,16 +35,48 @@
       .then(d => { PM = d && Array.isArray(d.games) ? d : null; LOAD = 'done'; ROWS = null; if (SB.tab === KEY) SB.render(); });
     return WAIT;
   }
-  // fallback matcher (same sport, start within 6 hours, both abbreviations) when the Polymarket tab is not loaded
-  function matchOwn(pg) {
-    const t = Date.parse(pg.start);
-    for (const g of (SB.DATA && SB.DATA.games) || []) {
-      if (g.sport !== pg.sport || Math.abs(SB.startMs(g) - t) > 6 * 3600e3) continue;
-      const a = (x, y) => String(x || '').toUpperCase() === String(y || '').toUpperCase();
-      if (a(pg.home.abbr, g.home.abbr) && a(pg.away.abbr, g.away.abbr)) return { g, swap: false };
-      if (a(pg.home.abbr, g.away.abbr) && a(pg.away.abbr, g.home.abbr)) return { g, swap: true };
+  // ---------- matching: a Polymarket game -> the feed game (same sport, start within 6 hours, both teams identified) ----------
+  // Our own matcher, rebuilt for every feed (the Polymarket tab's cache keeps the game objects of the feed it first saw, so after
+  // an hourly refresh it would compare old prices). Stricter than a name hit: college Polymarket names are bare nicknames
+  // ("Broncos", "Eagles", "Bulldogs") that many schools share, so a nickname counts only when the Polymarket abbreviation's
+  // letters also run through the feed's full name (WMICH -> Western Michigan Broncos). Each side is scored 3 (abbreviation, full
+  // name, or nickname backed that way), 1 (a nickname or a distinctive word alone) or 0; a match needs one side at 3 and the other
+  // at 1+, and a tie between two games (or both ways round) is no match at all. Home / away come from the teams, not the labels.
+  const N = s => String(s == null ? '' : s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(fc|cf|sc|afc|ac|cd|club)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const COMMON = new Set(['united', 'city', 'athletic', 'atletico', 'sporting', 'racing', 'olympique', 'borussia', 'dynamo', 'dinamo', 'union', 'rovers', 'wanderers', 'albion', 'county', 'state', 'saint', 'college', 'eastern', 'western', 'northern', 'southern', 'central']);
+  const subseq = (a, b) => { if (!a) return false; let i = 0; for (const c of b) if (c === a[i] && ++i === a.length) return true; return false; };
+  function sideFit(pt, ft) {
+    if (!pt || !ft) return 0;
+    const pa = String(pt.abbr || '').toUpperCase(), fa = String(ft.abbr || '').toUpperCase();
+    if (pa && pa === fa) return 3;
+    const ours = N(ft.name); if (!ours) return 0;
+    const O = ' ' + ours + ' ', back = subseq(pa.toLowerCase().replace(/[^a-z]/g, ''), ours.replace(/[^a-z]/g, ''));
+    let best = 0;
+    for (const x of [N(pt.name), N(pt.alias)]) {
+      if (x.length < 3) continue;
+      if (x === ours) return 3;
+      const X = ' ' + x + ' ';
+      if (O.includes(X) || X.includes(O)) { best = Math.max(best, (O.includes(X) ? x : ours).includes(' ') || back ? 3 : 1); continue; }
+      if (x.split(' ').some(w => w.length >= 5 && !COMMON.has(w) && O.includes(' ' + w + ' '))) best = Math.max(best, 1);
     }
-    return null;
+    return best;
+  }
+  let MC = new Map(), MCD = null;
+  function matchGame(pg) {
+    if (!pg || !pg.home || !pg.away) return null;
+    if (MCD !== SB.DATA) { MCD = SB.DATA; MC = new Map(); }
+    const k = (pg.slug || '') + '|' + pg.start; if (MC.has(k)) return MC.get(k);
+    const t = Date.parse(pg.start), cand = [];
+    for (const g of (SB.DATA && SB.DATA.games) || []) {
+      if (!g || g.sport !== pg.sport || !g.home || !g.away || !(Math.abs(SB.startMs(g) - t) <= 6 * 3600e3)) continue;
+      for (const swap of [false, true]) {
+        const a = sideFit(pg.home, swap ? g.away : g.home), b = sideFit(pg.away, swap ? g.home : g.away);
+        if (Math.max(a, b) >= 3 && Math.min(a, b) >= 1) cand.push({ g, swap, sc: a + b });
+      }
+    }
+    cand.sort((x, y) => y.sc - x.sc);
+    const m = cand.length === 1 || (cand.length > 1 && cand[0].sc > cand[1].sc) ? cand[0] : null;
+    MC.set(k, m); return m;
   }
   const quoteOk = q => q && num(q.m) && q.m >= 0 && q.m <= 1;
   const liveQ = q => q && num(q.b) && num(q.a) && q.b > 0 && q.a < 1 && q.a > q.b && q.a - q.b <= WIDE;
@@ -52,6 +85,7 @@
   function erf(x) { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; }
   const Phi = z => 0.5 * (1 + erf(z / Math.SQRT2));
   const gt = (m, x) => { if (m.disc) { let s = 0; for (let i = 0; i < m.pm.length; i++) if (i - m.kmax > x) s += m.pm[i]; return s; } return 1 - Phi((x - m.mu) / m.sd); };
+  const eq = (m, x) => (m.disc && Number.isInteger(x) && Math.abs(x) <= m.kmax ? m.pm[x + m.kmax] : 0);
   function spreadCmp(pg, g, swap) {
     let m = null; try { m = SB.fit(g); } catch (e) { m = null; }
     if (!m || m.kind !== 'margin') return null;
@@ -60,16 +94,19 @@
     for (const s of pg.spreads || []) {
       const ghl = swap ? -s.hl : s.hl; if (!num(ghl) || Math.abs(ghl - homeLine) > 1e-9) continue;
       const qh = swap ? s.away : s.home, qa = swap ? s.home : s.away; if (!quoteOk(qh) || !quoteOk(qa) || qh.m + qa.m <= 0) continue;
-      const pmH = qh.m / (qh.m + qa.m), model = gt(m, -ghl);
+      // a whole-number line can push (stake back), so both sides are read as the chance of covering given no push
+      const pmH = qh.m / (qh.m + qa.m), push = eq(m, -ghl), model = push < 1 ? gt(m, -ghl) / (1 - push) : null;
+      if (model == null || Math.abs(pmH - model) > ODD) return null;  // that far apart: a flipped or misread line, not a comparison
       return { homeLine: ghl, pm: pmH, model, gap: pmH - model, v: s.v, live: liveQ(qh) && liveQ(qa) };
     }
     return null;
   }
+  // the side the two markets disagree on most (ties go to the side Polymarket prices higher)
+  const topSide = sides => sides.reduce((a, x) => (Math.abs(x.gap) > Math.abs(a.gap) + 1e-9 || (Math.abs(Math.abs(x.gap) - Math.abs(a.gap)) <= 1e-9 && x.gap > a.gap) ? x : a), sides[0]);
   function compare(pg) {
-    if (!pg || pg.stale || !pg.ml || !pg.home || !pg.away) return null;
-    const P = window.__polymarket;
-    let m = null; try { m = P && P.matchOf ? P.matchOf(pg) : matchOwn(pg); } catch (e) { m = null; }
-    const g = m && m.g; if (!g || !SB.priced(g) || !g.prob) return null;
+    if (!pg || pg.stale || pg.live || !pg.ml || !pg.home || !pg.away) return null;   // in play or gone from Polymarket: no pre-game price
+    let m = null; try { m = matchGame(pg); } catch (e) { m = null; }
+    const g = m && m.g; if (!g || !SB.openG(g) || !SB.priced(g) || !g.prob) return null;
     const ml = pg.ml, qH = m.swap ? ml.away : ml.home, qA = m.swap ? ml.home : ml.away, qD = ml.draw || null;
     const soc = g.sport === 'soccer';
     if (!quoteOk(qH) || !quoteOk(qA) || (soc && !quoteOk(qD))) return null;
@@ -81,37 +118,47 @@
       { side: 'H', name: g.home.name, abbr: g.home.abbr, pm: qH.m / s, book: (b.home || 0) / bs, q: qH },
     ];
     for (const x of sides) x.gap = x.pm - x.book;
-    const lead = sides.reduce((a, x) => (x.gap > a.gap ? x : a), sides[0]);
-    const gap = Math.max(...sides.map(x => Math.abs(x.gap)));
+    const lead = sides.reduce((a, x) => (x.gap > a.gap ? x : a), sides[0]), top = topSide(sides);
+    const gap = Math.abs(top.gap);
+    // two real-money markets on one game rarely sit 15+ points apart: that is an old price, a different game or swapped sides,
+    // so the row is shown with a warning and never counted as a signal or a lean. "flip": the prices fit the other way round.
+    const mirror = x => sides.find(y => y.side === (x.side === 'H' ? 'A' : x.side === 'A' ? 'H' : 'D'));
+    const flipGap = Math.max(...sides.map(x => Math.abs(mirror(x).pm - x.book)));
+    const odd = gap > ODD ? (flipGap < GAP ? 'flip' : 'far') : null;
     const live = sides.every(x => liveQ(x.q)), vol = num(ml.v) ? ml.v : num(pg.volume) ? pg.volume : 0;
     const wide = Math.max(...sides.map(x => (num(x.q.a) && num(x.q.b) ? x.q.a - x.q.b : 1)));
     const url = typeof pg.url === 'string' && /^https:\/\/polymarket\.com\//.test(pg.url) ? pg.url : null;
-    return { pg, g, sides, gap, lead: lead.gap > 0 ? lead : null, live, wide, vol, evVol: num(pg.volume) ? pg.volume : null, liq: num(pg.liquidity) ? pg.liquidity : null,
-      strong: live && gap >= GAP - 1e-12 && vol >= VOL, start: SB.startMs(g), url, spread: spreadCmp(pg, g, m.swap) };
+    return { pg, g, swap: m.swap, msc: m.sc, sides, gap, top, lead: lead.gap > 0 ? lead : null, odd, live, wide, vol, evVol: num(pg.volume) ? pg.volume : null, liq: num(pg.liquidity) ? pg.liquidity : null,
+      strong: live && !odd && gap >= GAP - 1e-12 && vol >= VOL, start: SB.startMs(g), url, spread: odd ? null : spreadCmp(pg, g, m.swap) };
   }
+  let ROWST = 0;
   function rows() {
-    if (ROWS && ROWSD === SB.DATA) return ROWS;
-    ROWSD = SB.DATA; const now = Date.now(), seen = new Map();
+    const now = Date.now();
+    if (ROWS && ROWSD === SB.DATA && now - ROWST < 5 * 60e3) return ROWS;   // games that start drop off within 5 minutes
+    ROWSD = SB.DATA; ROWST = now; const seen = new Map();
     for (const pg of (PM && PM.games) || []) {
       const t = Date.parse(pg && pg.start); if (!(t > now) || t - now > 10 * 864e5) continue;
       const c = compare(pg); if (!c) continue;
-      const o = seen.get(c.g.id); if (!o || c.vol > o.vol) seen.set(c.g.id, c);  // one Polymarket event per game: the busiest
+      const o = seen.get(c.g.id); if (!o || c.msc > o.msc || (c.msc === o.msc && c.vol > o.vol)) seen.set(c.g.id, c);  // one Polymarket event per game: the surest match, then the busiest
     }
     return (ROWS = [...seen.values()]);
   }
   const forGame = gid => (PM ? rows().find(c => c.g.id === gid) || null : null);
 
   // ---------- page ----------
-  const st = { sport: 'all', sort: store.get('sharp.sort', 'gap'), show: store.get('sharp.show', 'all') };
+  const st = { sport: 'all', sort: store.get('sharp.sort', 'gap'), show: store.get('sharp.show', 'all'), focus: null, jump: null };
   if (!['gap', 'time', 'vol'].includes(st.sort)) st.sort = 'gap';
   if (!['all', 'signals'].includes(st.show)) st.show = 'all';
   let lastParams = null;
   const sorters = {
-    gap: (a, b) => (b.strong - a.strong) || (b.gap - a.gap) || (a.start - b.start),
+    gap: (a, b) => (b.strong - a.strong) || (!!a.odd - !!b.odd) || (b.gap - a.gap) || (a.start - b.start),   // likely data problems last
     time: (a, b) => (a.start - b.start) || (b.gap - a.gap),
     vol: (a, b) => (b.vol - a.vol) || (b.gap - a.gap),
   };
-  const sayLead = c => (c.lead ? `Polymarket ${pts(c.lead.gap)} pts higher on ${c.lead.side === 'D' ? 'the draw' : c.lead.name}` : 'The two markets agree');
+  const sideName = x => (x.side === 'D' ? 'the draw' : x.name);
+  const sayLead = c => (c.gap < 0.0005 ? 'The two markets agree' : `Polymarket ${pts(c.top.gap)} pts ${c.top.gap > 0 ? 'higher' : 'lower'} on ${sideName(c.top)}`);
+  const oddTxt = c => (c.odd === 'flip' ? `Prices ${pts(c.gap)} pts apart, and they fit the other way round: the home and away sides may be swapped in one of the files. Not counted as a signal.`
+    : `Prices ${pts(c.gap)} pts apart: that usually means an old price or a mismatched game rather than a real disagreement. Not counted as a signal.`);
   function splitHTML(c) {
     const A = c.sides.find(x => x.side === 'A'), H = c.sides.find(x => x.side === 'H'), D = c.sides.find(x => x.side === 'D');
     return U.split({ rows: [{ l: A.pm * 100, r: H.pm * 100, label: 'Polymarket' }, { l: A.book * 100, r: H.book * 100, label: 'Books' }] }) +
@@ -136,24 +183,27 @@
   }
   function cardHTML(c, focus) {
     const g = c.g, q = `Why do Polymarket and the sportsbooks disagree on ${g.away.name} at ${g.home.name}?`;
-    return `<article class="sh-card${c.strong ? ' sh-strong' : ''}${focus ? ' sh-focus' : ''}" id="sh-${esc(g.id)}" data-sh-gid="${esc(g.id)}" data-sh-slug="${esc(c.pg.slug)}" data-sh-gap="${esc(pts(c.gap))}" data-sh-strong="${c.strong}">
-      <div class="sh-hd"><span class="sh-k">${esc(SPN[g.sport] || g.sport)} · moneyline</span><span class="sh-gap${c.strong ? ' sh-gon' : c.gap >= GAP ? ' sh-gmid' : ''}">${esc(pts(c.gap))} pts gap</span></div>
+    return `<article class="sh-card${c.strong ? ' sh-strong' : ''}${c.odd ? ' sh-oddc' : ''}${focus ? ' sh-focus' : ''}"${focus ? ' tabindex="-1"' : ''} id="sh-${esc(g.id)}" data-sh-gid="${esc(g.id)}" data-sh-slug="${esc(c.pg.slug)}" data-sh-gap="${esc(pts(c.gap))}" data-sh-strong="${c.strong}"${c.odd ? ` data-sh-odd="${esc(c.odd)}"` : ''}>
+      <div class="sh-hd"><span class="sh-k">${esc(SPN[g.sport] || g.sport)} · moneyline</span><span class="sh-gap${c.odd ? ' sh-godd' : c.strong ? ' sh-gon' : c.gap >= GAP ? ' sh-gmid' : ''}">${esc(pts(c.gap))} pts gap${c.odd ? ' · check' : ''}</span></div>
       ${teamsHTML(c, false)}${splitHTML(c)}
-      ${c.strong ? `<div class="sh-band"><span class="sh-k">Strong signal</span><b>${esc(sayLead(c))}</b></div>` : c.lead && c.gap >= GAP ? `<p class="sh-soft">${esc(sayLead(c))}${c.live ? ', on a thin market' : ', but the quote is too wide to read'}.</p>` : ''}
+      ${c.odd ? `<p class="sh-odd" role="note">${esc(oddTxt(c))}</p>` : c.strong ? `<div class="sh-band"><span class="sh-k">Strong signal</span><b>${esc(sayLead(c))}</b></div>` : c.gap >= GAP ? `<p class="sh-soft">${esc(sayLead(c))}${!c.live ? ', but the quote is too wide to read' : c.vol < VOL ? `, on a thin market (${money(c.vol)} traded)` : ''}.</p>` : ''}
       ${spreadHTML(c)}${metaHTML(c)}
       <div class="sh-acts"><button type="button" class="ui-ghost sm" data-sh-slate="${esc(g.id)}">Game card</button><button type="button" class="ui-ghost sm" data-sh-deep="${esc(g.id)}">Deep dive</button><button type="button" class="ui-ghost sm" data-sh-ask="${esc(q)}">Ask</button>${c.url ? `<a class="ui-link sh-ext" href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">Polymarket ↗</a>` : ''}</div>
     </article>`;
   }
   function heroHTML(c) {
-    const L = c.lead, nm = L.side === 'D' ? 'The draw' : L.name;
+    const L = c.top, nm = L.side === 'D' ? 'The draw' : L.name;
     return `<section class="sh-hero" data-sh-hero="${esc(c.g.id)}">${teamsHTML(c, true)}<div class="sh-hsplit">${splitHTML(c)}</div>
-      <div class="sh-sig"><div class="ui-kick">Polymarket higher · moneyline · strong signal</div><div class="sh-tt">${esc(nm)}</div>
-      <p>${esc(`Polymarket prices ${nm === 'The draw' ? 'the draw' : nm} at ${pct(L.pm)}, the books at ${pct(L.book)}: ${pts(L.gap)} points apart, with ${money(c.vol)} traded on Polymarket. A gap between two markets, not a sure thing.`)}</p></div></section>`;
+      <div class="sh-sig"><div class="ui-kick">Polymarket ${L.gap > 0 ? 'higher' : 'lower'} · moneyline · strong signal</div><div class="sh-tt">${esc(nm)}</div>
+      <p>${esc(`Polymarket prices ${sideName(L)} at ${pct(L.pm)}, the books at ${pct(L.book)}: ${pts(L.gap)} points apart, with ${money(c.vol)} traded on Polymarket. A gap between two markets, not a sure thing.`)}</p></div></section>`;
   }
   function render(main, params) {
     params = params || {};
-    let focus = null;
-    if (params !== lastParams) { lastParams = params; if (params.gid) focus = String(params.gid); if (params.sport && (params.sport === 'all' || SPN[params.sport])) st.sport = params.sport; }
+    if (params !== lastParams) {
+      lastParams = params; st.focus = params.gid ? String(params.gid) : null; st.jump = st.focus;
+      if (params.sport && (params.sport === 'all' || SPN[params.sport])) st.sport = params.sport;
+    }
+    const focus = st.focus; let jump = null, miss = '';
     if (LOAD === 'idle') load();
     const head = U.page({ kicker: 'Sharp board · market vs market', title: 'Polymarket vs', accent: 'the books', sub: 'Two real-money prices for every game we can match, side by side, with the biggest disagreements first.' });
     const note = `<div class="ui-card sh-note" role="note"><b>Not a betting split.</b> We have no ticket or money percentages, so nothing here shows where the bets or the big money are. Each game compares two real-money prices instead: Polymarket's (the middle of its bid and ask, scaled to add up to 100%) and the sportsbook consensus in our feed. A gap is a disagreement between markets, not a guaranteed edge: either one can be wrong, and the prices were taken at different times${PM && PM.updated ? ` (Polymarket ${esc(when(Date.parse(PM.updated)))}; the feed ${esc(when(Date.parse((SB.DATA && SB.DATA.updated) || '')))})` : ''}.</div>`;
@@ -165,31 +215,37 @@
       if (!R.length) body = U.empty('No upcoming game matched between Polymarket and our feed right now. Matching needs the same sport, a start within 6 hours and both teams.');
       else {
         const sports = SPORDER.filter(s => R.some(c => c.g.sport === s));
+        if (st.jump) {   // {gid}: make sure the filters show it, then scroll to it once (kept until the prices have loaded)
+          const f = R.find(c => c.g.id === st.jump);
+          if (f) { if (st.sport !== 'all' && st.sport !== f.g.sport) st.sport = 'all'; if (st.show === 'signals' && !f.strong) st.show = 'all'; jump = st.jump; }
+          else { const g = SB.gameById(st.jump); miss = g ? `${g.away.name} at ${g.home.name} has no matched Polymarket price to compare, so here is every game that has one.` : ''; }
+          st.jump = null;
+        }
         if (st.sport !== 'all' && !sports.includes(st.sport)) st.sport = 'all';
         const inSport = R.filter(c => st.sport === 'all' || c.g.sport === st.sport);
         const strong = inSport.filter(c => c.strong).sort(sorters.gap);
         let list = (st.show === 'signals' ? inSport.filter(c => c.strong) : inSport).slice().sort(sorters[st.sort]);
-        const top = strong[0] || null, big = inSport.slice().sort((a, b) => b.gap - a.gap)[0];
-        const heroBlock = top ? heroHTML(top) : `<div class="ui-card sh-quiet"><div class="ui-kick">No strong signal right now</div><p>${esc(`No matched game has a gap of 3+ points on a Polymarket moneyline with $10k+ traded and a two-sided quote. The biggest gap is ${pts(big.gap)} points (${big.g.away.name} at ${big.g.home.name}, ${money(big.vol)} traded).`)}</p></div>`;
+        const top = strong[0] || null, sane = inSport.filter(c => !c.odd), big = sane.slice().sort((a, b) => b.gap - a.gap)[0], nOdd = inSport.length - sane.length;
+        const heroBlock = top ? heroHTML(top) : `<div class="ui-card sh-quiet"><div class="ui-kick">No strong signal right now</div><p>${esc(`No matched game has a gap of 3+ points on a Polymarket moneyline with $10k+ traded and a two-sided quote.${big ? ` The biggest gap is ${pts(big.gap)} points (${big.g.away.name} at ${big.g.home.name}, ${money(big.vol)} traded).` : ''}`)}</p></div>`;
         body = `<div class="sh-ctl"><div class="sh-scroll">${U.pills([{ k: 'all', label: 'All', n: R.length }, ...sports.map(s => ({ k: s, label: SPN[s], n: R.filter(c => c.g.sport === s).length }))], st.sport, 'sh-sport')}</div>
           <div class="ui-row">${U.seg([{ k: 'gap', label: 'Gap' }, { k: 'time', label: 'Time' }, { k: 'vol', label: 'Volume' }], st.sort, 'sh-sort')}${U.seg([{ k: 'all', label: 'All' }, { k: 'signals', label: `Signals ${strong.length}` }], st.show, 'sh-show')}</div></div>
           ${heroBlock}
-          <p class="ui-muted sh-sum">${esc(`${inSport.length} matched game${inSport.length === 1 ? '' : 's'} · ${strong.length} strong signal${strong.length === 1 ? '' : 's'} (gap 3+ pts, $10k+ traded) · ${inSport.filter(c => c.gap >= GAP).length} with a gap of 3+ pts`)}</p>
+          ${miss ? `<p class="ui-note sh-miss" role="status">${esc(miss)}</p>` : ''}
+          <p class="ui-muted sh-sum">${esc(`${inSport.length} matched game${inSport.length === 1 ? '' : 's'} · ${strong.length} strong signal${strong.length === 1 ? '' : 's'} (gap 3+ pts, $10k+ traded) · ${sane.filter(c => c.gap >= GAP).length} with a gap of 3+ pts${nOdd ? ` · ${nOdd} set aside (prices 15+ pts apart: likely a data problem)` : ''}`)}</p>
           ${list.length ? `<div class="sh-grid">${list.map(c => cardHTML(c, c.g.id === focus)).join('')}</div>` : U.empty('No strong signals for this filter. Switch to All to see every matched game.')}`;
       }
     }
-    main.innerHTML = `<div class="ui-page sh-root">${head}${note}${body}<p class="ui-note">How to read it: the striped bar and the left / right numbers are the away and home team's chances in each market. "Books" is the sportsbook consensus in our feed, the same chances the Games tab's model is built on. A strong signal needs a 3+ point gap, a two-sided Polymarket quote no wider than 12¢ and $10k+ traded on that moneyline. Polymarket fees and the books' margin are not included.</p></div>`;
+    main.innerHTML = `<div class="ui-page sh-root">${head}${note}${body}<p class="ui-note">How to read it: the striped bar and the left / right numbers are the away and home team's chances in each market. "Books" is the sportsbook consensus in our feed, the same chances the Games tab's model is built on. A strong signal needs a 3+ point gap, a two-sided Polymarket quote no wider than 12¢ and $10k+ traded on that moneyline; a gap of 15+ points is set aside as a likely data problem (an old price, a different game or swapped sides). Games are matched by sport, a start within 6 hours and both teams; an unclear match is left out. Polymarket fees and the books' margin are not included.</p></div>`;
     const root = main.querySelector('.sh-root');
     root.addEventListener('click', onClick);
-    root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-sh-games]')) e.target.click(); });
-    if (focus) requestAnimationFrame(() => { const el = document.getElementById('sh-' + focus); if (el) el.scrollIntoView({ block: 'start' }); });
+    if (jump) requestAnimationFrame(() => { const el = document.getElementById('sh-' + jump); if (el) { el.scrollIntoView({ block: 'start' }); el.focus({ preventScroll: true }); } });
   }
   function onClick(e) {
     const t = e.target.closest('button'); if (!t) return;
     const pill = t.dataset.uiPill || t.dataset.uiSeg;
     if (pill) {
       const [n, k] = pill.split('|');
-      if (n === 'sh-sport') st.sport = k; else if (n === 'sh-sort') { st.sort = k; store.set('sharp.sort', k); } else if (n === 'sh-show') { st.show = k; store.set('sharp.show', k); } else return;
+      if (n === 'sh-sport') { st.sport = k; st.focus = null; } else if (n === 'sh-sort') { st.sort = k; store.set('sharp.sort', k); } else if (n === 'sh-show') { st.show = k; store.set('sharp.show', k); } else return;
       SB.render();
       const sel = t.dataset.uiPill ? `[data-ui-pill="${CSS.escape(pill)}"]` : `[data-ui-seg="${CSS.escape(pill)}"]`, nb = document.querySelector(sel); if (nb) nb.focus();
       return;
@@ -233,6 +289,9 @@
 .sh-band .sh-k::before{content:"";width:6px;height:6px;border-radius:50%;background:#2b7fff;box-shadow:0 0 8px #2b7fff}
 .sh-band b{display:block;margin-top:4px;font:800 18px/1.2 'Rubik',sans-serif}
 .sh-soft{margin:12px 0 0;font:500 13px/1.4 var(--fui);color:var(--mid)}
+.sh-odd{margin:12px 0 0;padding:10px 12px;border-radius:12px;border:1px dashed rgba(241,30,132,.55);font:500 13px/1.4 var(--fui);color:#ffc2dd}
+.sh-hd .sh-gap.sh-godd{background:rgba(241,30,132,.14);color:#ff8cc0}
+.sh-card:focus{outline:none}
 .sh-spread{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:12px;padding-top:10px;border-top:1px solid var(--hair);font:500 12.5px var(--fui);color:#ffffffa6}
 .sh-spread b{color:#fff}.sh-spread .sh-gp{margin-left:auto;font-weight:700;color:#ffffffcc}
 .sh-meta{margin:10px 0 0;font:500 12px/1.45 var(--fui);color:#ffffff8c}
@@ -255,5 +314,5 @@
 
   SB.registerTab({ key: KEY, label: 'Sharp Board', render });
   SB.on && SB.on('data', () => { ROWS = null; if (LOAD === 'done') { LOAD = 'idle'; WAIT = null; } });  // polymarket.json is re-read lazily after each feed refresh
-  window.__sharp = { load, rows, forGame, compare, get state() { return LOAD; }, get PM() { return PM; }, GAP, VOL };
+  window.__sharp = { load, rows, forGame, compare, match: matchGame, get state() { return LOAD; }, get PM() { return PM; }, GAP, VOL, ODD };
 })();

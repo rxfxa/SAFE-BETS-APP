@@ -326,7 +326,7 @@
       <div class="bld-stage"><span class="bld-bg pass" aria-hidden="true">Pass</span><span class="bld-bg add" aria-hidden="true">Add</span>
         <div class="bld-stack">${under}${cardHTML(top, 'bld-top', ` data-bld-id="${esc(top.id)}" role="group" aria-roledescription="prop card" aria-label="${esc(`Card ${pos} of ${total}: ${nm}, model ${pct(top.p)}, fair odds ${U.fair(top.p)}`)}"`).replace('<article', '<span class="bld-stamp add" aria-hidden="true">Add to slip</span><span class="bld-stamp pass" aria-hidden="true">Pass</span><article')}</div></div>
       <div class="bld-acts"><button type="button" class="bld-pass" data-bld-act="pass" aria-label="${esc('Pass on ' + nm)}"><span aria-hidden="true">✕</span> Pass</button><button type="button" class="ui-cta bld-add" data-bld-act="add" aria-label="${esc('Add ' + nm + ' to your slip')}"><span aria-hidden="true">✓</span> Add to slip</button></div>
-      <p class="bld-hint">Swipe or drag right to add, left to pass. Keys: <kbd>←</kbd> pass, <kbd>→</kbd> add.</p>`;
+      <p class="bld-hint">Swipe or drag right to add, left to pass.<span class="bld-keys"> Keys: <kbd>←</kbd> pass, <kbd>→</kbd> add.</span></p>`;
   }
   function genHTML() {
     const R = RISK[st.risk];
@@ -451,6 +451,8 @@
 .bld-root :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @media (max-width:420px){.bld-root .bld-gen .ui-seg{width:100%;justify-content:space-between}.bld-root .bld-gen .ui-seg button{flex:1;padding:0 8px}.bld-root .bld-build{align-self:stretch}}
 @media (prefers-reduced-motion:reduce){.bld-root .bld-top{transition:none}}
+@media (hover:none),(pointer:coarse){.bld-root .bld-keys{display:none}}
+body:has(.bld-root.bld-side) #slipbar{display:none!important}
 `;
     document.head.appendChild(s);
   }
@@ -480,7 +482,15 @@
     main.innerHTML = `<div class="ui-page bld-root" data-mode="${st.mode}">${head}${ctrl}
       <div class="bld-wrap"><div class="bld-grid"><section class="bld-main" aria-label="${st.mode === 'swipe' ? 'Prop deck' : 'Parlay generator'}">${body}</section><aside class="ui-card bld-slip" aria-labelledby="bld-slip-h">${slipHTML()}</aside></div></div>
       <p class="ui-note">Every chance is a model estimate: season averages with recent form, the game's price and blowout risk. Fair odds are what that chance is worth, not a book price; we have no sportsbook prop prices, so there is no edge against a book here. Hit rate counts his logged recent games at the card's line, and a few games are a small sample.</p></div>`;
+    sideMode();
   }
+  // with the slip panel beside the deck (sticky), the app's floating slip bar would only cover the panel: hide it on this screen
+  function sideMode() {
+    const r = document.querySelector('.bld-root'), sl = r && r.querySelector('.bld-slip');
+    if (sl) r.classList.toggle('bld-side', getComputedStyle(sl).position === 'sticky');
+  }
+  let rzT = 0;
+  window.addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { if (showing()) sideMode(); }, 120); });
   let pending = false;
   function safeRender(focusSel) {
     if (!showing()) return;

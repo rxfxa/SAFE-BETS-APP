@@ -33,12 +33,12 @@
     nba: { kick: 'Top scorers', note: 'Points a game this season.', unit: 'PPG', min: 5, f: (T, gp) => T('pts') / gp },
     nhl: { kick: 'Top point getters', note: 'Goals plus assists a game this season.', unit: 'P/G', min: 8, f: (T, gp) => (T('g') + T('a')) / gp },
     ncaaf: { kick: 'Top yardage', note: 'Passing, rushing and receiving yards a game this season.', unit: 'YDS/G', min: 4, f: (T, gp) => (T('pyd') + T('ryd') + T('recyd')) / gp },
-    soccer: { kick: 'Top goal scorers', note: 'Goals in the matches our box scores cover (Europe\'s big leagues, the Champions League and MLS).', unit: 'GOALS', min: 1, f: T => T('g') },
+    soccer: { kick: 'Top goal scorers', note: 'Goals in the Premier League, La Liga, Serie A, Bundesliga and Ligue 1 matches in our box scores (no Champions League, MLS or other leagues).', unit: 'GOALS', min: 1, f: T => T('g') },
   };
   // the full-table columns per sport (k: a per-game or total key computed in index())
   const COLS = {
-    nfl: [['gp', 'GP'], ['top', 'PPR/G'], ['pydg', 'Pass yds/G'], ['rydg', 'Rush yds/G'], ['recg', 'Rec/G'], ['recydg', 'Rec yds/G'], ['tds', 'TD']],
-    ncaaf: [['gp', 'GP'], ['top', 'Yds/G'], ['pydg', 'Pass/G'], ['rydg', 'Rush/G'], ['recydg', 'Rec yds/G'], ['tds', 'TD']],
+    nfl: [['gp', 'GP'], ['top', 'PPR/G'], ['pydg', 'Pass yds/G'], ['ptdt', 'Pass TD'], ['rydg', 'Rush yds/G'], ['recg', 'Rec/G'], ['recydg', 'Rec yds/G'], ['tds', 'Rush+Rec TD']],
+    ncaaf: [['gp', 'GP'], ['top', 'Yds/G'], ['pydg', 'Pass/G'], ['ptdt', 'Pass TD'], ['rydg', 'Rush/G'], ['recydg', 'Rec yds/G'], ['tds', 'Rush+Rec TD']],
     nba: [['gp', 'GP'], ['ming', 'Min'], ['top', 'Pts'], ['rebg', 'Reb'], ['astg', 'Ast']],
     nhl: [['gp', 'GP'], ['gt', 'G'], ['at', 'A'], ['ptst', 'Pts'], ['sogt', 'SOG'], ['top', 'P/G']],
     soccer: [['gp', 'GP'], ['top', 'G'], ['sott', 'SOT'], ['sht', 'Shots']],
@@ -132,7 +132,7 @@
         const e = { id: sp + ':' + i, sp, name: P.n, nk, team: P.t, teamName: teams[P.t] || '', pos: P.pos || (mine[0] && mine[0].pos) || '', gp, P, S, fi, ti, T, slate: mine };
         e.top = TOP[sp].f(T, gp);
         const g1 = x => T(x) / gp;
-        Object.assign(e, { pydg: g1('pyd'), rydg: g1('ryd'), recg: g1('rec'), recydg: g1('recyd'), tds: T('rtd') + T('ctd'), ming: g1('min'), rebg: g1('reb'), astg: g1('ast'), gt: T('g'), at: T('a'), ptst: T('g') + T('a'), sogt: T('sog'), sott: T('sot'), sht: T('sh') });
+        Object.assign(e, { ptdt: T('ptd'), pydg: g1('pyd'), rydg: g1('ryd'), recg: g1('rec'), recydg: g1('recyd'), tds: T('rtd') + T('ctd'), ming: g1('min'), rebg: g1('reb'), astg: g1('ast'), gt: T('g'), at: T('a'), ptst: T('g') + T('a'), sogt: T('sog'), sott: T('sot'), sht: T('sh') });
         bySp[sp].push(e); all.push(e); byId.set(e.id, e); counts[sp]++;
       });
     }
@@ -266,6 +266,8 @@
 .pl-root .pl-mk:first-of-type{border-top:0;padding-top:2px}
 .pl-root .pl-mkh{display:flex;justify-content:space-between;gap:10px;align-items:baseline;margin-bottom:6px}
 .pl-root .pl-mkh b{font:700 16px 'Rubik',sans-serif}.pl-root .pl-mkh span{font:500 12.5px var(--fui);color:#ffffffa6}
+/* the app's older .bar (strip) rule also matches ui.js's game-log bars: undo it here */
+.pl-root .ui-log .bar{display:block;margin:0}
 .pl-root .pl-lad{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 10px;align-items:center;padding:6px 0;border-top:1px dashed var(--hair)}
 .pl-root .pl-lad:first-of-type{border-top:0}
 .pl-root .pl-lad .ln{display:flex;align-items:center;gap:10px;min-width:0}
@@ -333,7 +335,7 @@
     let list = X.bySp[sp].filter(e => e.P && e.gp >= st.min);
     list.sort((a, b) => { const x = a[so.k], y = b[so.k]; return ((num(x) ? x : -1e9) - (num(y) ? y : -1e9)) * so.dir || b.gp - a.gp || (a.name < b.name ? -1 : 1); });
     const shown = list.slice(0, st.shown);
-    const tcols = [{ k: 'name', label: 'Player', sort: false }].concat(cols.map(([k, label]) => ({ k, label, heat: k !== 'gp', fmt: v => (k === 'gp' || /t$|tds/.test(k) ? fN(v) : f1(v)) })));
+    const tcols = [{ k: 'name', label: 'Player', sort: false }].concat(cols.map(([k, label]) => ({ k, label, heat: k !== 'gp', fmt: v => (k === 'gp' || /t$|tds/.test(k) || (k === 'top' && sp === 'soccer') ? fN(v) : f1(v)) })));
     const rows = shown.map(e => Object.assign({ html: `<button type="button" class="pl-pn" data-pl-open="${esc(e.id)}"><span class="pn">${esc(e.name)}</span><span class="pt">${esc(e.team)}${e.pos ? ' · ' + esc(e.pos) : ''}${onSlate(e) ? ' · on the slate' : ''}</span></button>` }, Object.fromEntries(cols.map(([k]) => [k, e[k]]))));
     const minSel = U.select({ label: 'Min games', value: st.min, options: [[1, '1+'], [3, '3+'], [5, '5+'], [10, '10+']], name: 'pl-min' });
     return `<div class="pl-sec" data-pl-table="${esc(sp)}"><div class="pl-sechd"><div class="pl-h3" style="margin:0"><span>All ${esc(SPLONG[sp])} players · ${list.length.toLocaleString('en-US')}</span></div><div class="pl-ctl">${minSel}</div></div>
@@ -404,14 +406,20 @@
     meta.push(`<span class="m">${e.gp ? `${e.gp} game${e.gp === 1 ? '' : 's'} this season` : 'no season box scores'}</span>`);
     if (s0) meta.push(`<span class="m nx">Next: ${esc(s0.home ? 'vs' : '@')} ${esc(s0.opp)} · ${esc(whenOf(s0.g))}</span>`);
     const q = `How has ${e.name} played lately?`;
+    const k0 = s0 ? MORDER.find(k => s0.stats[k]) : null, an0 = !s0 ? null : k0 ? { id: s0.stats[k0].id } : s0.td ? { name: s0.name, stat: 'td', team: s0.team, gid: s0.gid } : null;
     const hero = `<section class="ui-card pl-hero" style="--h:${hu}" aria-label="${esc(e.name)}"><div class="pl-hd">${U.team(e.team, true)}<div><div class="pl-tn" data-pl-team>${esc(e.teamName || (s0 && s0.teamName) || e.team)}</div><div class="pl-meta">${meta.join('')}</div></div></div>
-      <div class="pl-hact"><button type="button" class="ui-cta" data-pl-ask="${esc(q)}">Ask about ${esc(e.name.split(' ')[0])}</button>${s0 ? `<button type="button" class="ui-ghost" data-pl-an="${esc(JSON.stringify(Object.keys(s0.stats).length ? { id: s0.stats[MORDER.find(k => s0.stats[k])].id } : { name: s0.name, stat: 'td', team: s0.team, gid: s0.gid }))}">Open in Prop Analyzer</button>` : ''}</div></section>`;
+      <div class="pl-hact"><button type="button" class="ui-cta" data-pl-ask="${esc(q)}">Ask about ${esc(e.name.split(' ')[0])}</button>${an0 ? `<button type="button" class="ui-ghost" data-pl-an="${esc(JSON.stringify(an0))}">Open in Prop Analyzer</button>` : ''}</div></section>`;
     const avg = e.P ? `<div class="ui-card" data-pl-avgs><div class="pl-h3"><span>Season averages</span><b>${e.P.gp > e.P.log.length ? 'season totals ÷ games' : 'ESPN box scores'}</b></div>${U.tiles(tilesOf(e))}${e.gp < 5 ? '<p class="ui-note" style="margin-top:8px">Fewer than 5 games: a small sample.</p>' : ''}</div>` : '';
     return `${hero}<div class="pl-grid"><div class="pl-col">${avg}${logHTML(e)}</div><div class="pl-col">${propsHTML(e)}</div></div>`;
   }
 
   // ---------- render ----------
+  const RMS = { last: 0, max: 0, n: 0 };
   function render(main, params) {
+    const t0 = performance.now();
+    try { draw(main, params); } finally { const ms = performance.now() - t0; RMS.last = ms; RMS.max = Math.max(RMS.max, ms); RMS.n++; }
+  }
+  function draw(main, params) {
     css(); needSeason(); needFT(); applyParams(params); resolvePending();
     const X = index();
     const total = X.total;
@@ -468,7 +476,11 @@
     }
     const so = t.getAttribute('data-ui-sort');
     if (so && so.startsWith('pl-tab|')) { const k = so.split('|')[1]; st.sort = st.sort && st.sort.k === k ? { k, dir: -st.sort.dir } : { k, dir: -1 }; rerender(attrSel('data-ui-sort', so)); return; }
-    if (t.hasAttribute('data-pl-more')) { st.shown += PAGE; SB.render(); return; }
+    if (t.hasAttribute('data-pl-more')) {   // focus moves to the first added row (the button that was clicked is gone)
+      const n0 = st.shown; st.shown += PAGE; SB.render();
+      const b = document.querySelectorAll('.pl-root [data-pl-table] tbody tr')[n0]; const f = b && b.querySelector('button'); if (f) f.focus();
+      return;
+    }
     if (t.hasAttribute('data-pl-back')) { st.view = null; const y = st.back; SB.render(); window.scrollTo(0, y); const q = document.querySelector('.pl-root #pl-q'); if (q) q.focus({ preventScroll: true }); return; }
     if (t.hasAttribute('data-pl-slip')) {
       const id = t.getAttribute('data-pl-slip'), i = id.indexOf('|'), gid = id.slice(0, i), key = id.slice(i + 1);
@@ -509,5 +521,5 @@
 
   SB.registerTab({ key: KEY, label: 'Players', render });
   // read-only hooks for tests
-  window.__players = { index, topList, searchList, get state() { return { ...st }; }, get seasonState() { return SEAS_ST; } };
+  window.__players = { index, topList, searchList, get state() { return { ...st }; }, get seasonState() { return SEAS_ST; }, get renderMs() { return { ...RMS }; } };
 })();

@@ -103,36 +103,87 @@
     if (SORTC.src !== items || SORTC.sport !== st.sport) SORTC = { src: items, sport: st.sport, out: (st.sport === 'all' ? items.slice() : items.filter(x => x.sp === st.sport)).sort(byChance) };
     return SORTC.out;
   }
-  function queue() {
-    const D = deckOf(), q = deckList().filter(it => !D.done.has(it.id) && !SB.inSlip(it.gid, it.key));
+  // the deck without games that kicked off since the board was built (the board is cached per feed load)
+  const liveList = () => deckList().filter(it => { const g = it.g || SB.gameById(it.gid); return !!g && SB.openG(g); });
+  function queue(list) {
+    const D = deckOf(), q = (list || liveList()).filter(it => !D.done.has(it.id) && !SB.inSlip(it.gid, it.key));
     if (D.pin) { const i = q.findIndex(x => x.id === D.pin); if (i > 0) q.unshift(q.splice(i, 1)[0]); }
     return q;
   }
-  // season box scores and touchdown prices load on demand (insights.js owns the season index)
-  let seasonAsked = false, ftAsked = false;
+  // season box scores and touchdown prices load on demand. insights.js indexes season.json only once its own tab has been shown,
+  // so until then its board has no NFL / college / NHL / soccer box scores (and no season TDs). We read the same file (SB.season(),
+  // fetched once by the app) and fill those cards' recent games the way the Insights board does: his games before the game day,
+  // matched by name and team (ESPN abbreviation first, then the team name).
+  let ftAsked = false, SEA = { st: 'idle', d: null, ix: {} };
+  const SLOG = new Map();
   function needSide() {
     const I = window.__insights, F = window.__firsttd;
-    if (!seasonAsked && I && typeof I.needSeason === 'function') {
-      seasonAsked = true;
-      try { I.needSeason(); } catch (e) { /* optional */ }
-      Promise.resolve(typeof SB.season === 'function' ? SB.season() : null).catch(() => null).then(() => setTimeout(() => { if (showing()) safeRender(); }, 0));
+    if (I && typeof I.needSeason === 'function') { try { I.needSeason(); } catch (e) { /* optional */ } }
+    if (SEA.st === 'idle' && typeof SB.season === 'function') {
+      SEA.st = 'loading';
+      Promise.resolve(SB.season()).then(d => { SEA = { st: d && d.sports ? 'ok' : 'none', d: d && d.sports ? d : null, ix: {} }; }, () => { SEA = { st: 'none', d: null, ix: {} }; })
+        .then(() => { SLOG.clear(); if (showing()) safeRender(); });
     }
     if (!ftAsked && F && !F.FT && typeof F.load === 'function') {
       ftAsked = true;
       Promise.resolve(F.load()).then(() => { if (showing()) safeRender(); }).catch(() => {});
     }
   }
+  function seaIdx(sp) {
+    if (!SEA.d) return null;
+    if (SEA.ix[sp] !== undefined) return SEA.ix[sp];
+    const S = SEA.d.sports[sp];
+    if (!S || !Array.isArray(S.players)) return (SEA.ix[sp] = null);
+    const fi = {}; (S.fields || []).forEach((f, i) => { fi[f] = 3 + i; });
+    const byName = new Map();
+    for (const p of S.players) if (p && p.n && Array.isArray(p.log)) { const k = E.nameKey(p.n); if (!byName.has(k)) byName.set(k, []); byName.get(k).push(p); }
+    const teams = S.teams && typeof S.teams === 'object' && !Array.isArray(S.teams) ? S.teams : {};
+    return (SEA.ix[sp] = { fi, byName, teams, byTeam: new Map(Object.entries(teams).map(([ab, nm]) => [E.nameKey(nm), ab])) });
+  }
+  function seaPlayer(sp, name, abbr, teamName) {
+    const X = seaIdx(sp); if (!X) return null;
+    const c = X.byName.get(E.nameKey(name)); if (!c || !c.length) return null;
+    const nk = E.nameKey(teamName), last = s => { const a = E.nameKey(s).split('-'); return a[a.length - 1]; };
+    let ab = null;
+    if (X.teams[abbr] && (!teamName || last(X.teams[abbr]) === last(teamName))) ab = abbr;
+    else if (nk && X.byTeam.has(nk)) ab = X.byTeam.get(nk);
+    else if (nk) { for (const [k, a] of X.byTeam) if (k.length > 4 && (k.startsWith(nk) || nk.startsWith(k))) { ab = a; break; } }
+    if (!ab && X.teams[abbr]) ab = abbr;
+    const same = c.find(p => p.t === ab); if (same) return same;
+    return c.length === 1 && (sp !== 'ncaaf' || !ab) ? c[0] : null;   // college names repeat, so there the team must match
+  }
+  // the card's recent games, oldest first [{v, o}], plus season TDs for touchdown cards
+  function logFor(it) {
+    const own = { vals: it.log && Array.isArray(it.log.vals) ? it.log.vals : [], src: (it.log && it.log.src) || '', stot: it.stot != null ? it.stot : null, sgp: it.sgp != null ? it.sgp : null };
+    if (it.sp === 'nba' || own.src === 'box scores' || (it.td && own.stot != null) || !SEA.d) return own;
+    const I = window.__insights; if (I && I.seasonState === 'ok') return own;
+    if (SLOG.has(it.id)) return SLOG.get(it.id);
+    let out = own;
+    try {
+      const g = it.g || SB.gameById(it.gid), me = g && (g.home.abbr === it.team ? g.home : g.away), X = seaIdx(it.sp);
+      const P = g && X ? seaPlayer(it.sp, it.name, it.team, me ? me.name : '') : null;
+      if (P) {
+        const f = X.fi, day = E.dayOf(SB.startMs(g)), vals = [];
+        const fv = r => (it.td ? (+r[f.rtd] || 0) + (+r[f.ctd] || 0) : it.stat === 'hpts' ? (+r[f.g] || 0) + (+r[f.a] || 0) : f[it.stat] != null ? +r[f[it.stat]] : NaN);
+        for (const r of P.log) { if (!Array.isArray(r) || !(String(r[0]) < day)) continue; const v = fv(r); if (num(v)) vals.push({ d: r[0], o: r[1], v }); }
+        vals.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+        const tot = it.td && Array.isArray(P.tot) && f.rtd != null ? (+P.tot[f.rtd - 3] || 0) + (+P.tot[f.ctd - 3] || 0) : null;
+        out = { vals: vals.length ? vals : own.vals, src: vals.length ? 'box scores' : own.src, stot: tot != null ? tot : own.stot, sgp: tot != null ? P.gp : own.sgp };
+      }
+    } catch (e) { out = own; }
+    SLOG.set(it.id, out); return out;
+  }
 
   // ---------- the top card ----------
   function hitsOf(it) {
-    const vals = (it.log && Array.isArray(it.log.vals) ? it.log.vals : []).slice(-10), thr = it.td ? 1 : it.thr;
+    const vals = logFor(it).vals.slice(-10), thr = it.td ? 1 : it.thr;
     const hits = vals.map(x => x.v >= thr), h = hits.filter(Boolean).length, n = hits.length;
     return { hits, h, n, label: n ? `L${n} · ${h} of ${n}` + (n < 5 ? ' (few games)' : '') : 'No recent games logged' };
   }
   function backOf(it, H) {
-    const mu = it.mu, b = E.BLOW && E.BLOW[it.sp], u = UNIT[it.stat] || '', M = it.M;
-    const rows = [], l5 = (it.log && Array.isArray(it.log.vals) ? it.log.vals : []).slice(-5), a5 = l5.length ? l5.reduce((s, x) => s + x.v, 0) / l5.length : null;
-    if (it.td) { rows.push(['Season TDs', it.stot != null ? `${it.stot} in ${it.sgp} games` : '—']); rows.push([`Last ${H.n || 10}`, H.n ? `scored in ${H.h} of ${H.n}` : '—']); }
+    const mu = it.mu, b = E.BLOW && E.BLOW[it.sp], u = UNIT[it.stat] || '', M = it.M, LG = logFor(it);
+    const rows = [], l5 = LG.vals.slice(-5), a5 = l5.length ? l5.reduce((s, x) => s + x.v, 0) / l5.length : null;
+    if (it.td) { rows.push(['Season TDs', LG.stot != null ? `${LG.stot} in ${LG.sgp} game${LG.sgp === 1 ? '' : 's'}` : '—']); rows.push([`Last ${H.n || 10}`, H.n ? `scored in ${H.h} of ${H.n}` : '—']); }
     else {
       rows.push(['Projection', M && num(M.an) ? `${f1(M.an)} ${u}` + (num(M.pb) && M.pb > 0.02 && num(M.ab) && Math.abs(M.ab - M.an) > 0.05 ? ` · ${f1(M.ab)} if a blowout` : '') : '—']);
       rows.push(['Season avg', it.savg != null ? `${f1(it.savg)} ${u}` : '—']);
@@ -148,7 +199,7 @@
   }
   // the front's strip of his last games against this line (oldest first)
   function stripOf(it) {
-    const l5 = (it.log && Array.isArray(it.log.vals) ? it.log.vals : []).slice(-5), thr = it.td ? 1 : it.thr, ln = it.td ? 'a TD' : it.thr + '+';
+    const l5 = logFor(it).vals.slice(-5), thr = it.td ? 1 : it.thr, ln = it.td ? 'a TD' : it.thr + '+';
     if (!l5.length) return `<div class="bld-l5"><span class="ui-lbl">Last games</span><span class="none">No recent games logged for him</span></div>`;
     const lab = `His last ${l5.length} against ${ln}: ` + l5.map(x => `${x.v}${x.o ? ' vs ' + x.o : ''}`).join(', ');
     return `<div class="bld-l5" role="img" aria-label="${esc(lab)}"><span class="ui-lbl">Last ${l5.length} · vs ${esc(ln)}</span><span class="g">${l5.map(x => `<span class="${x.v >= thr ? 'h' : 'm'}"><b>${esc(Number.isInteger(x.v) ? x.v : f1(x.v))}</b><i>${esc(String(x.o || '').slice(0, 4))}</i></span>`).join('')}</span></div>`;
@@ -162,7 +213,7 @@
       matchupScore: it.mu ? it.mu.s : null, matchupLabel: it.mu ? it.mu.label : 'No game price yet',
       back: B, flipLabel: 'Flip for the full matchup', actions: [],
     });
-    return `<div class="${cls}"${attrs || ''}>${html.replace('<div class="ft">', stripOf(it) + '<div class="ft">')}</div>`;   // the first .ft is the front face's footer
+    return `<div class="${cls}"${attrs || ''}>${html.replace('<div class="ft">', () => stripOf(it) + '<div class="ft">')}</div>`;   // the first .ft is the front face's footer
   }
 
   // ---------- the slip ----------
@@ -210,6 +261,7 @@
   }
   function slipHTML() {
     const S = slipState(), n = S.live.length, stale = S.views.length - n;
+    if (st.copyFail && st.copyFail !== slipText(S)) st.copyFail = null;   // the hand-copy box only ever shows the current slip
     const legs = S.views.map((v, i) => `<div class="bld-leg${v.open ? '' : ' off'}" data-bld-leg="${esc(legSig(v.L))}">
       ${U.team(v.team || SPS[v.g ? v.g.sport : ''] || '?')}
       <div class="bl-t"><b class="bl-n">${esc(v.name)}</b><span class="bl-m">${esc([v.mkt, v.game].filter(Boolean).join(' · '))}</span>${v.open ? '' : '<span class="bl-s">Started: left out of the math</span>'}</div>
@@ -260,7 +312,7 @@
     return GS.out;
   }
   function deckHTML() {
-    const list = deckList(), q = queue(), total = list.length, D = deckOf(), day = dayKey(st.day);
+    const list = liveList(), q = queue(list), total = list.length, D = deckOf(), day = dayKey(st.day);
     const hist = D.hist.length;
     const undo = `<button type="button" class="ui-link bld-undo" data-bld-act="undo"${hist ? '' : ' disabled'} aria-label="${esc(hist ? 'Undo last: ' + D.hist[hist - 1].name : 'Undo last')}">↺ Undo last</button>`;
     if (!q.length) {
@@ -288,7 +340,7 @@
     if (st.gone && !st.T) out = U.empty('Those legs moved on (a game started or the feed changed). Build again.');
     else if (st.T) {
       const T = st.T, ok = T.legs.length >= T.n, sp = st.sport === 'all' ? 'all sports' : (SPN[st.sport] || st.sport);
-      const title = `${T.n}-leg ${R.label.toLowerCase()} parlay · ${sp}`;
+      const title = `${T.n}-leg ${R.label.toLowerCase()} parlay · ${sp}`;   // when fewer fit, the card itself says how many qualify
       const sub = `${R.note} Built from the model's own chances; swap any leg (⇄) or run it 500,000 times.`;
       let card = ''; try { card = SB.ticketCard(st.cardId, esc(title), { legs: T.legs, p: T.p, n: T.n }, esc(sub)); } catch (e) { card = U.empty('This parlay could not be drawn. Build again.'); }
       out = `<div class="bld-ticket">${card}</div><div class="ui-row bld-use"><button type="button" class="ui-cta" data-bld-use="1"${ok ? '' : ' disabled'}>Use this slip</button><button type="button" class="ui-ghost" data-bld-again="1">Build another</button></div>` +
@@ -408,7 +460,7 @@
   function applyParams(p) {
     // render() passes the same params object until the next goTab: apply each one once
     if (!p || typeof p !== 'object' || seenP === p || !Object.keys(p).length) return; seenP = p;
-    const sp = typeof p.sport === 'string' ? p.sport.toLowerCase() : '';
+    const raw = typeof p.sport === 'string' ? p.sport.trim().toLowerCase() : '', sp = { cfb: 'ncaaf', college: 'ncaaf', 'college fb': 'ncaaf' }[raw] || raw;
     if (sp) st.sport = SPN[sp] ? sp : 'all';
     const m = typeof p.mode === 'string' ? p.mode.toLowerCase() : '';
     if (m === 'gen' || m === 'generate') st.mode = 'gen'; else if (m === 'swipe') st.mode = 'swipe';
@@ -437,7 +489,14 @@
     const sy = window.scrollY;
     SB.render();
     if (Math.abs(window.scrollY - sy) > 2) window.scrollTo(0, sy);
-    if (focusSel) { try { const el = document.querySelector('.bld-root ' + focusSel); if (el && !el.disabled) el.focus({ preventScroll: true }); } catch (e) { /* focus is a nicety */ } }
+    if (focusSel) {
+      try {
+        let el = document.querySelector('.bld-root ' + focusSel);
+        // the deck ran out (or the button left): keep focus in the deck instead of dropping it on the page
+        if ((!el || el.disabled) && /data-bld-act/.test(focusSel)) el = document.querySelector('.bld-root .bld-main [data-bld-restart], .bld-root .bld-main button:not([disabled])');
+        if (el && !el.disabled) el.focus({ preventScroll: true });
+      } catch (e) { /* focus is a nicety */ }
+    }
   }
   const focusedAct = () => { const a = document.activeElement; if (!a || !a.closest || !a.closest('.bld-root')) return null; for (const at of ['data-bld-act', 'data-ui-seg', 'data-ui-pill', 'data-bld-n', 'data-bld-props', 'data-bld-build', 'data-bld-again', 'data-bld-use']) if (a.hasAttribute(at)) return `[${at}="${String(a.getAttribute(at)).replace(/["\\]/g, '\\$&')}"]`; return null; };
   let LIVE = null;
@@ -616,11 +675,12 @@
   if (typeof SB.on === 'function') {
     // the slip changed somewhere else (a sheet, another screen): redraw the panel and skip legs now in the slip
     SB.on('slip', () => { if (!self && showing()) safeRender(); });
-    SB.on('data', () => { SORTC = { src: null, sport: null, out: [] }; GS = { data: null, out: [] }; ftAsked = false; checkTicket(); });
+    SB.on('data', () => { SORTC = { src: null, sport: null, out: [] }; GS = { data: null, out: [] }; SLOG.clear(); ftAsked = false; checkTicket(); });
   }
 
   SB.registerTab({ key: KEY, label: 'Parlay', render });
   // read-only hooks for tests
   window.__builder = { RISK, optsFor, get state() { return { mode: st.mode, sport: st.sport, day: st.day, n: st.n, risk: st.risk, props: st.props, seed: st.seed, opts: st.opts, T: st.T, cardId: st.cardId }; },
-    deck: () => queue().map(x => x.id), list: () => deckList().map(x => x.id), item: id => deckList().find(x => x.id === id) || null, slipText: () => slipText(slipState()) };
+    deck: () => queue().map(x => x.id), list: () => liveList().map(x => x.id), item: id => deckList().find(x => x.id === id) || null, slipText: () => slipText(slipState()),
+    hits: id => { const it = deckList().find(x => x.id === id); return it ? hitsOf(it) : null; }, get seasonState() { return SEA.st; } };
 })();

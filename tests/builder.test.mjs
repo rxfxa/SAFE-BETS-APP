@@ -46,6 +46,32 @@ check('top card: name, matchup, market, fair odds from the model chance, "$100 p
 check('progress reads "1 of N"', s.pos.trim() === `1 of ${s.n}`, s.pos);
 check('two cards wait behind the top one (inert, hidden from screen readers)', await page.evaluate(() => [...document.querySelectorAll('.bld-root .bld-under')].every(u => u.inert && u.getAttribute('aria-hidden') === 'true') && document.querySelectorAll('.bld-root .bld-under').length === 2));
 
+// ---------- NFL cards get their box scores even before Insights has been opened ----------
+// (bug: insights.js indexes season.json only when its own tab renders, so a first visit here showed no hit rate on any TD card)
+await page.waitForFunction(() => ['ok', 'none'].includes(window.__builder.seasonState), null, { timeout: 30000 });
+const HB = await page.evaluate(async () => {
+  const E = SB.engine, d = await SB.season(), X = d.sports.nfl, fi = {}; X.fields.forEach((f, i) => { fi[f] = 3 + i; });
+  const ids = window.__builder.list().filter(id => window.__builder.item(id).sp !== 'nba'), out = {};
+  for (const id of ids) out[id] = window.__builder.hits(id).label;
+  // recompute one touchdown card by hand: his rushing + receiving TDs in games before the game day, last 10
+  const td = ids.map(id => window.__builder.item(id)).filter(it => it.td).find(it => X.players.filter(p => E.nameKey(p.n) === E.nameKey(it.name)).length === 1);
+  let want = null, got = null;
+  if (td) {
+    const P = X.players.find(p => E.nameKey(p.n) === E.nameKey(td.name)), day = E.dayOf(SB.startMs(SB.gameById(td.gid)));
+    const v = P.log.filter(r => r[0] < day).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(r => (+r[fi.rtd] || 0) + (+r[fi.ctd] || 0)).slice(-10);
+    want = `L${v.length} · ${v.filter(x => x >= 1).length} of ${v.length}` + (v.length < 5 ? ' (few games)' : ''); got = out[td.id];
+  }
+  return { ins: window.__insights.seasonState, out, n: ids.length, tdWith: ids.filter(id => window.__builder.item(id).td && /^L\d/.test(out[id])).length, tdAll: ids.filter(id => window.__builder.item(id).td).length, want, got, name: td && td.name };
+});
+check('first visit (Insights never opened): touchdown cards show his recent games from season.json', HB.ins === 'idle' && HB.tdAll > 0 && HB.tdWith === HB.tdAll, `${HB.tdWith} of ${HB.tdAll} TD cards`);
+check('…and the count matches a hand recount of his box scores', HB.want && HB.got === HB.want, `${HB.name}: ${HB.got} vs ${HB.want}`);
+await page.evaluate(() => SB.goTab('insights', {}));
+await page.waitForFunction(() => window.__insights.seasonState === 'ok', null, { timeout: 30000 });
+await page.evaluate(() => SB.goTab('builder', {}));
+await page.waitForSelector('.bld-root .bld-top');
+const HB3 = await page.evaluate(out => Object.keys(out).filter(id => { const h = window.__builder.hits(id); return !h || h.label !== out[id]; }).map(id => `${id}: ${out[id]} -> ${(window.__builder.hits(id) || {}).label}`), HB.out);
+check('…the same hit rates Insights computes once it has indexed the season', !HB3.length && HB.n > 0, HB3.slice(0, 3).join(' | ') || `${HB.n} non-NBA cards`);
+
 // ---------- add / pass with the buttons ----------
 const t0 = s.top;
 await page.click('[data-bld-act="add"]');

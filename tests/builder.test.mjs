@@ -42,7 +42,7 @@ const topInfo = await page.evaluate(id => { const it = window.__builder.item(id)
 const F = await page.evaluate(() => { const f = document.querySelector('.bld-root .bld-top .front'), q = x => (f.querySelector(x) || {}).textContent || ''; return { fn: q('.fn'), ln: q('.ln'), mu: q('.mu'), mkt: q('.mkt .t'), odds: q('.odds'), pay: q('.pay'), lbls: [...f.querySelectorAll('.st2 .ui-lbl')].map(x => x.textContent), strip: f.querySelectorAll('.bld-l5 .g > span').length, flip: q('[data-ui-flip]') }; });
 check('top card: name, matchup, market, fair odds from the model chance, "$100 pays", hit rate and matchup',
   `${F.fn} ${F.ln}`.trim() === topInfo.name && F.mu.includes(topInfo.matchup) && F.mkt.trim() === topInfo.mkt && F.odds.trim() === topInfo.fair && F.pay.includes(`${topInfo.pays} at fair odds`) &&
-  F.lbls.join(',') === 'Hit rate,Matchup' && /Flip for the full matchup/.test(F.flip), `${F.fn} ${F.ln} | ${F.mkt} | ${F.odds} | ${F.pay}`);
+  F.lbls.join(',') === 'Hit rate,Matchup' && /Flip for the full matchup/.test(F.flip) && F.strip > 0 && F.strip <= 5, `${F.fn} ${F.ln} | ${F.mkt} | ${F.odds} | ${F.pay} | strip ${F.strip}`);
 check('progress reads "1 of N"', s.pos.trim() === `1 of ${s.n}`, s.pos);
 check('two cards wait behind the top one (inert, hidden from screen readers)', await page.evaluate(() => [...document.querySelectorAll('.bld-root .bld-under')].every(u => u.inert && u.getAttribute('aria-hidden') === 'true') && document.querySelectorAll('.bld-root .bld-under').length === 2));
 
@@ -365,6 +365,8 @@ await browser.close();
   const cold = await page.evaluate(() => { const t = performance.now(); SB.goTab('builder', {}); return { ms: performance.now() - t, top: !!document.querySelector('.bld-root .bld-top') }; });
   check('cold first render (SB.goTab from another tab, Insights never shown) under 1,500 ms', cold.top && cold.ms < 1500, `${Math.round(cold.ms)} ms`);
   await page.waitForSelector('.bld-root .bld-top');
+  const fold = await page.evaluate(() => { window.scrollTo(0, 0); return ['add', 'pass'].map(a => Math.round(document.querySelector(`.bld-root [data-bld-act="${a}"]`).getBoundingClientRect().bottom)); });
+  check('1440x900: ✕ Pass and ✓ Add to slip are in the first screen, no scrolling', fold.every(b => b > 0 && b <= 900), fold.join(','));
   await page.waitForFunction(() => window.__builder.seasonState === 'none', null, { timeout: 20000 });
   const SN = await page.evaluate(() => { const ids = window.__builder.list(), td = ids.filter(id => window.__builder.item(id).td); SB.render();
     return { n: ids.length, td: td.length, lbl: td.map(id => window.__builder.hits(id).label), txt: document.querySelector('.bld-root').innerText }; });

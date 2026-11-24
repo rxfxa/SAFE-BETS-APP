@@ -375,7 +375,7 @@
 .bld-root .bld-pos{white-space:nowrap}.bld-root .bld-pos b{color:#fff;font-size:12px}
 .bld-root .bld-prog{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
 .bld-root .bld-prog i{display:block;height:100%;background:var(--acc);border-radius:2px}
-.bld-root .bld-stage{position:relative;display:flex;justify-content:center;padding:4px 0 30px;min-width:0}
+.bld-root .bld-stage{position:relative;display:flex;justify-content:center;padding:4px 0 8px;min-width:0}
 .bld-root .bld-bg{position:absolute;font:900 italic 76px/1 'Rubik',sans-serif;text-transform:uppercase;letter-spacing:-.02em;pointer-events:none;user-select:none;display:none}
 .bld-root .bld-bg.pass{left:-24px;top:50%;transform:translateY(-50%) rotate(-90deg);color:rgba(241,30,132,.11)}
 .bld-root .bld-bg.add{right:6px;top:-6px;color:rgba(var(--acc-rgb),.09)}
@@ -487,7 +487,7 @@ body:has(.bld-root.bld-side) #slipbar{display:none!important}
   }
   function render(main, params) {
     css(); applyParams(params); needSide(); checkTicket();
-    const head = U.page({ kicker: 'Parlay builder', title: 'Pick your legs,', accent: 'or let the model pick',
+    const head = U.page({ kicker: 'Parlay builder', title: 'Your picks,', accent: 'or the model\'s',
       sub: 'Swipe through the slate one prop at a time, or set the sport, legs and risk and Safe Bets builds the slip. Every leg shows the model\'s chance and its fair odds.' });
     const ctrl = `<div class="bld-ctrl">${U.seg([{ k: 'swipe', label: 'Swipe' }, { k: 'gen', label: 'Generate' }], st.mode, 'bld-mode')}${st.mode === 'swipe' ? U.select({ label: 'Day', value: st.day, options: [['today', 'Today'], ['tomorrow', 'Tomorrow']], name: 'bld-day' }) : ''}</div>${U.pills(sportItems(), st.sport, 'bld-sport')}`;
     let body = ''; try { body = st.mode === 'swipe' ? deckHTML() : genHTML(); } catch (e) { console.error(e); body = U.empty('This part could not load. Try the other view.'); }

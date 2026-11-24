@@ -59,6 +59,7 @@ check('first render of every screen under 1,500 ms (model built inside)', Object
 // ---- the model: week, games this week, formula, projection pieces ----
 const M = await page.evaluate(() => { const m = __ffb.model(); return { W: m.W, teams: Object.keys(m.games).sort(), n: m.players.length }; });
 check('week 11 on 2026-11-23 (weeks run Wed-Tue on UTC dates)', M.W === 11 && W === 11, `W=${M.W}`);
+check('fix: the week badge names the weeks of the games in the window (MNF is week 11, Thanksgiving week 12)', await text(page, '.ffb-wk .ui-badge') === 'Weeks 11-12', await text(page, '.ffb-wk .ui-badge'));
 check('this week = the feed games not started within 7 days (MNF + Thanksgiving: 8 teams, ESPN abbrs matched by name: WAS->WSH, LA->LAR)', JSON.stringify(M.teams) === JSON.stringify(['CHI', 'CIN', 'DAL', 'DET', 'GB', 'LAR', 'PHI', 'WSH']), M.teams.join(','));
 for (const sc of ['ppr', 'half', 'std']) {
   await page.selectOption('.ffb-root select[data-ui-select="ff-scoring"]', sc);
@@ -101,6 +102,7 @@ const more = await page.$('.ffb-root [data-ffb-act="rall"]');
 if (more) { await more.click(); await page.waitForTimeout(40); check('"Show all" lists every ranked player and keeps focus on the button', (await rk()).length > 40 && await page.evaluate(() => document.activeElement && document.activeElement.getAttribute('data-ffb-act') === 'rall')); }
 check('rankings: positions and window are remembered', await page.evaluate(() => localStorage.getItem('fm2.ff.rankpos') === '"WR"' && localStorage.getItem('fm2.ff.rankwin') === '"ros"'));
 check('rankings note says who is left out and why', /fewer than 3 games/.test(await text(page, '.ffb-root')));
+check('fix: a player missing from his team\'s last box score is "no stats last game", never "missed"', await page.evaluate(() => /no stats last game/.test(document.querySelector('.ffb-rt').textContent) && !/missed/i.test(document.querySelector('.ffb-root').textContent)));
 check('no horizontal scroll at 390 px (rankings)', await noScroll(page));
 await page.click('.ffb-root [data-ui-seg="ff-rwin|week"]');
 
@@ -142,9 +144,10 @@ check('search text is escaped (no element, no script)', await page.evaluate(() =
 await page.evaluate(() => SB.goTab('ff-trade', { give: ['Amon-Ra St. Brown', 'Kyren Williams'], get: ['Chuba Hubbard', 'Nobody Atall'] }));
 const kw = expect('Kyren Williams', 'ppr', '2026-11-26'), ch = expect('Chuba Hubbard', 'ppr', null);
 const give = amon.value + kw.value, get = ch.value, net = get - give, edge = Math.round(net * 1000 / give) / 10;
-const tr = await page.evaluate(() => ({ give: document.querySelector('[data-ffb-total="give"]').textContent, get: document.querySelector('[data-ffb-total="get"]').textContent, band: document.querySelector('.ffb-tv')?.getAttribute('data-ffb-band'), title: document.querySelector('.ffb-tvt')?.textContent, edge: document.querySelector('.ffb-edn')?.textContent, net: document.querySelector('.ffb-trl .net')?.textContent, dot: document.querySelector('.ffb-track i')?.style.left, rows: [...document.querySelectorAll('.ffb-side.give .ffb-prow .v')].map(v => +v.textContent), miss: document.querySelector('.ffb-root .ffb-warn')?.textContent || '' }));
+const tr = await page.evaluate(() => ({ give: document.querySelector('[data-ffb-total="give"]').textContent, get: document.querySelector('[data-ffb-total="get"]').textContent, band: document.querySelector('.ffb-tv')?.getAttribute('data-ffb-band'), title: document.querySelector('.ffb-tvt')?.textContent, edge: document.querySelector('.ffb-edn')?.textContent, net: document.querySelector('.ffb-trl .net')?.textContent, dot: document.querySelector('.ffb-track i')?.style.left, rows: [...document.querySelectorAll('.ffb-side.give .ffb-prow .v')].map(v => +v.textContent.replace(/\D+/g, '')), vsr: [...document.querySelectorAll('.ffb-prow .v')].every(v => /^value \d+$/.test(v.textContent)), miss: document.querySelector('.ffb-root .ffb-warn')?.textContent || '' }));
 const bandOf = e => (e >= 15 ? 'strong-accept' : e >= 5 ? 'accept' : e > -5 ? 'fair' : e > -15 ? 'decline' : 'strong-decline');
 check('params {give, get} fill both sides; values = ROS points', JSON.stringify(tr.rows) === JSON.stringify([amon.value, kw.value]), JSON.stringify(tr.rows));
+check('fix: each value carries screen-reader text ("value 137"), not an aria-label on a plain span', tr.vsr);
 check('side totals in the big numbers', tr.give === String(give) && tr.get === String(get), `${tr.give} / ${tr.get} vs ${give} / ${get}`);
 check('trade edge % = (receive − give) / give, net value, verdict band', tr.edge === `${edge > 0 ? '+' : edge < 0 ? '−' : '±'}${Math.abs(edge).toFixed(1)}%` && tr.net === `${net > 0 ? '+' : net < 0 ? '−' : '±'}${Math.abs(net)} net value` && tr.band === bandOf(edge), JSON.stringify(tr) + ` expected edge ${edge}`);
 check('meter dot sits at 50 + edge (clamped to the track)', tr.dot === `${(50 + Math.max(-50, Math.min(50, edge))).toFixed(1)}%`, tr.dot);
@@ -195,6 +198,9 @@ check('empty slots stay empty and grade F', F.c === 'QB=Q:A RB=R1:A+ RB=-:F WR=W
 // rank ÷ starters at the position (QB / TE 12, RB / WR 24): <= 1/8 A+, <= 1/4 A, <= 1/2 B, <= 3/4 C, <= 1 D, else F; overall = grade-point average
 check('slot grades from position rank in a 12-team league (QB #2 of 12 A, RB #3 of 24 A+, WR #15 C, RB #12 B; GPA 3.47 = B)', F.grades === 'AA+BACAB' && F.gpa === 'B', F.grades + ' ' + F.gpa);
 const rate = await text(page, '.ffb-root');
+check('fix: grades are read as "grade A" (screen-reader text), no aria-label on plain spans', await page.evaluate(() => [...document.querySelectorAll('.ffb-g')].every(g => /^grade (A\+|[A-DF])$/.test(g.textContent)) && /^Overall grade /.test(document.querySelector('.ffb-gbig').textContent) && document.querySelectorAll('.ffb-root span[aria-label]:not([role])').length === 0));
+const look = await page.$('.ffb-root .ffb-lus [data-ffb-add^="roster|"]');
+if (look) { const n0 = await page.evaluate(() => __ffb.state.roster.length); await look.click(); await page.waitForTimeout(40); check('fix: "Add" from players to look at adds him and puts focus on that list\'s heading', await page.evaluate(n0 => __ffb.state.roster.length === n0 + 1 && document.activeElement && document.activeElement.id === 'ffb-look', n0)); await page.evaluate(() => { __ffb.state.roster.pop(); localStorage.setItem('fm2.ff.roster', JSON.stringify(__ffb.state.roster)); SB.render(); }); }
 check('overall grade, bench and "players to look at" with the free-agent caveat', /Overall grade/.test(rate) && /Bench/.test(rate) && /Players to look at/.test(rate) && /can't see your league's free agents/.test(rate));
 check('no horizontal scroll at 390 px (rate my team)', await noScroll(page));
 // compare from "players to look at" opens Start / Sit with both players
@@ -210,6 +216,7 @@ await ready(page, '.ffb-root .ffb-trade');
 check('booting on a stored ff-* tab shows fantasy mode', await page.evaluate(() => document.body.classList.contains('mode-fantasy')));
 await page.click('.ffb-root [data-ffb-act="example-trade"]'); await page.waitForTimeout(60);
 check('example trade grades a 1-for-1', await page.evaluate(() => document.querySelectorAll('.ffb-prow').length === 2 && !!document.querySelector('.ffb-tv')));
+check('fix: after an example, focus is on a remove button, not a search box (no phone keyboard)', await page.evaluate(() => !!document.activeElement && document.activeElement.hasAttribute('data-ffb-rm')));
 check('desktop: two trade columns side by side', await page.evaluate(() => { const [a, b] = [...document.querySelectorAll('.ffb-side')].map(s => s.getBoundingClientRect()); return Math.abs(a.top - b.top) < 2 && b.left > a.right; }));
 check('no horizontal scroll at 1440 px', await noScroll(page));
 if (shots) { await page.evaluate(() => scrollTo(0, document.querySelector('.ffb-trade').getBoundingClientRect().top + scrollY - 20)); await page.screenshot({ path: `${shots}/ffb-trade-1440.png` }); }
@@ -229,6 +236,14 @@ await page.evaluate(() => SB.goTab('ff-rate', {}));
 await page.click('.ffb-root [data-ffb-act="example-roster"]'); await page.waitForTimeout(60);
 check('example roster fills the lineup (desktop)', await page.evaluate(() => document.querySelectorAll('.ffb-lus')[0].querySelectorAll('.ffb-lu').length === 7));
 check('no horizontal scroll at 1440 px (rate my team)', await noScroll(page));
+// an empty NFL slate: nobody has a game, the example still fills Start / Sit and the verdict says why
+const noNfl = await page.evaluate(() => {
+  const G = SB.DATA.games, keep = G.filter(g => g.sport !== 'nfl'), was = G.slice(); G.length = 0; G.push(...keep); __ffb.reset();
+  __ffb.state.ss = []; SB.goTab('ff-startsit', {}); document.querySelector('.ffb-root [data-ffb-act="example-ss"]').click();
+  const out = { cards: document.querySelectorAll('.ffb-pc').length, v: (document.querySelector('.ffb-root .ui-verdict .t') || {}).textContent, badge: document.querySelector('.ffb-wk .ui-badge').textContent, zero: /0 NFL games in our feed/.test(document.querySelector('.ffb-wk').textContent) };
+  G.length = 0; G.push(...was); __ffb.reset(); return out;
+});
+check('fix: no NFL games in the feed: the example still works, verdict says nobody plays, week line says 0 games', noNfl.cards === 2 && noNfl.v === 'None of them has a game this week in our feed' && noNfl.zero && noNfl.badge === 'Week 11', JSON.stringify(noNfl));
 check('no errors from ffb.js / ui.js (desktop)', E.own.length === 0, E.own.join(' | '));
 await browser.close();
 

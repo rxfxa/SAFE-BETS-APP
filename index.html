@@ -1169,6 +1169,7 @@ let mode=store.get('mode','betting')==='fantasy'?'fantasy':'betting';
 const FF_KEYS=new Set(['ff-startsit','ff-trade','ff-rate','ff-rank']),BOTH_KEYS=new Set(['ask','players','statx','fantasy']);
 const modeOf=k=>FF_KEYS.has(k)?'fantasy':BOTH_KEYS.has(k)?'both':'betting';
 const inMode=k=>{const m=modeOf(k);return m==='both'||m===mode;};
+{const m0=modeOf(tab);if(m0!=='both'&&m0!==mode)mode=m0;}  // a stored screen of the other mode opens in its own mode
 const theme='dark'; // one committed black theme: no toggle. The 'theme' event stays in the API for modules and does not fire.
 let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('saved',[]);
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};

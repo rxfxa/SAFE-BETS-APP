@@ -144,7 +144,8 @@
       p.rank = p.proj > 0 ? 1 + pool[p.pos].filter(q => q !== p && q.proj > p.proj).length : null;
       p.rosRank = p.ros > 0 ? 1 + rpool[p.pos].filter(q => q !== p && q.ros > p.ros).length : null;
     }
-    return (M = { key, S, W, players, byId, games, nGames: G.length, tInfo, pool, rpool, teams });
+    const weeks = [...new Set(G.map(g => weekOf(SB.startMs(g))))].sort((a, b) => a - b);
+    return (M = { key, S, W, weeks, players, byId, games, nGames: G.length, tInfo, pool, rpool, teams });
   }
   function resolve(m, id) {
     if (!m || typeof id !== 'string') return null;
@@ -180,7 +181,9 @@
   }
   function weekLine(m) {
     const nt = Object.keys(m.games).length, tot = Object.keys(m.teams).length || 32;
-    const wk = m.W >= 1 && m.W <= WEEKS ? `Week ${m.W}` : m.W > WEEKS ? 'Regular season over' : 'Before week 1';
+    // the badge names the NFL week(s) of the games in the window (a Monday can hold this week's last game and next week's first)
+    const wl = (m.weeks.length ? m.weeks : [m.W]).filter(w => w >= 1 && w <= WEEKS);
+    const wk = wl.length ? (wl.length === 1 ? `Week ${wl[0]}` : `Weeks ${wl[0]}-${wl[wl.length - 1]}`) : m.W > WEEKS ? 'Regular season over' : 'Before week 1';
     return `<p class="ffb-wk"><span class="ui-badge">${esc(wk)}</span> ${esc(`${m.nGames} NFL game${m.nGames === 1 ? '' : 's'} in our feed in the next 7 days: ${nt} of ${tot} teams have a game "this week". The rest show 0 (bye, or their game isn't in the feed yet).`)}</p>`;
   }
   const scoringSel = () => U.select({ label: 'Scoring', value: st.scoring, options: Object.keys(SCORE).map(k => [k, SCLAB[k]]), name: 'ff-scoring' });
@@ -264,7 +267,7 @@
     return { give, get, net, edge, band: edge == null ? null : band(edge) };
   }
   function tradeSide(m, list, title, P, total) {
-    const rows = P.map(p => `<div class="ffb-prow"><div class="who"><b>${esc(p.n)}</b><span class="ffb-mono">${esc(posTeam(p))}</span><small>${esc(p.left ? `${f1(p.base)} pts a game × ${p.left} game${p.left === 1 ? '' : 's'} left${small(p)}` : 'No games left this season')}${p.missed ? ' · ⚠ missed his team\'s last game' : ''}</small></div><span class="v" aria-label="${esc(`value ${p.value}`)}">${esc(p.value)}</span><button type="button" class="ffb-x" data-ffb-rm="${esc(list + '|' + p.id)}" aria-label="${esc('Remove ' + p.n)}">×</button></div>`).join('');
+    const rows = P.map(p => `<div class="ffb-prow"><div class="who"><b>${esc(p.n)}</b><span class="ffb-mono">${esc(posTeam(p))}</span><small>${esc(p.left ? `${f1(p.base)} pts a game × ${p.left} game${p.left === 1 ? '' : 's'} left${small(p)}` : 'No games left this season')}${p.missed ? ' · ⚠ no stats in his team\'s last game' : ''}</small></div><span class="v"><span class="ffb-sr">value </span>${esc(p.value)}</span><button type="button" class="ffb-x" data-ffb-rm="${esc(list + '|' + p.id)}" aria-label="${esc('Remove ' + p.n)}">×</button></div>`).join('');
     return `<section class="ffb-side ${list}" aria-label="${esc(title)}"><div class="ui-lbl ffb-sideh">${esc(title)}</div>
       <div class="ffb-plist">${rows || `<div class="ffb-slot">${esc(list === 'give' ? 'No players yet: add who you would send.' : 'No players yet: add who you would get back.')}</div>`}</div>
       ${searchBox(m, list, list === 'give' ? 'Add a player you give up' : 'Add a player you receive', 'Search NFL players')}
@@ -272,7 +275,7 @@
   }
   function tradeVerdict(T) {
     const b = T.band, pos = 50 + clamp(T.edge, -50, 50), side = T.edge > 0 ? 'favors you' : T.edge < 0 ? 'favors them' : 'even';
-    return `<section class="ffb-tv ${b.tone}" data-ffb-band="${b.k}" aria-label="Trade verdict"><div class="ui-lbl">Trade verdict</div>
+    return `<section class="ffb-tv ${b.tone}" data-ffb-band="${b.k}" aria-label="Trade verdict"><div class="ui-lbl">Trade verdict · model estimate</div>
       <div class="ffb-tvrow"><div class="ffb-tvt">${esc(b.label)}</div><div class="ffb-edge"><span class="ffb-edn">${esc(sgn(T.edge) + Math.abs(T.edge).toFixed(1))}<small>%</small></span><span class="ffb-edl">Trade<br>edge</span></div></div>
       <div class="ffb-track" role="img" aria-label="${esc(`Trade edge ${sgn(T.edge)}${Math.abs(T.edge).toFixed(1)}%: ${side}`)}"><i style="left:${pos.toFixed(1)}%"></i></div>
       <div class="ffb-trl"><span>Favors them</span><span class="net">${esc(`${sgn(T.net)}${Math.abs(T.net)} net value`)}</span><span>Favors you</span></div></section>`;
@@ -315,13 +318,13 @@
     if (!P.length) return h + U.empty('Add your players (up to 18) to see your best lineup, a grade for each spot and who to look at.') + FOOT();
     const L = lineup(P), starters = L.slots.filter(x => x.p);
     const worst = L.slots.slice().sort((a, b) => GP[a.grade] - GP[b.grade])[0], best = L.slots.slice().sort((a, b) => GP[b.grade] - GP[a.grade])[0];
-    h += `<section class="ui-card ffb-overall"><div class="ffb-gbig ${gcls(L.grade)}" aria-label="${esc('Overall grade ' + L.grade)}">${esc(L.grade)}</div><div><div class="ui-lbl">Overall grade · ${esc(SCLAB[st.scoring])}</div>
+    h += `<section class="ui-card ffb-overall"><div class="ffb-gbig ${gcls(L.grade)}"><span class="ffb-sr">Overall grade </span>${esc(L.grade)}</div><div><div class="ui-lbl">Overall grade · ${esc(SCLAB[st.scoring])}</div>
       <div class="ffb-ovt">${esc(`${f1(L.total)} projected points this week`)}</div>
       <p class="ui-muted">${esc(`Strongest spot: ${best.slot} (${best.grade}). Weakest: ${worst.slot} (${worst.grade}${worst.p ? '' : ', empty'}). Each starter is graded on his rank at his position this week, as a 12-team league with 1 QB, 2 RB, 2 WR, 1 TE and a FLEX would see it.`)}</p></div></section>`;
     const row = x => {
       const p = x.p;
       return `<div class="ffb-lu"><span class="ffb-slotb">${esc(x.slot)}</span><div class="who">${p ? `<b>${esc(p.n)}</b><span>${esc(`${posTeam(p)} · ${muText(p)}${p.rank ? ` · ${p.pos} #${p.rank}` : ''}`)}</span>${p.missed ? `<span class="ffb-warn">${esc('⚠ No stats in his team\'s last game')}</span>` : ''}` : `<b class="ffb-dim">Empty</b><span>${esc(`No ${x.slot === 'FLEX' ? 'RB, WR or TE' : x.slot} left on your roster`)}</span>`}</div>
-        <span class="ffb-lup">${p ? f1(p.proj) : '—'}</span><span class="ffb-g ${gcls(x.grade)}" aria-label="${esc('Grade ' + x.grade)}">${esc(x.grade)}</span></div>`;
+        <span class="ffb-lup">${p ? f1(p.proj) : '—'}</span><span class="ffb-g ${gcls(x.grade)}"><span class="ffb-sr">grade </span>${esc(x.grade)}</span></div>`;
     };
     h += `<div class="ffb-two"><section class="ui-card"><div class="ffb-rhead"><b>Best lineup this week</b><span class="ui-lbl">Proj · grade</span></div><div class="ffb-lus">${L.slots.map(row).join('')}</div></section>`;
     h += `<section class="ui-card"><div class="ffb-rhead"><b>Bench</b><span class="ui-lbl">Proj</span></div><div class="ffb-lus">${L.bench.length ? L.bench.map(p => `<div class="ffb-lu"><span class="ffb-slotb dim">BN</span><div class="who"><b>${esc(p.n)}</b><span>${esc(`${posTeam(p)} · ${muText(p)}`)}</span></div><span class="ffb-lup">${f1(p.proj)}</span></div>`).join('') : `<p class="ui-muted">${esc('Nobody on the bench.')}</p>`}</div></section></div>`;
@@ -331,7 +334,7 @@
       return c.sort((a, b) => (a.p ? a.p.proj : -1) - (b.p ? b.p.proj : -1))[0];
     };
     const look = m.players.filter(p => !mine.has(p.id) && p.proj > 0 && p.gp >= MING).sort(byProj).slice(0, 8);
-    h += `<section class="ui-card"><div class="ffb-rhead"><b>Players to look at</b><span class="ui-lbl">Proj</span></div><div class="ffb-lus">${look.map(p => {
+    h += `<section class="ui-card"><div class="ffb-rhead"><b id="ffb-look" tabindex="-1">Players to look at</b><span class="ui-lbl">Proj</span></div><div class="ffb-lus">${look.map(p => {
       const s = starterAt(p.pos), d = s ? p.proj - (s.p ? s.p.proj : 0) : 0;
       const up = s && d > 0.05 ? `${sgn(d)}${f1(Math.abs(d))} over your ${s.slot}${s.p ? ` (${s.p.n})` : ' (empty)'}` : 'Would sit behind your starters';
       return `<div class="ffb-lu"><span class="ffb-slotb dim">${esc(p.pos)}</span><div class="who"><b>${esc(p.n)}</b><span>${esc(`${p.t} · ${muText(p)} · ${up}`)}</span></div><span class="ffb-lup">${f1(p.proj)}</span>
@@ -360,7 +363,7 @@
     rows.forEach((p, i) => {
       if (tv[i] !== lastT) { lastT = tv[i]; body += `<tr class="ffb-tier"><td colspan="${cols.length}">Tier ${lastT}</td></tr>`; }
       const sc = p.gm ? p.gm.score : null;
-      body += `<tr><td class="ffb-rk">${i + 1}</td><td class="ffb-pl"><span class="pn">${esc(p.n)}</span><span class="pt">${esc(p.pos)}${p.gp < SMALL ? ` · ${p.gp} g` : ''}${p.missed ? ' · ⚠ missed last game' : ''}</span></td><td>${esc(p.t)}</td>
+      body += `<tr><td class="ffb-rk">${i + 1}</td><td class="ffb-pl"><span class="pn">${esc(p.n)}</span><span class="pt">${esc(p.pos)}${p.gp < SMALL ? ` · ${p.gp} g` : ''}${p.missed ? ' · ⚠ no stats last game' : ''}</span></td><td>${esc(p.t)}</td>
         <td class="ffb-pj">${ros ? esc(p.value) : f1(p.proj)}</td>${ros ? `<td>${esc(p.left)}</td>` : ''}<td>${f1(p.ppg)}</td><td>${f1(p.l3)}</td>
         <td class="ffb-mcell">${p.gm ? `${esc(`${p.gm.home ? 'vs' : '@'} ${p.gm.opp}`)} <b class="tone-${U.tone(sc)}">${sc == null ? '—' : esc(sc)}</b>` : '<span class="ffb-dim">no game</span>'}</td><td>${trendHTML(p)}</td></tr>`;
     });
@@ -396,7 +399,7 @@
     const pool = pos => m.players.filter(p => p.pos === pos && p.gp >= MING && p.proj > 0).sort(byProj);
     const rpool = pos => m.players.filter(p => p.pos === pos && p.gp >= MING && p.ros > 0).sort(byRos);
     const at = (arr, idx) => idx.map(i => arr[Math.min(i, arr.length - 1)]).filter(Boolean).map(p => p.id);
-    if (kind === 'ss') { let ids = at(pool('WR'), [2, 3]); if (new Set(ids).size < 2) ids = m.players.filter(p => p.proj > 0 && p.gp >= MING).sort(byProj).slice(0, 2).map(p => p.id); st.ss = [...new Set(ids)]; save('ss'); }
+    if (kind === 'ss') { let ids = at(pool('WR'), [2, 3]); if (new Set(ids).size < 2) ids = m.players.filter(p => p.gp >= MING).sort((a, b) => b.proj - a.proj || b.ppg - a.ppg).slice(0, 2).map(p => p.id); st.ss = [...new Set(ids)]; save('ss'); }
     if (kind === 'trade') {  // a 1-for-1: a WR for the RB worth about 10% more
       const w = rpool('WR'), g = w[Math.min(8, w.length - 1)]; if (!g) return;
       const r = rpool('RB').filter(p => p.id !== g.id).sort((a, b) => Math.abs(a.value - g.value * 1.1) - Math.abs(b.value - g.value * 1.1))[0];
@@ -434,7 +437,7 @@
     const y = window.scrollY;
     draw(SB.tab, main, null);
     if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
-    if (focusSel) { try { const el = main.querySelector(focusSel); if (el && !el.disabled) el.focus({ preventScroll: true }); else { const q = main.querySelector('.ffb-q:not([disabled])'); if (q) q.focus({ preventScroll: true }); } } catch (e) { /* no focus target */ } }
+    if (focusSel) { try { const el = main.querySelector(focusSel); if (el && !el.disabled) el.focus({ preventScroll: el.id !== 'ffb-look' }); else { const q = main.querySelector('.ffb-q:not([disabled])'); if (q) q.focus({ preventScroll: true }); } } catch (e) { /* no focus target */ } }
   }
 
   // ---------- events (delegated, only inside .ffb-root) ----------
@@ -451,7 +454,7 @@
     if (pill && pill.startsWith('ff-rpos|')) { st.rpos = pick(pill.split('|')[1], [...POS, 'FLEX'], 'RB'); st.rall = false; store.set('ff.rankpos', st.rpos); rerender(`[data-ui-pill="${cssq(pill)}"]`); return; }
     if (seg && seg.startsWith('ff-rwin|')) { st.rwin = pick(seg.split('|')[1], ['week', 'ros'], 'week'); store.set('ff.rankwin', st.rwin); rerender(`[data-ui-seg="${cssq(seg)}"]`); return; }
     const add = b.getAttribute('data-ffb-add');
-    if (add) { const i = add.indexOf('|'), list = add.slice(0, i); addTo(list, add.slice(i + 1)); rerender(list === 'roster' && !b.closest('.ffb-search') ? null : `[data-ffb-q="${cssq(list)}"]`); return; }
+    if (add) { const i = add.indexOf('|'), list = add.slice(0, i); addTo(list, add.slice(i + 1)); rerender(b.closest('.ffb-search') ? `[data-ffb-q="${cssq(list)}"]` : '#ffb-look'); return; }
     const rm = b.getAttribute('data-ffb-rm');
     if (rm) {
       const i = rm.indexOf('|'), list = rm.slice(0, i), id = rm.slice(i + 1);
@@ -463,7 +466,7 @@
     }
     const act = b.getAttribute('data-ffb-act'); if (!act) return;
     const m = build();
-    if (act.startsWith('example-') && m) { example(m, act.slice(8)); rerender('.ffb-q'); return; }
+    if (act.startsWith('example-') && m) { example(m, act.slice(8)); rerender('[data-ffb-rm]'); return; }
     if (act === 'swap') { const g = st.give; st.give = st.get; st.get = g; save('give'); rerender('[data-ffb-act="swap"]'); return; }
     if (act === 'clear|trade') { st.give = []; st.get = []; st.miss = []; save('give'); rerender('[data-ffb-q="give"]'); return; }
     if (act === 'clear|roster') { st.roster = []; save('roster'); rerender('[data-ffb-q="roster"]'); return; }

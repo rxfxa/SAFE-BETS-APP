@@ -303,10 +303,11 @@ check('end of the deck: says so, with Start over and Generate', /That's the deck
 await page.click('[data-bld-restart]');
 s = await S();
 check('Start over: back to card 1', s.pos.trim() === `1 of ${s.n}`, s.pos);
+await page.click('[data-ui-pill="bld-sport|all"]');
 await page.selectOption('.bld-root select[data-ui-select="bld-day"]', 'tomorrow');
-const tm = await page.evaluate(() => { const B = window.__insights.board(SB.engine.nextDay(SB.engine.dayOf(Date.now()))).items.filter(x => x.sp === 'nfl').map(x => x.id).sort(); const L = window.__builder.list().slice().sort();
+const tm = await page.evaluate(() => { const B = window.__insights.board(SB.engine.nextDay(SB.engine.dayOf(Date.now()))).items.map(x => x.id).sort(); const L = window.__builder.list().slice().sort();
   return { day: window.__builder.state.day, same: JSON.stringify(B) === JSON.stringify(L), n: L.length, pos: (document.querySelector('.bld-root .bld-pos') || document.querySelector('.bld-root .ui-empty') || {}).textContent }; });
-check('Day: Tomorrow switches the deck to tomorrow\'s board', tm.day === 'tomorrow' && tm.same, `${tm.n} cards · ${tm.pos}`);
+check('Day: Tomorrow switches the deck to tomorrow\'s board', tm.day === 'tomorrow' && tm.same && tm.n > 0, `${tm.n} cards · ${tm.pos}`);
 await page.selectOption('.bld-root select[data-ui-select="bld-day"]', 'today');
 await page.click('[data-ui-pill="bld-sport|all"]');
 

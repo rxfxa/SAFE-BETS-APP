@@ -49,12 +49,21 @@
     }
     return SIDX;
   }
-  function seasonOf(sp, name, team) {
+  // box-score logs are dated by the game's UTC start date (a 4 PM PT game on Nov 22 is logged 2026-11-23). A logged game
+  // counts when its date is before the priced game's UTC date and not after today's UTC date (so last night's game stays in
+  // on a back-to-back, and nothing logged later than the game being priced leaks in).
+  function logCut(g) {
+    const today = new Date(Date.now()).toISOString().slice(0, 10);
+    const gd = g ? (typeof g.start === 'string' && g.start.length >= 10 ? g.start.slice(0, 10) : num(SB.startMs(g)) ? new Date(SB.startMs(g)).toISOString().slice(0, 10) : null) : null;
+    return d => { d = String(d || '').slice(0, 10); return !!d && (!gd || d < gd) && d <= today; };
+  }
+  function seasonOf(sp, name, team, g) {
     const X = sIndex(), S = X && X[sp]; if (!S) return null;
     const L = S.m.get(E.nameKey(name)); if (!L || !L.length) return null;
     const t = String(team || '').toUpperCase();
     const p = L.find(x => x.t === t) || L.slice().sort((a, b) => (b.gp || 0) - (a.gp || 0))[0];
-    return { p, S, rows: (p.log || []).slice().sort((a, b) => String(a[0]).localeCompare(String(b[0]))) };
+    const ok = logCut(g);
+    return { p, S, rows: (p.log || []).filter(r => ok(r[0])).sort((a, b) => String(a[0]).localeCompare(String(b[0]))) };
   }
   const val = (S, row, f) => { const i = S.fields.indexOf(f); if (i < 0) return null; const v = Number(row[3 + i]); return isFinite(v) ? v : null; };
   const sumF = (S, row, fs) => fs.reduce((s, f) => s + (val(S, row, f) || 0), 0);
@@ -252,18 +261,20 @@
     if (/\b(soccer|premier league|champions league|la liga|serie a|bundesliga|ligue 1|mls|epl)\b/.test(lc)) return 'soccer';
     return null;
   }
+  // 1 for the full name, the nickname (last word) or the abbreviation; .6 for another word of the name ("Houston", "Memphis")
   function teamHit(t, qn, raw) {
-    const nm = norm(t.name); if (nm && qn.includes(' ' + nm + ' ')) return true;
+    const nm = norm(t.name); if (nm && qn.includes(' ' + nm + ' ')) return 1;
     const toks = nm.split(' ').filter(w => w.length >= 4 && !TEAMSTOP.has(w));
-    if (toks.length && qn.includes(' ' + toks[toks.length - 1] + ' ')) return true;
+    if (toks.length && qn.includes(' ' + toks[toks.length - 1] + ' ')) return 1;
     const ab = String(t.abbr || '');
-    return ab.length >= 2 && ab === ab.toUpperCase() && !ABSTOP.has(ab) && new RegExp('(^|[^A-Za-z])' + ab.replace(/[^A-Z0-9]/g, '') + '([^A-Za-z]|$)').test(raw);
+    if (ab.length >= 2 && ab === ab.toUpperCase() && !ABSTOP.has(ab) && new RegExp('(^|[^A-Za-z])' + ab.replace(/[^A-Z0-9]/g, '') + '([^A-Za-z]|$)').test(raw)) return 1;
+    return toks.slice(0, -1).some(w => qn.includes(' ' + w + ' ')) ? .6 : 0;
   }
   function matchGames(text) {
     const raw = String(text || ''), qn = ' ' + norm(raw) + ' ', now = Date.now(), out = [];
     for (const g of SB.DATA.games || []) {
       if (!SB.openG(g) || SB.isVoid(g) || SB.startMs(g) > now + 8 * 864e5) continue;
-      const s = (teamHit(g.home, qn, raw) ? 1 : 0) + (teamHit(g.away, qn, raw) ? 1 : 0);
+      const s = teamHit(g.home, qn, raw) + teamHit(g.away, qn, raw);
       if (s) out.push({ g, s });
     }
     return out.sort((a, b) => b.s - a.s || SB.startMs(a.g) - SB.startMs(b.g)).map(x => x.g);
@@ -349,7 +360,7 @@
     const pl = td ? null : e.stats[spec.stat];
     if (!td && !pl) return gone(`The app has no ${ST_NAME[spec.stat] || 'model'} line for ${e.name}.`);
     const sp = g.sport, home = g.home.abbr === e.team, opp = home ? g.away : g.home;
-    const sea = SEASON ? seasonOf(sp, e.name, e.team) : null;
+    const sea = SEASON ? seasonOf(sp, e.name, e.team, g) : null;
     const pos = e.pos || (sea && sea.p.pos) || null;
     let line, under = !!spec.under && !td, p, key, proj = null, M = null, pushAt = null, defaulted = false;
     if (td) {
@@ -379,7 +390,7 @@
     if ((!log || log.vals.length < 3) && sp === 'nba' && pl) {
       const rf = E.recentOf(pl);
       if (rf && rf.last5 && rf.last5.length >= 3) log = { vals: rf.last5.map(Number), labels: (rf.opp5 || []).map(String), src: 'box scores (morning form check)' };
-      else { const l4 = E.last4Of(e.team, e.name); const rr = l4 ? l4.rows.filter(r => !r.dnp && num(r[spec.stat])) : []; if (rr.length) log = { vals: rr.map(r => r[spec.stat]), labels: rr.map(r => String(r.opp || '')), src: 'last 4 box scores' }; }
+      else { const l4 = E.last4Of(e.team, e.name), ok = logCut(g); const rr = l4 ? l4.rows.filter(r => ok(r.date) && !r.dnp && num(r[spec.stat])) : []; if (rr.length) log = { vals: rr.map(r => r[spec.stat]), labels: rr.map(r => String(r.opp || '')), src: 'last 4 box scores' }; }
     }
     if (log) {
       log.hits = log.vals.map(v => (td ? v >= 1 : under ? v < line : v > line));
@@ -451,7 +462,7 @@
       const rel = s ? r / s : 1, tone = rel >= 1.1 ? 'good' : rel <= .9 ? 'bad' : 'mid';
       F.push({ name: 'Usage', tone, status: tone === 'good' ? 'Rising' : tone === 'bad' ? 'Falling' : 'Steady', why: `${ul}: ${f1(r)} a game in his last ${rec.length} vs ${f1(s)} this season (${rowsAll.length} games, ESPN box scores).` });
     } else if (sp === 'nba' && pl && num(pl.mpg) && pl.mpg > 0) {
-      const l4 = E.last4Of(e.team, e.name), mins = l4 ? l4.rows.filter(r => !r.dnp && r.min > 0).map(r => r.min) : [];
+      const l4 = E.last4Of(e.team, e.name), ok = logCut(g), mins = l4 ? l4.rows.filter(r => ok(r.date) && !r.dnp && r.min > 0).map(r => r.min) : [];
       if (mins.length) { const r = mean(mins), rel = r / pl.mpg, tone = rel >= 1.08 ? 'good' : rel <= .92 ? 'bad' : 'mid'; F.push({ name: 'Usage', tone, status: tone === 'good' ? 'Rising' : tone === 'bad' ? 'Falling' : 'Steady', why: `Minutes: ${f1(r)} a game in his last ${mins.length} vs ${f1(pl.mpg)} this season.` }); }
       else F.push({ name: 'Usage', tone: 'mid', status: 'Steady', why: `Minutes: ${f1(pl.mpg)} a game this season; no recent box scores in the app's data.` });
     } else F.push({ name: 'Usage', tone: 'mid', status: 'Unknown', why: `No usage numbers for ${e.name} in the app's box scores.` });
@@ -499,10 +510,9 @@
       const r = resolvePlayer(nm);
       const e = r && r.e, sp = e ? e.sport : r && r.s ? r.s.sp : null, name = e ? e.name : r && r.s ? r.s.p.n : String(nm);
       if (!r || (sp !== 'nfl' && sp !== 'ncaaf')) { out.push({ ok: false, name, why: `${name} isn't an NFL or college football player in the app's data.` }); continue; }
-      const team = e ? e.team : r.s.p.t, sea = seasonOf(sp, name, team);
+      const team = e ? e.team : r.s.p.t, g = e ? SB.gameById(e.gid) : pIndex().nextG.get(sp + '|' + team) || null, sea = seasonOf(sp, name, team, g);
       if (!sea || !sea.rows.length) { out.push({ ok: false, name, why: `No box scores for ${name} this season.` }); continue; }
       const pts = sea.rows.map(x => pprRow(sea.S, x)), seasonPPR = mean(pts), last3 = mean(pts.slice(-3));
-      const g = e ? SB.gameById(e.gid) : pIndex().nextG.get(sp + '|' + team) || null;
       const ctx = g ? E.teamCtx(g, team) : null, adj = ctx ? 1 + .5 * (ctx.tf - 1) : 1;
       const tdp = e && e.td ? SB.p1(SB.gameById(e.td.gid), e.td.key) : null;
       out.push({ ok: true, name, team, pos: (e && e.pos) || sea.p.pos || '', sp, g, seasonPPR, last3, proj: (.7 * seasonPPR + .3 * last3) * adj, adj, tdp: tdp > 0 ? tdp : null, gp: sea.rows.length });
@@ -584,9 +594,9 @@
     if (!A.ok) return { error: A.why };
     spec.line = stat === 'td' ? null : A.line; spec.mk = A.market; if (A.defaulted && stat !== 'td') spec.dl = 1;
     if (ctx) ctx.card(spec);
-    const r = propResult(A);
-    if (dropped.length) r.ignored = dropped;
-    return r;
+    const res = propResult(A);
+    if (dropped.length) res.ignored = dropped;
+    return res;
   }
   async function tGameReport(a, ctx) {
     await loadSeason();
@@ -638,7 +648,7 @@
       const gs = matchGames(String(x.team)); if (!gs.length) return { error: `No game for "${x.team}".` };
       const g = gs[0]; if (!SB.priced(g)) return { error: `No price for ${g.away.abbr} @ ${g.home.abbr} yet.` };
       const res = String(x.result || 'win').toLowerCase();
-      const raw = String(x.team), qn = ' ' + norm(raw) + ' ', isHome = teamHit(g.home, qn, raw);
+      const raw = String(x.team), qn = ' ' + norm(raw) + ' ', hH = teamHit(g.home, qn, raw), isHome = hH > 0 && hH >= teamHit(g.away, qn, raw);
       const key = res === 'draw' ? 'D' : isHome ? 'H' : 'A';
       if (key === 'D' && g.sport !== 'soccer') return { error: 'Draws are priced for soccer only.' };
       return { gid: g.id, key, label: key === 'D' ? `${g.home.abbr}–${g.away.abbr} draw` : `${(key === 'H' ? g.home : g.away).name} to win`, p: SB.p1(g, key), sport: g.sport };
@@ -679,7 +689,7 @@
     const label = pool === tonight ? 'tonight' : pool === soon ? 'in the next 36 hours' : 'this week';
     // recent hit rate (box scores) breaks near-ties among the best 30
     const top = pool.sort((x, y) => y.score - x.score).slice(0, 30);
-    for (const x of top) { const sea = SEASON ? seasonOf(x.g.sport, x.e.name, x.e.team) : null; if (!sea) continue; let rows = x.g.sport === 'nba' ? sea.rows.filter(r => (val(sea.S, r, 'min') || 0) > 0) : sea.rows; rows = rows.slice(-5); if (!rows.length) continue;
+    for (const x of top) { const sea = SEASON ? seasonOf(x.g.sport, x.e.name, x.e.team, x.g) : null; if (!sea) continue; let rows = x.g.sport === 'nba' ? sea.rows.filter(r => (val(sea.S, r, 'min') || 0) > 0) : sea.rows; rows = rows.slice(-5); if (!rows.length) continue;
       const h = rows.filter(r => (x.stat === 'td' ? sumF(sea.S, r, ['rtd', 'ctd']) >= 1 : (val(sea.S, r, x.stat) || 0) > x.line)).length; x.score += .05 * (h / rows.length - .5); }
     const seen = new Set(), pick = top.sort((x, y) => y.score - x.score).filter(x => (seen.has(x.e.k) ? false : seen.add(x.e.k))).slice(0, n);
     if (!pick.length) return { error: `No ${sport ? SPN[sport] + ' ' : ''}props on the app's slate clear a 65% model chance right now.` };
@@ -751,8 +761,11 @@
       const r = await tPropReport({ player: I.e.name, stat: I.stat, line: I.line, side: I.under ? 'under' : 'over', price: I.price }, ctx); if (r.error) return fail(r);
       const A = analyzeProp(a.cards[a.cards.length - 1]);
       let t = `**${A.e.name} · ${A.market}**: model chance **${pc(A.p)}** (fair odds ${A.fair})`;
-      t += A.price ? `. Your price ${amOf(A.price)} implies ${pc(1 / A.price)}, an edge of ${sg(A.V.edge)} points. Verdict: **${A.V.title}** (model estimate).` : `. Verdict: **${A.V.title}** (model estimate).`;
+      t += A.price ? `. Your price ${amOf(A.price)} implies ${pc(1 / A.price)}, an edge of ${sg(A.V.edge)} percentage points. Verdict: **${A.V.title}** (model estimate).`
+        : `. Verdict: **${A.V.title}** (model estimate), worth it only at ${A.fair} or better. Add your book's price for an edge read.`;
       if (I.missing && I.missing !== A.stat) t += `\n\nThe app has no ${ST_NAME[I.missing] || I.missing} line for him, so this is his ${A.stat === 'td' ? 'anytime TD' : ST_NAME[A.stat]} market.`;
+      if (I.tdNote) t += `\n\n${I.tdNote}`;
+      if (I.amb) t += `\n\n${I.amb}`;
       const b = [];
       if (A.log) b.push(`Recent: ${A.log.summary} (a small sample).`);
       if (A.proj != null) b.push(`Model average: ${f1(A.proj)} ${ST_NAME[A.stat]}${A.M && A.M.rf ? ', recent form counting 30%' : ''}.`);
@@ -768,7 +781,8 @@
       const legs = I.legs.map(L => ({ player: L.e.name, stat: L.stat, line: L.line, side: L.under ? 'under' : 'over' }));
       const r = await tPriceParlay({ legs }, ctx); if (r.error) return fail(r);
       const one = r.legs.length === 1 ? '\n\n- Only one leg matched a player with a game on the app\'s slate; players without a game can\'t be priced.' : '';
-      return { data: r, text: `**${r.title}**: joint chance **${r.joint_chance}** (fair odds ${r.fair_odds}), vs ${r.if_unrelated} if the legs were unrelated.${one}${r.unmatched ? `\n\n- Not matched: ${r.unmatched.join(' ')}` : ''}` };
+      const amb = I.legs.map(L => L.amb).filter(Boolean).join(' ');
+      return { data: r, text: `**${r.title}**: joint chance **${r.joint_chance}** (fair odds ${r.fair_odds}), vs ${r.if_unrelated} if the legs were unrelated.${one}${r.unmatched ? `\n\n- Not matched: ${r.unmatched.join(' ')}` : ''}${amb ? `\n\n${amb}` : ''}` };
     }
     if (I.kind === 'top') {
       const r = await tTopProps({ sport: I.sport, n: 5, stat: I.stat, when: I.when || '' }, ctx); if (r.error) return fail(r);
@@ -787,7 +801,9 @@
         : `**${g.away.name} @ ${g.home.name}** (${SB.when(g)}): the feed has no price yet, so win chances are unknown.${G.props.length ? ' Key props from season averages are on the card.' : ''}`;
       return { data: r, text: t };
     }
-    if (I.kind === 'seasononly') return { data: null, text: `**${I.p.n}** (${I.p.t}) has no game with a model line on the app's slate right now, so there is no chance to give. The app covers NFL, college football, NBA, NHL and soccer games in the feed.` };
+    if (I.kind === 'seasononly') return { data: null, text: I.sp === 'nhl' || I.sp === 'soccer'
+      ? `**${I.p.n}** (${I.p.t}): the app has no ${SPN[I.sp]} player lines, so there is no chance to give. It prices ${SPN[I.sp]} games (win, draw, totals): ask about his team's game instead.`
+      : `**${I.p.n}** (${I.p.t}) has no game with a model line on the app's slate right now, so there is no chance to give. The app covers NFL, college football, NBA, NHL and soccer games in the feed.` };
     if (I.kind === 'slipq') return { data: null, text: 'Type the legs (for example "price a parlay: Maxey over 24.5 points and Brunson over 5.5 assists") and I\'ll price them together, or use **Scan a slip** for a screenshot.' };
     const ex = suggestions().slice(0, 3).map(s => '- ' + s).join('\n');
     return { data: null, text: `I couldn't match that to a player, team or bet on the app's slate. Try:\n${ex}` };
@@ -933,7 +949,7 @@
       if (m.busy) { x.err = 'This answer was interrupted (the page was closed or reloaded).'; x.retry = true; }
       return x;
     });
-    const seen = new Set(); for (const m of ST.msgs) { if (seen.has(m.id)) m.id = m.id + '-' + (++ST.seq); seen.add(m.id); }
+    const seen = new Set(); for (const m of ST.msgs) { if (!/^[a-z0-9-]{1,40}$/i.test(m.id)) m.id = 'r' + (++ST.seq); if (seen.has(m.id)) m.id = m.id + '-' + (++ST.seq); seen.add(m.id); }
   }
 
   // ---------------------------------------------------------------- suggestions from today's slate
@@ -1126,11 +1142,11 @@
       sub: fan ? 'Who to start, who scores, how many catches: every answer is built on this season\'s box scores and the app\'s model, with chances shown as estimates.' : 'Props, parlays, matchups and tonight\'s slate. Every answer comes with the numbers behind it: the app\'s own model, this season\'s box scores, and chances shown as estimates.' })}
   <p class="ask-cov">Coverage: NFL · college football · NBA · NHL · soccer</p></div>
 <section class="ask-panel" aria-label="Chat">${orb('')}<p class="ask-h" role="heading" aria-level="2">Ask Safe Bets</p><p class="ask-sub">${fan ? 'Fantasy questions answered from the app\'s numbers.' : 'Straight answers with the numbers behind them.'}</p>
-  <div class="ask-chips" role="list">${chips}</div>${dockHTML()}</section>`;
+  <div class="ask-chips" role="group" aria-label="Suggested questions">${chips}</div>${dockHTML()}</section>`;
   }
   function threadHTML() {
     return `<div class="ask-top"><span class="ui-kick">Ask Safe Bets</span><button type="button" class="ui-ghost sm" data-ask-new>New chat</button></div>
-<div class="ask-thread">${ST.msgs.map(msgHTML).join('')}</div>${dockHTML()}<p class="ask-sr" aria-live="polite">${esc(ST.live)}</p>`;
+<div class="ask-thread">${ST.msgs.map(msgHTML).join('')}</div>${dockHTML()}<p class="ask-sr" aria-live="polite"></p>`;
   }
   let MAIN = null;
   function render(main, params) {
@@ -1143,13 +1159,19 @@
     for (const m of ST.msgs) if (m.role === 'assistant') mdInto(main.querySelector(`.ask-a[data-mid="${CSS.escape(m.id)}"] .ask-text`), m.text);
     wire(main.querySelector('.ask'));
     const ta = main.querySelector('.ask-input'); if (ta) grow(ta);
+    // the live region is drawn empty and filled a moment later, so screen readers hear the change
+    const sr = main.querySelector('.ask-sr');
+    if (sr && ST.live) { const t = ST.live; ST.live = ''; setTimeout(() => { if (sr.isConnected) sr.textContent = t; }, 150); }
   }
   function redraw(how) {
     if (SB.tab !== KEY || !MAIN || !document.body.contains(MAIN)) return;
-    const ta0 = MAIN.querySelector('.ask-input'), had = ta0 && document.activeElement === ta0;
+    const ta0 = MAIN.querySelector('.ask-input'), ae = document.activeElement, had = ta0 && ae === ta0;
+    // a button that is redrawn away (Send / Stop, a suggestion, a name in a list, Try again) hands focus to the new Send / Stop
+    const hadBtn = !had && ae && ae !== document.body && MAIN.contains(ae) && ae.matches('.ask-send,.ask-chip,[data-ask-q],[data-ask-retry]');
     render(MAIN, {});
     const ta = MAIN.querySelector('.ask-input');
     if (how === 'focus' || (had && ta)) { try { ta.focus({ preventScroll: how !== 'focus' }); ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* not focusable */ } }
+    else if (hadBtn) { const b = MAIN.querySelector('.ask-send'); if (b) b.focus({ preventScroll: true }); }
     if (how === 'bottom') requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
     else if (how && how.startsWith('answer:')) {
       const el = MAIN.querySelector(`.ask-a[data-mid="${CSS.escape(how.slice(7))}"]`);
@@ -1293,7 +1315,7 @@ body:has(#slipbar.on) .ask-dock{bottom:76px}
 .ask-lr:first-child{border-top:0}
 .ask-lr .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .ask-lr .t b,.ask-lname{font:700 14.5px var(--fui);color:#fff}
-.ask-lname{all:unset;cursor:pointer;font:700 14.5px var(--fui);color:#fff;min-height:24px;text-decoration:underline;text-decoration-color:rgba(var(--acc-rgb),.45);text-underline-offset:3px}
+.ask-lname{all:unset;cursor:pointer;font:700 14.5px var(--fui);color:#fff;display:inline-flex;align-items:center;align-self:flex-start;min-height:40px;margin:-8px 0 -6px;text-decoration:underline;text-decoration-color:rgba(var(--acc-rgb),.45);text-underline-offset:3px}
 .ask-lname:focus-visible{outline:2px solid var(--acc2);outline-offset:2px;border-radius:4px}
 .ask-lr .t>span{font:500 12.5px var(--fui);color:#ffffffa6;overflow-wrap:anywhere}
 .ask-lr .d{display:flex;align-items:center;gap:8px}.ask-lr .d small{font:500 11.5px var(--fui);color:#ffffff80}
@@ -1315,5 +1337,5 @@ body:has(#slipbar.on) .ask-dock{bottom:76px}
 
   restore();
   SB.registerTab({ key: KEY, label: 'Chat', render });
-  window.__ask = { parseIntent, analyzeProp, tools: TOOL_FN, get state() { return ST; } };  // for tests and debugging
+  window.__ask = { parseIntent, analyzeProp, logCut, tools: TOOL_FN, get state() { return ST; } };  // for tests and debugging
 })();

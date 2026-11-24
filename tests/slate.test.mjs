@@ -47,6 +47,9 @@ const PM = JSON.parse(FX('polymarket-2026-11-23b.json'));
 const ars = D.games.find(g => g.id === 'soccer-ARS-BVB-2026-11-24'), pa = PM.games.find(x => x.sport === 'soccer' && x.home.abbr === 'ARS' && x.away.abbr === 'BVB' && !x.stale);
 { const b = ars.prob, s = b.home + b.away + b.draw, q = m => ({ ...m, b: +(m.m - 0.005).toFixed(4), a: +(m.m + 0.005).toFixed(4) });
   pa.ml.home = q({ ...pa.ml.home, m: +(b.home / s + 0.06).toFixed(4) }); pa.ml.away = q({ ...pa.ml.away, m: +(b.away / s - 0.04).toFixed(4) }); pa.ml.draw = q({ ...pa.ml.draw, m: +(b.draw / s - 0.02).toFixed(4) }); }
+// Brentford v Everton ($10.5k traded): Polymarket 4 pts higher on the draw -> a draw lean that lights the Draw tile
+{ const pb = PM.games.find(x => x.slug === 'epl-bre-eve-2026-11-23'), b = SOC.prob, s = b.home + b.away + b.draw, q = v => ({ m: +v.toFixed(4), b: +(v - 0.005).toFixed(4), a: +(v + 0.005).toFixed(4) });
+  pb.ml.home = q(b.home / s - 0.02); pb.ml.away = q(b.away / s - 0.02); pb.ml.draw = q(b.draw / s + 0.04); }
 const pmPin = put('polymarket.json', PM);
 
 const { page, errors, browser } = await open({ width: 390, height: 844, tab: 'slate', pins: { 'data.json': dataPin, 'trends.json': trendsPin, 'polymarket.json': pmPin } });
@@ -138,6 +141,8 @@ check('Team Trends lean bands exactly on the flagged games (not on a game whose 
 check('every other priced card says "No lean: the model is priced from the market"', priced.filter(c => !c.leans.includes('pm') && !c.leans.includes('trends')).every(c => c.leans.join() === 'none' && /No lean: the model is priced from the market/.test(c.text)) && priced.length > 40, `${priced.length} priced cards`);
 const nbaL = cards.find(c => c.gid === NBA.id), socL = cards.find(c => c.gid === SOC.id), arsL = cards.find(c => c.gid === ars.id);
 check('trends upset band: underdog, wins vs prices, its reasons, and the sample counted once per team (9, not 9 + 5) with its caveats', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.abbr} to win`) && nbaL.text.includes(`${NBA.away.name}, the underdog`) && /\+1\.9/.test(nbaL.text) && /\b9 games · small sample · could be chance/.test(nbaL.text) && nbaL.leans.join() === 'trends', nbaL.text.slice(0, 260));
+const drawHl = await page.evaluate(id => { const c = document.getElementById('sl-' + id); return c ? [...c.querySelectorAll('.sl-tile')].map(t => t.classList.contains('sl-hl')) : null; }, SOC.id);
+check('a Polymarket lean on the draw lights the Draw tile, not Money', socL.leans.includes('pm') && /Draw/.test(socL.text) && /Polymarket 4\.0 pts higher on the draw/.test(socL.text) && JSON.stringify(drawHl) === '[false,true,true]', JSON.stringify(drawHl) + ' ' + socL.text.slice(0, 120));
 check('trends total band: under 2.5 with the rate and the sample', /Under 2\.5 goals/.test(socL.text) && /60%/.test(socL.text) && /20 games/.test(socL.text), socL.text.slice(0, 200));
 check('Polymarket band: "Polymarket 6.0 pts higher on Arsenal", strong signal, volume', /ARS to win/.test(arsL.text) && /Polymarket 6\.0 pts higher on Arsenal FC/.test(arsL.text) && /\+6\.0/.test(arsL.text) && /Strong signal/i.test(arsL.text) && /traded/.test(arsL.text), arsL.text.slice(0, 220));
 check('no horizontal page scroll at 390px on any day', cards.every(c => c.hscroll <= 390), Math.max(...cards.map(c => c.hscroll)) + 'px');

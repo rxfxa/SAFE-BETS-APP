@@ -152,7 +152,7 @@
     why.push(`${money(c.vol)} traded on Polymarket's moneyline. Polymarket's price is from ${tStamp(S.PM && S.PM.updated)}, the books' from ${tStamp(SB.DATA && SB.DATA.updated)}: some of a gap can be news in between.`);
     why.push('Two markets disagreeing is not a guaranteed edge: either can be wrong.');
     const gp = (Math.round(L.gap * 1000) / 10).toFixed(1);
-    return { src: 'pm', tile: 'money', kicker: ['Polymarket', 'Moneyline', 'Strong signal'], title: L.side === 'D' ? 'Draw' : `${L.abbr} to win`,
+    return { src: 'pm', tile: L.side === 'D' ? 'draw' : 'money', kicker: ['Polymarket', 'Moneyline', 'Strong signal'], title: L.side === 'D' ? 'Draw' : `${L.abbr} to win`,
       sub: `Polymarket ${gp} pts higher on ${L.side === 'D' ? 'the draw' : L.name}: ${pct(L.pm)} vs ${pct(L.book)} at the books`,
       big: '+' + gp, bigSub: 'pts vs books', why, tag: `${money(c.vol)} traded`, side: L.side, gid: g.id };
   }
@@ -203,7 +203,7 @@
     const moneyT = tile('Money', `${M.fav} ${fair(M.pFav)}`, `${M.dog} ${fair(dogP)} · fair`, hl.money);
     const tot = M.total, totSub = `over ${pct(tot.p)}${tot.push >= 0.005 ? ` · push ${pct(tot.push)}` : ''}${tot.gen ? ' · league avg' : ''}`;
     const totalT = tile('Total', lineTxt(tot.line), totSub, hl.total);
-    if (M.kind === 'soccer') return `<div class="sl-tiles">${moneyT}${tile('Draw', M.draw.val, `${pct(M.pD)} · fair`, false)}${totalT}</div>`;
+    if (M.kind === 'soccer') return `<div class="sl-tiles">${moneyT}${tile('Draw', M.draw.val, `${pct(M.pD)} · fair`, hl.draw)}${totalT}</div>`;
     return `<div class="sl-tiles">${tile(M.spread.label, M.spread.val, M.spread.sub, hl.spread)}${moneyT}${totalT}</div>`;
   }
   function leanHTML(L) {
@@ -214,7 +214,7 @@
   function card(g, ev) {
     const M = modelOf(g), H = g.home, A = g.away, ms = SB.startMs(g), soc = g.sport === 'soccer';
     const leans = ev.get(g.id) || [];
-    const hl = { money: leans.some(l => l.tile === 'money'), total: leans.some(l => l.tile === 'total'), spread: false };
+    const hl = { money: leans.some(l => l.tile === 'money'), draw: leans.some(l => l.tile === 'draw'), total: leans.some(l => l.tile === 'total'), spread: false };
     const side = (t, p, home) => `<div class="sl-side">${team(t, true)}<div class="sl-nm">${esc(t.name)}</div><div class="sl-ab">${home ? 'home' : 'away'}</div>${M ? `<div class="sl-wp">${esc(pct(p).replace('%', ''))}<small>%</small></div><div class="sl-ab">win chance</div>` : ''}</div>`;
     const tp = tFmt.formatToParts(new Date(ms)), tm = [tp.filter(x => x.type !== 'dayPeriod').map(x => x.value).join('').trim(), (tp.find(x => x.type === 'dayPeriod') || {}).value || ''];
     let body;

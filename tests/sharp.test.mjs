@@ -1,8 +1,9 @@
 // Sharp Board (sharp.js): Polymarket's price vs the sportsbook consensus in the feed for every matched game. Gaps recomputed
 // from the raw fixture quotes, strongest signals first, the honest note, filters, sorting, the {gid} param, the buttons, and the
 // empty states. Fixtures pinned, clock 2026-11-23T12:00Z. The 23 Nov Polymarket snapshot has no gap of 3+ points on a market with
-// $10k+ traded, so the test writes a copy with two (Arsenal +6, Como +4) and also checks the untouched snapshot.
-// Run: node tests/sharp.test.mjs
+// $10k+ traded, so the test writes a copy with two (Arsenal +6, Como +4, with Como's game listed the other way round on
+// Polymarket), two likely data problems (Sabah 20 pts off; Ole Miss's prices swapped), and also checks the untouched snapshot,
+// the strict matcher (shared college nicknames, ties), and a feed refresh. Run: node tests/sharp.test.mjs
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,11 @@ function bump(gid, homeAbbr, awayAbbr, dH, dA, dD) {
 }
 const ARS = bump('soccer-ARS-BVB-2026-11-24', 'ARS', 'BVB', 0.06, -0.04, -0.02);
 const COM = bump('soccer-COM-AEK-2026-11-24', 'COM', 'AEK1', 0.04, -0.02, -0.02);   // Polymarket names AEK "AEK1": matched by name
+// Como's game listed away-first on Polymarket: home / away must come from the teams, not the labels
+{ const pg = COM.pg; [pg.home, pg.away] = [pg.away, pg.home]; [pg.ml.home, pg.ml.away] = [pg.ml.away, pg.ml.home];
+  pg.spreads = (pg.spreads || []).map(x => ({ ...x, hl: -x.hl, home: x.away, away: x.home })); }
+const SAB = bump('soccer-SBH-BAR-2026-11-25', 'SF', 'FCB', 0.2, -0.2, 0);            // 20 pts off on a $23.7k market: a data problem, not a signal
+const OLE = (() => { const pg = PM.games.find(x => x.slug === 'cfb-mspst-miss-2026-11-27'); [pg.ml.home, pg.ml.away] = [pg.ml.away, pg.ml.home]; return pg; })();   // prices on the wrong teams
 const pmPin = put('polymarket.json', PM);
 const byGid = new Map(D.games.map(g => [g.id, g])), bySlug = new Map(PM.games.map(x => [x.slug, x]));
 const ready = () => window.__sharp && __sharp.state === 'done' && document.querySelector('.sh-root') && !/Loading Polymarket/.test(document.querySelector('.sh-root').innerText);
@@ -43,12 +49,12 @@ const all = await page.locator('.sh-root').innerText();
 check('no certainty words', !/\block\b|sure thing|can't lose|\bdue\b/i.test(all.replace(/not a sure thing/gi, '')) && !/guaranteed(?! edge)/i.test(all));
 
 // ---------- matches and gaps (recomputed from the raw fixture quotes) ----------
-const cards = await page.evaluate(() => [...document.querySelectorAll('.sh-card')].map(c => ({ gid: c.dataset.shGid, slug: c.dataset.shSlug, gap: +c.dataset.shGap, strong: c.dataset.shStrong === 'true', text: c.innerText.replace(/\s+/g, ' ') })));
+const cards = await page.evaluate(() => [...document.querySelectorAll('.sh-card')].map(c => ({ gid: c.dataset.shGid, slug: c.dataset.shSlug, gap: +c.dataset.shGap, strong: c.dataset.shStrong === 'true', odd: c.dataset.shOdd || null, text: c.innerText.replace(/\s+/g, ' ') })));
 check('Polymarket games matched to feed games (fixture slate)', cards.length >= 20, `${cards.length} cards`);
 let verified = 0; const bad = [];
 for (const c of cards) {
   const g = byGid.get(c.gid), pg = bySlug.get(c.slug); if (!g || !pg) { bad.push(c.gid + ' missing'); continue; }
-  const same = pg.home.abbr === g.home.abbr && pg.away.abbr === g.away.abbr, swap = pg.home.abbr === g.away.abbr && pg.away.abbr === g.home.abbr;
+  const sw = pg.slug === COM.pg.slug, same = !sw && pg.home.abbr === g.home.abbr && pg.away.abbr === g.away.abbr, swap = sw || (pg.home.abbr === g.away.abbr && pg.away.abbr === g.home.abbr);
   if (!same && !swap) continue;
   const H = swap ? pg.ml.away : pg.ml.home, A = swap ? pg.ml.home : pg.ml.away, Dr = g.sport === 'soccer' ? pg.ml.draw : null;
   const s = H.m + A.m + (Dr ? Dr.m : 0), b = g.prob, bs = b.home + b.away + (Dr ? b.draw : 0);
@@ -56,9 +62,30 @@ for (const c of cards) {
   if (Math.abs(gap - c.gap) > 0.051) bad.push(`${c.gid} ${c.gap} vs ${gap.toFixed(2)}`); else verified++;
 }
 check('gap = largest difference between Polymarket (mid, scaled to 100%) and the books, per side, in points', verified >= 10 && !bad.length, `${verified} verified; ${bad.slice(0, 4).join('; ')}`);
-const order = cards.map(c => [c.strong ? 1 : 0, c.gap]);
-check('strongest signals first, then by gap', order.every((x, i) => !i || order[i - 1][0] > x[0] || (order[i - 1][0] === x[0] && order[i - 1][1] >= x[1])) && cards[0].gid === ARS.g.id && cards[1].gid === COM.g.id && cards.filter(c => c.strong).length === 2,
-  JSON.stringify(order.slice(0, 6)));
+const order = cards.map(c => [c.strong ? 1 : 0, c.odd ? 0 : 1, c.gap]);
+const before = (a, b) => a[0] > b[0] || (a[0] === b[0] && (a[1] > b[1] || (a[1] === b[1] && a[2] >= b[2])));
+check('strongest signals first, then by gap, likely data problems last', order.every((x, i) => !i || before(order[i - 1], x)) && cards[0].gid === ARS.g.id && cards[1].gid === COM.g.id && cards.filter(c => c.strong).length === 2
+  && cards.slice(-2).every(c => c.odd), JSON.stringify(order.slice(0, 4)) + ' … ' + JSON.stringify(order.slice(-3)));
+const sab = cards.find(c => c.gid === SAB.g.id), ole = cards.find(c => c.slug === OLE.slug);
+check('15+ pts apart = a likely data problem: flagged, never a strong signal even with $23.7k traded', sab && sab.odd === 'far' && !sab.strong && Math.abs(sab.gap - 20) < 0.06 && /usually means an old price or a mismatched game/.test(sab.text) && /Not counted as a signal/.test(sab.text), sab && sab.text.slice(0, 200));
+check('prices that fit the other way round are flagged as possibly swapped sides', ole && ole.odd === 'flip' && !ole.strong && /sides may be swapped/.test(ole.text), ole && `${ole.odd} ${ole.text.slice(0, 160)}`);
+check('the summary counts the set-aside rows', /2 set aside \(prices 15\+ pts apart/.test(await page.locator('.sh-sum').innerText()));
+const com = cards.find(c => c.gid === COM.g.id);
+const comSplit = await page.evaluate(id => [...document.querySelectorAll(`#sh-${CSS.escape(id)} .ui-split .pct`)].map(x => x.innerText.replace(/\s/g, '')), COM.g.id);
+const comWant = (() => { const g = COM.g, ml = COM.pg.ml, s = ml.home.m + ml.away.m + ml.draw.m, b = g.prob, bs = b.home + b.away + b.draw, P = x => Math.round(x * 100) + '%'; return [P(ml.home.m / s), P(ml.away.m / s), P(b.away / bs), P(b.home / bs)]; })();   // Polymarket "home" is AEK here
+check('a game Polymarket lists the other way round: Como is still home, the gap and the strong band are on Como', com && com.strong && /Polymarket 4\.0 pts higher on Como 1907/.test(com.text) && Math.abs(com.gap - 4) < 0.06 && JSON.stringify(comSplit) === JSON.stringify(comWant),
+  JSON.stringify(comSplit) + ' vs ' + JSON.stringify(comWant));
+// the matcher: a shared college nickname alone never matches, the real abbreviation does; two equal candidates are no match
+const mt = await page.evaluate(() => {
+  const g = SB.gameById('ncaaf-WMU-M-OH-2026-11-25'), base = { sport: 'ncaaf', start: g.start, ml: {} };
+  const real = __sharp.match({ ...base, slug: 't-real', home: { name: 'Broncos', abbr: 'WMICH' }, away: { name: 'RedHawks', abbr: 'MIAOH' } });
+  const nick = __sharp.match({ ...base, slug: 't-nick', home: { name: 'Broncos', abbr: 'BOISE' }, away: { name: 'RedHawks', abbr: 'OHIO' } });
+  SB.DATA.games.push({ ...g, id: 'ncaaf-WMU-M-OH-clone' });
+  const tie = __sharp.match({ ...base, slug: 't-tie', home: { name: 'Broncos', abbr: 'WMICH' }, away: { name: 'RedHawks', abbr: 'MIAOH' } });
+  SB.DATA.games.pop();
+  return { real: real && real.g.id + (real.swap ? ' swap' : ''), nick, tie };
+});
+check('matcher: nickname + abbreviation letters match (WMICH Broncos = Western Michigan); a shared nickname alone does not; a tie is no match', mt.real === 'ncaaf-WMU-M-OH-2026-11-25' && mt.nick === null && mt.tie === null, JSON.stringify(mt));
 check('a strong signal needs a 3+ pt gap and $10k+ traded: the bigger but thin college gaps are not strong', cards.some(c => !c.strong && c.gap >= 3) && cards.filter(c => c.strong).every(c => c.gap >= 3));
 check('the strong card is highlighted in our words with volume and liquidity', /Strong signal/i.test(cards[0].text) && /Polymarket 6\.0 pts higher on Arsenal FC/.test(cards[0].text) && /\$22\.4k traded on the moneyline/.test(cards[0].text) && /liquidity/.test(cards[0].text)
   && await page.locator('.sh-card.sh-strong').count() === 2, cards[0].text.slice(0, 260));
@@ -105,6 +132,15 @@ await page.click(`#sh-${ARS.g.id} [data-sh-ask]`);
 await page.waitForTimeout(250);
 const ask = await page.evaluate(() => ({ tab: SB.tab, v: (document.querySelector('#main textarea, #main input[type="text"]') || {}).value || '' }));
 check('Ask opens Chat with the question about the gap', ask.tab === 'ask' && /Polymarket and the sportsbooks disagree/.test(ask.v), JSON.stringify(ask));
+// a feed refresh: the board re-reads the books' prices (no stale game objects from the first feed)
+{ const D2 = JSON.parse(JSON.stringify(D)), g = D2.games.find(x => x.id === ARS.g.id), ml = ARS.pg.ml;
+  g.prob = { home: ml.home.m, away: ml.away.m, draw: ml.draw.m };   // the books move onto Polymarket's price
+  await page.route(/\/data\.json(\?.*)?$/, r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...D2, updated: '2026-11-23T11:00:00Z' }) }));
+  await page.evaluate(() => SB.goTab('sharp', {}));
+  await page.evaluate(() => window.__fm2.refreshTick());
+  await page.waitForFunction(id => { const c = document.getElementById('sh-' + id); return window.__sharp.state === 'done' && c && c.dataset.shStrong === 'false'; }, ARS.g.id, { timeout: 10000 }).catch(() => {});
+  const after = await page.evaluate(id => { const c = document.getElementById('sh-' + id), h = document.querySelector('[data-sh-hero]'); return { gap: c && +c.dataset.shGap, strong: c && c.dataset.shStrong, hero: h && h.dataset.shHero }; }, ARS.g.id);
+  check('after a feed refresh the board uses the new book prices (Arsenal gap gone, Como leads)', after.gap != null && after.gap < 0.2 && after.strong === 'false' && after.hero === COM.g.id, JSON.stringify(after)); }
 check('no page errors', !errors.length, errors.join(' | '));
 await browser.close();
 

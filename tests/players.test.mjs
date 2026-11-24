@@ -24,10 +24,14 @@ const fr = await page.evaluate(() => SB.firstRender && SB.firstRender.ms);
 check('first render under 1,500 ms on the fixture slate', fr != null && fr < 1500, `${Math.round(fr)} ms`);
 const rr = await page.evaluate(() => { const t = performance.now(); SB.render(); return performance.now() - t; });
 check('a re-render stays fast', rr < 400, `${Math.round(rr)} ms`);
+const rms = await page.evaluate(() => __players.renderMs);
+check('render time measured in the page: every render so far under 1,500 ms (incl. the cold one that indexes 4,500 season players)', rms.n >= 2 && rms.max < 1500, `max ${Math.round(rms.max)} ms over ${rms.n} renders`);
 const txt = await page.locator('.pl-root').innerText();
 check('header: player count kicker and display title', /PLAYERS · 5 SPORTS/i.test(txt) && /SEASON STATS/i.test(await page.locator('.pl-root .ui-title').innerText()));
 check('honest: averages are what happened, not projections', /not projections/.test(txt));
 check('no certainty words', !/guarantee|\block\b|sure thing|can't lose|\bdue\b/i.test(txt));
+const socNote = await page.evaluate(() => document.querySelector('[data-pl-sec="soccer"] .pl-k2').textContent);
+check('soccer note names the leagues our box scores really cover (no Champions League / MLS claim)', /Premier League, La Liga, Serie A, Bundesliga and Ligue 1/.test(socNote) && /no Champions League, MLS/.test(socNote), socNote);
 const chips = await page.evaluate(() => [...document.querySelectorAll('.pl-chips .ui-pill')].map(b => [b.getAttribute('data-ui-pill'), b.querySelector('.n') ? b.querySelector('.n').textContent : '']));
 const idx = await page.evaluate(() => { const X = __players.index(); return { counts: X.counts, total: X.total, slateOnly: Object.fromEntries(['nfl', 'nba', 'nhl', 'ncaaf', 'soccer'].map(sp => [sp, X.bySp[sp].filter(e => !e.P).length])) }; });
 check('chips: All sports, NFL, NBA, NHL, College, Soccer in that order', chips.map(c => c[0].split('|')[1]).join(',') === 'all,nfl,nba,nhl,ncaaf,soccer', chips.map(c => c[0]).join(','));
@@ -62,6 +66,8 @@ const pg = await page.evaluate(() => ({
   log: [...document.querySelectorAll('[data-pl-log] tbody tr')].map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim())),
   head: [...document.querySelectorAll('[data-pl-log] thead th')].map(th => th.textContent.trim()),
 }));
+const bar0 = await page.evaluate(() => { const b = document.querySelector('.pl-root .ui-log .bar'); return b ? getComputedStyle(b).marginBottom + ' ' + getComputedStyle(b).display : 'none'; });
+check('game-log chart: the app\'s older .bar rule is undone (no 4px lift off the baseline)', bar0 === '0px block', bar0);
 check('player page: name as the display title, team full name, position, games', pg.title.replace(/\s+/g, ' ').trim() === sName && pg.team === SEASON.sports.nba.teams[W.t] && pg.meta.includes(`${W.gp} games`) && pg.kick.includes('NBA'), `${pg.title} | ${pg.team} | ${pg.meta}`);
 check('season averages: points / rebounds / assists a game = season totals ÷ games', pg.tiles.Points === f1(T(S, W, 'pts') / W.gp) && pg.tiles.Rebounds === f1(T(S, W, 'reb') / W.gp) && pg.tiles.Assists === f1(T(S, W, 'ast') / W.gp) && pg.tiles.Games === String(W.gp), JSON.stringify(pg.tiles));
 const fi = f => 3 + S.fields.indexOf(f), want10 = W.log.slice(-10).reverse();
@@ -115,10 +121,22 @@ const nbaReb = SEASON.sports.nba.players.filter(P => P.gp >= 3).sort((a, b) => T
 check('table sorts by a column (rebounds)', rebFirst === nbaReb[0].n, `${rebFirst} vs ${nbaReb[0].n}`);
 await page.locator('[data-pl-more]').click();
 check('Show more adds 50 rows', (await page.locator('[data-pl-table] tbody tr').count()) === 100);
+check('Show more: focus moves to the first added row (the clicked button is gone)', await page.evaluate(() => document.activeElement === document.querySelectorAll('[data-pl-table] tbody tr')[50].querySelector('button')));
 await page.selectOption('select[data-ui-select="pl-min"]', '10');
 const min10 = await page.evaluate(() => [...document.querySelectorAll('[data-pl-table] tbody tr')].map(tr => +tr.querySelectorAll('td')[1].textContent));
 check('Min games 10+ filters the table', min10.length > 0 && min10.every(g => g >= 10), `${min10.length} rows`);
 check('no horizontal scroll at 390 px (table scrolls inside its wrapper)', await noScroll(page));
+// NFL table: passing TDs have their own column (the old "TD" column counted rushing + receiving only, so QBs read ~0)
+await page.evaluate(() => SB.goTab('players', { sport: 'nfl' }));
+await page.waitForSelector('[data-pl-table="nfl"]');
+const nflT = await page.evaluate(() => { const head = [...document.querySelectorAll('[data-pl-table] thead th')].map(th => th.textContent.replace(/[↑↓]/g, '').trim()); const rows = [...document.querySelectorAll('[data-pl-table] tbody tr')].map(tr => [tr.querySelector('.pn').textContent, ...[...tr.querySelectorAll('td')].slice(1).map(td => td.textContent)]); return { head, rows }; });
+const SN = SEASON.sports.nfl, qb = SN.players.filter(P => P.gp >= 3 && P.pos === 'QB').map(P => ({ n: P.n, ptd: T(SN, P, 'ptd'), rr: T(SN, P, 'rtd') + T(SN, P, 'ctd') })).find(q => nflT.rows.some(r => r[0] === q.n));
+const qRow = qb && nflT.rows.find(r => r[0] === qb.n), hi = k => nflT.head.indexOf(k);
+check('NFL table: "Pass TD" and "Rush+Rec TD" columns, a QB\'s values equal the fixture totals', !!qRow && qRow[hi('Pass TD')] === String(qb.ptd) && qRow[hi('Rush+Rec TD')] === String(qb.rr), qb ? `${qb.n}: ${qRow && qRow[hi('Pass TD')]} / ${qRow && qRow[hi('Rush+Rec TD')]} vs ${qb.ptd} / ${qb.rr}` : 'no QB row');
+await page.evaluate(() => SB.goTab('players', { sport: 'soccer' }));
+await page.waitForSelector('[data-pl-table="soccer"]');
+const socG = await page.evaluate(() => { const hi = [...document.querySelectorAll('[data-pl-table] thead th')].findIndex(th => /^G\b/.test(th.textContent.trim())); return [...document.querySelectorAll('[data-pl-table] tbody tr')].slice(0, 5).map(tr => tr.querySelectorAll('td')[hi].textContent); });
+check('soccer table: goals are whole numbers (were "15.0")', socG.length === 5 && socG.every(v => /^\d+$/.test(v)), socG.join(','));
 // the menu item goes back to the list from a player page
 await page.evaluate(n => SB.goTab('players', { name: n, sport: 'nba' }), sName);
 await page.waitForSelector('.pl-root[data-pl="page"]');

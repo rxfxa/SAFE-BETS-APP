@@ -2,7 +2,9 @@
 // (Team Trends or a Polymarket gap of 3+ points), key props with + Slip, the buttons and the {gid} param.
 // Fixtures pinned, clock 2026-11-23T12:00Z. The 23 Nov feed has no NBA / NFL / NHL prices for the games still to play, so the test
 // writes a copy with prices on one game of each (and an NBA game total), a small trends.json with one upset flag and one
-// over / under lean, and a Polymarket copy with a 6-point gap on one game. Run: node tests/slate.test.mjs
+// over / under lean (plus entries that must NOT make a lean: an "underdog" the prices now favour, a team on the wrong side),
+// and a Polymarket copy with a 6-point gap on one game. A lean from Polymarket needs the Sharp Board's strong signal (3+ points
+// on the side, two-sided quote, $10k+ traded, under 15 points apart). Run: node tests/slate.test.mjs
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,13 +28,19 @@ const dataPin = put('data.json', D);
 const SOC = upcoming.find(g => g.id === 'soccer-BRE-EVE-2026-11-23');
 const TR = { asOf: DAY, teams: [
   { name: NBA.away.name, sport: 'nba', comp: 'NBA', abbr: NBA.away.abbr, windows: {}, next: { gid: NBA.id, home: false, opp: NBA.home.name, p: 0.36, line: null,
-    lean: { upset: { flag: true, role: 'underdog', why: [`${NBA.away.name} as an underdog this season: won 5 of 9, prices expected 3.1 (small sample, could be chance)`], strength: 1.9 }, total: { side: null, why: [], n: 0 } } } },
+    lean: { upset: { flag: true, role: 'underdog', why: [`${NBA.away.name} as an underdog this season: won 5 of 9, prices expected 3.1 (small sample, could be chance)`, `${NBA.away.name} in the last 30 days: won 3 of 5, prices expected 1.6 (small sample, could be chance)`], strength: 1.9 }, total: { side: null, why: [], n: 0 } } } },
   { name: NBA.home.name, sport: 'nba', comp: 'NBA', abbr: NBA.home.abbr, windows: {}, next: { gid: NBA.id, home: true, opp: NBA.away.name, p: 0.64, line: null,
     lean: { upset: { flag: false, role: 'favourite', why: [], strength: 0 }, total: { side: null, why: [], n: 0 } } } },
   { name: SOC.home.name, sport: 'soccer', comp: SOC.comp, abbr: SOC.home.abbr, windows: {}, next: { gid: SOC.id, home: true, opp: SOC.away.name, p: 0.4, line: null,
     lean: { upset: { flag: false, role: null, why: [] }, total: { side: 'under', n: 20, why: [`${SOC.home.name} games: 3 of 10 over 2.5 (prices expected 5.2 of 9)`, `${SOC.away.name} games: 5 of 10 over 2.5 (prices expected 5.0 of 9)`, 'Together: 8 of 20 (40%) over 2.5, -2.2 against the prices'] } } } },
   { name: 'Unrelated FC', sport: 'soccer', comp: 'Serie A', abbr: 'UNR', windows: {}, next: { gid: 'soccer-MON-FIO-2026-11-23', home: true, opp: 'x', p: 0.3, line: null,
-    lean: { upset: { flag: false, role: 'underdog', why: [] }, total: { side: null, why: ['Together: 10 of 20 (50%) over 2.5'], n: 20 } } } },
+    lean: { upset: { flag: false, role: 'underdog', why: [] }, total: { side: 'over', why: ['Together: 14 of 20 (70%) over 2.5'], n: 20 } } } },   // not in that game: no lean
+  // flagged as the underdog with the morning's prices, but the feed now makes this side the favourite (70%): no upset lean
+  { name: NFL.away.name, sport: 'nfl', comp: 'NFL', abbr: NFL.away.abbr, windows: {}, next: { gid: NFL.id, home: false, opp: NFL.home.name, p: 0.45, line: null,
+    lean: { upset: { flag: true, role: 'underdog', why: [`${NFL.away.name} as an underdog this season: won 4 of 6, prices expected 2.2 (small sample, could be chance)`], strength: 1.8 }, total: { side: null, why: [], n: 0 } } } },
+  // the home team listed as the away side (a swapped entry): dropped
+  { name: NHL.home.name, sport: 'nhl', comp: 'NHL', abbr: NHL.home.abbr, windows: {}, next: { gid: NHL.id, home: false, opp: NHL.away.name, p: 0.44, line: null,
+    lean: { upset: { flag: true, role: 'underdog', why: [`${NHL.home.name} as an underdog this season: won 6 of 9, prices expected 3.5`], strength: 2.5 }, total: { side: 'over', why: ['Together: 22 of 30 (73%) over the line'], n: 30 } } } },
 ] };
 const trendsPin = put('trends.json', TR);
 const PM = JSON.parse(FX('polymarket-2026-11-23b.json'));
@@ -103,24 +111,33 @@ async function allCards() {
   const keys = await page.evaluate(() => [...document.querySelectorAll('[data-ui-pill^="sl-day|"]')].map(b => b.dataset.uiPill));
   for (const k of keys) {
     await page.click(`[data-ui-pill="${k}"]`);
-    out.push(...await page.evaluate(() => [...document.querySelectorAll('.sl-card')].map(c => ({ gid: c.dataset.slGid, leans: [...c.querySelectorAll('[data-sl-lean]')].map(l => l.dataset.slLean), priced: c.querySelectorAll('.sl-tile').length > 0, text: [...c.querySelectorAll('[data-sl-lean]')].map(l => l.innerText.replace(/\s+/g, ' ')).join(' | '), hscroll: document.documentElement.scrollWidth }))));
+    out.push(...await page.evaluate(() => [...document.querySelectorAll('.sl-card')].map(c => ({ gid: c.dataset.slGid, leans: [...c.querySelectorAll('[data-sl-lean]')].map(l => l.dataset.slLean), priced: c.querySelectorAll('.sl-tile').length > 0, text: [...c.querySelectorAll('[data-sl-lean], .sl-pmx')].map(l => l.innerText.replace(/\s+/g, ' ')).join(' | '), hscroll: document.documentElement.scrollWidth }))));
   }
   return out;
 }
 const cards = await allCards();
-const pmGaps = await page.evaluate(() => __sharp.rows().filter(c => c.live && c.gap >= 0.03 && c.lead).map(c => {
-  const ml = c.pg.ml, raw = c.sides.map(s => s.q.m), sum = raw.reduce((a, b) => a + b, 0), b = c.g.prob, bs = b.home + b.away + (b.draw || 0);
-  const book = c.sides.map(s => (s.side === 'H' ? b.home : s.side === 'A' ? b.away : b.draw) / bs);
-  return { gid: c.g.id, gap: Math.max(...raw.map((m, i) => Math.abs(m / sum - book[i]))), ml: !!ml };
+// every matched game, recomputed from the raw quotes: a lean needs a side 3+ pts higher on Polymarket, every side quoted
+// two-sided within 12¢, $10k+ traded on the moneyline and no side 15+ pts apart
+const pmAll = await page.evaluate(() => __sharp.rows().map(c => {
+  const ml = c.pg.ml, qs = c.swap ? { H: ml.away, A: ml.home, D: ml.draw } : { H: ml.home, A: ml.away, D: ml.draw }, soc = c.g.sport === 'soccer';
+  const ks = soc ? ['H', 'A', 'D'] : ['H', 'A'], sum = ks.reduce((a, k) => a + qs[k].m, 0), b = c.g.prob, bs = b.home + b.away + (soc ? b.draw : 0);
+  const gaps = ks.map(k => qs[k].m / sum - ({ H: b.home, A: b.away, D: b.draw })[k] / bs), live = ks.every(k => qs[k].b > 0 && qs[k].a < 1 && qs[k].a > qs[k].b && qs[k].a - qs[k].b <= 0.12);
+  return { gid: c.g.id, maxGap: Math.max(...gaps.map(Math.abs)), up: Math.max(...gaps), live, vol: ml.v || 0 };
 }));
+const pmGaps = pmAll.filter(x => x.live && x.vol >= 10000 && x.up >= 0.03 && x.maxGap <= 0.15);
+const thin = pmAll.filter(x => x.maxGap >= 0.03 && x.maxGap <= 0.15 && !pmGaps.includes(x)), odd = pmAll.filter(x => x.maxGap > 0.15);
 const expPM = new Set(pmGaps.map(x => x.gid)), expTR = new Set([NBA.id, SOC.id]);
 const priced = cards.filter(c => c.priced);
 const wrongPM = priced.filter(c => c.leans.includes('pm') !== expPM.has(c.gid)), wrongTR = priced.filter(c => c.leans.includes('trends') !== expTR.has(c.gid));
-check('Polymarket lean bands exactly on games 3+ points away from the books (gap recomputed from the raw quotes)', pmGaps.length >= 1 && pmGaps.every(x => x.gap >= 0.03) && !wrongPM.length && expPM.has(ars.id), `${pmGaps.map(x => x.gid + ' ' + (x.gap * 100).toFixed(1)).join(', ')} wrong: ${wrongPM.map(c => c.gid).join(',')}`);
-check('Team Trends lean bands exactly on the flagged games (not on a game whose trend has no lean)', !wrongTR.length, wrongTR.map(c => c.gid).join(','));
+check('Polymarket lean bands exactly on the strong signals (recomputed from the raw quotes: 3+ pts on the side, $10k+, two-sided, under 15 pts)', pmGaps.length >= 1 && !wrongPM.length && expPM.has(ars.id), `${pmGaps.map(x => x.gid + ' ' + (x.up * 100).toFixed(1)).join(', ')} wrong: ${wrongPM.map(c => c.gid).join(',')}`);
+const thinC = thin.map(x => cards.find(c => c.gid === x.gid)).filter(Boolean);
+check('a 3+ pt gap on a thin market ($0-$10k traded, e.g. the college games) is no lean, and the No lean band says why', thin.length >= 3 && thinC.length === thin.length && thinC.every(c => c.leans.join() === 'none' && /not enough for a lean/.test(c.text)), thin.map(x => x.gid + ' $' + x.vol).join(', '));
+const oddC = odd.map(x => cards.find(c => c.gid === x.gid)).filter(Boolean);
+check('prices 15+ pts apart (the test\'s NBA game: 24.5) are treated as a data problem, never a lean', odd.some(x => x.gid === NBA.id) && oddC.every(c => !c.leans.includes('pm') && /looks like a data problem/.test(c.text)), odd.map(x => x.gid + ' ' + (x.maxGap * 100).toFixed(1)).join(', '));
+check('Team Trends lean bands exactly on the flagged games (not on a game whose trend has no lean, a team not in that game, a swapped side, or an "underdog" the prices now favour)', !wrongTR.length && cards.find(c => c.gid === NFL.id).leans.join() === 'none' && cards.find(c => c.gid === NHL.id).leans.join() === 'none' && cards.find(c => c.gid === 'soccer-MON-FIO-2026-11-23').leans.join() === 'none', wrongTR.map(c => c.gid).join(','));
 check('every other priced card says "No lean: the model is priced from the market"', priced.filter(c => !c.leans.includes('pm') && !c.leans.includes('trends')).every(c => c.leans.join() === 'none' && /No lean: the model is priced from the market/.test(c.text)) && priced.length > 40, `${priced.length} priced cards`);
 const nbaL = cards.find(c => c.gid === NBA.id), socL = cards.find(c => c.gid === SOC.id), arsL = cards.find(c => c.gid === ars.id);
-check('trends upset band: underdog, wins vs prices, sample and its reason', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.abbr} to win`) && nbaL.text.includes(`${NBA.away.name}, the underdog`) && /\+1\.9/.test(nbaL.text) && /9 games · small sample/.test(nbaL.text), nbaL.text.slice(0, 220));
+check('trends upset band: underdog, wins vs prices, its reasons, and the sample counted once per team (9, not 9 + 5) with its caveats', /Upset watch/i.test(nbaL.text) && nbaL.text.includes(`${NBA.away.abbr} to win`) && nbaL.text.includes(`${NBA.away.name}, the underdog`) && /\+1\.9/.test(nbaL.text) && /\b9 games · small sample · could be chance/.test(nbaL.text) && nbaL.leans.join() === 'trends', nbaL.text.slice(0, 260));
 check('trends total band: under 2.5 with the rate and the sample', /Under 2\.5 goals/.test(socL.text) && /60%/.test(socL.text) && /20 games/.test(socL.text), socL.text.slice(0, 200));
 check('Polymarket band: "Polymarket 6.0 pts higher on Arsenal", strong signal, volume', /ARS to win/.test(arsL.text) && /Polymarket 6\.0 pts higher on Arsenal FC/.test(arsL.text) && /\+6\.0/.test(arsL.text) && /Strong signal/i.test(arsL.text) && /traded/.test(arsL.text), arsL.text.slice(0, 220));
 check('no horizontal page scroll at 390px on any day', cards.every(c => c.hscroll <= 390), Math.max(...cards.map(c => c.hscroll)) + 'px');
@@ -130,6 +147,19 @@ await page.evaluate(() => SB.goTab('slate', { gid: 'soccer-PSG-FCL-2026-11-28' }
 await page.waitForTimeout(300);
 const jump = await page.evaluate(() => { const c = document.getElementById('sl-soccer-PSG-FCL-2026-11-28'), r = c && c.getBoundingClientRect(); return { on: document.querySelector('[data-ui-pill^="sl-day|"].on').dataset.uiPill, focus: c && c.classList.contains('sl-focus'), top: r && r.top }; });
 check('{gid} opens that game\'s day, highlights the card and scrolls to it', jump.on === 'sl-day|2026-11-28' && jump.focus && jump.top >= -2 && jump.top < 200, JSON.stringify(jump));
+await page.evaluate(() => SB.render());   // a later re-render (e.g. evidence arriving) keeps the highlight
+check('the highlight survives a re-render', await page.evaluate(() => !!document.querySelector('#sl-soccer-PSG-FCL-2026-11-28.sl-focus')));
+const tm = await page.evaluate(() => [...document.querySelectorAll('.sl-mid .sl-t')].map(x => [x.firstChild.textContent, (x.querySelector('small') || {}).textContent]));
+check('kick-off time split into the time and AM / PM', tm.length > 0 && tm.every(([t, ap]) => /^\d{1,2}:\d{2}$/.test(t) && /^(AM|PM)$/.test(ap)), JSON.stringify(tm.slice(0, 3)));
+// a game that has finished: shown when asked for, with the score and no + Slip buttons
+const fin = D.games.find(g => g.status === 'closed' && g.score && (D.players || []).some(p => p.gid === g.id)) || D.games.find(g => g.status === 'closed' && g.score);
+await page.evaluate(id => SB.goTab('slate', { gid: id }), fin.id);
+await page.waitForTimeout(200);
+const finC = await page.evaluate(id => { const c = document.getElementById('sl-' + id); return c ? { t: c.innerText, add: c.querySelectorAll('[data-sl-add]').length, focus: c.classList.contains('sl-focus') } : null; }, fin.id);
+check('a finished game asked for by {gid}: shown with its score, no pre-game lines and no + Slip', finC && finC.focus && /Final/i.test(finC.t) && finC.t.includes(`${fin.away.abbr} ${fin.score.away} – ${fin.score.home} ${fin.home.abbr}`) && finC.add === 0, JSON.stringify(finC && { add: finC.add, t: finC.t.slice(0, 80) }));
+await page.evaluate(() => SB.goTab('slate', { gid: 'nba-XXX-YYY-2026-11-23' }));
+await page.waitForTimeout(150);
+check('an unknown {gid} says so and shows the slate', /not in the feed any more/.test(await page.locator('.sl-root').innerText()) && await page.locator('.sl-card').count() > 0);
 await page.evaluate(() => SB.goTab('slate', { gid: 'nba-PHI-POR-2026-11-24' }));
 await page.waitForTimeout(250);
 const kp = await page.evaluate(() => [...document.querySelectorAll('#sl-nba-PHI-POR-2026-11-24 .sl-prop')].map(r => ({ name: r.querySelector('.sl-pn b').innerText, p: parseInt(r.querySelector('.sl-pc b').innerText, 10), key: r.querySelector('[data-sl-add]').dataset.slAdd })));

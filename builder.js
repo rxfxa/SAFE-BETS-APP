@@ -112,8 +112,8 @@
   }
   // season box scores and touchdown prices load on demand. insights.js indexes season.json only once its own tab has been shown,
   // so until then its board has no NFL / college / NHL / soccer box scores (and no season TDs). We read the same file (SB.season(),
-  // fetched once by the app) and fill those cards' recent games the way the Insights board does: his games before the game day,
-  // matched by name and team (ESPN abbreviation first, then the team name).
+  // fetched once by the app) and count each card's recent games ourselves (logFor), matching the player by name and team (ESPN
+  // abbreviation first, then the team name) the way the Insights board does.
   let ftAsked = false, SEA = { st: 'idle', d: null, ix: {} };
   const SLOG = new Map();
   function needSide() {
@@ -152,23 +152,35 @@
     const same = c.find(p => p.t === ab); if (same) return same;
     return c.length === 1 && (sp !== 'ncaaf' || !ab) ? c[0] : null;   // college names repeat, so there the team must match
   }
-  // the card's recent games, oldest first [{v, o}], plus season TDs for touchdown cards
+  // the card's recent games, oldest first [{d, o, v}], plus season TDs for touchdown cards. We count them ourselves (not from the
+  // Insights board) because box-score logs (season.json and nbalast4.json) are dated by the game's UTC start date: a game counts
+  // when its date is before the priced game's UTC date and not after today's UTC date. Cutting at the Los Angeles day would drop
+  // last night's game on a back-to-back (a 7 PM PT game on Nov 22 is dated Nov 23). With no box scores, the board's own recent
+  // form (playerform last 5) stays.
+  const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
   function logFor(it) {
-    const own = { vals: it.log && Array.isArray(it.log.vals) ? it.log.vals : [], src: (it.log && it.log.src) || '', stot: it.stot != null ? it.stot : null, sgp: it.sgp != null ? it.sgp : null };
-    if (it.sp === 'nba' || own.src === 'box scores' || (it.td && own.stot != null) || !SEA.d) return own;
-    const I = window.__insights; if (I && I.seasonState === 'ok') return own;
     if (SLOG.has(it.id)) return SLOG.get(it.id);
+    const own = { vals: it.log && Array.isArray(it.log.vals) ? it.log.vals : [], src: (it.log && it.log.src) || '', stot: it.stot != null ? it.stot : null, sgp: it.sgp != null ? it.sgp : null };
     let out = own;
     try {
-      const g = it.g || SB.gameById(it.gid), me = g && (g.home.abbr === it.team ? g.home : g.away), X = seaIdx(it.sp);
-      const P = g && X ? seaPlayer(it.sp, it.name, it.team, me ? me.name : '') : null;
-      if (P) {
-        const f = X.fi, day = E.dayOf(SB.startMs(g)), vals = [];
-        const fv = r => (it.td ? (+r[f.rtd] || 0) + (+r[f.ctd] || 0) : it.stat === 'hpts' ? (+r[f.g] || 0) + (+r[f.a] || 0) : f[it.stat] != null ? +r[f[it.stat]] : NaN);
-        for (const r of P.log) { if (!Array.isArray(r) || !(String(r[0]) < day)) continue; const v = fv(r); if (num(v)) vals.push({ d: r[0], o: r[1], v }); }
-        vals.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
-        const tot = it.td && Array.isArray(P.tot) && f.rtd != null ? (+P.tot[f.rtd - 3] || 0) + (+P.tot[f.ctd - 3] || 0) : null;
-        out = { vals: vals.length ? vals : own.vals, src: vals.length ? 'box scores' : own.src, stot: tot != null ? tot : own.stot, sgp: tot != null ? P.gp : own.sgp };
+      const g = it.g || SB.gameById(it.gid);
+      if (g) {
+        const cut = utcDay(SB.startMs(g)), today = utcDay(Date.now()), ok = d => /^\d{4}-\d\d-\d\d/.test(d) && d.slice(0, 10) < cut && d.slice(0, 10) <= today;
+        const by = new Map(), X = seaIdx(it.sp), me = g.home.abbr === it.team ? g.home : g.away;
+        const P = X ? seaPlayer(it.sp, it.name, it.team, me.name) : null;
+        let stot = null, sgp = null;
+        if (P) {
+          const f = X.fi, fv = r => (it.td ? (+r[f.rtd] || 0) + (+r[f.ctd] || 0) : it.stat === 'hpts' ? (+r[f.g] || 0) + (+r[f.a] || 0) : f[it.stat] != null ? +r[f[it.stat]] : NaN);
+          for (const r of P.log) { if (!Array.isArray(r) || !ok(String(r[0]))) continue; const v = fv(r); if (num(v)) by.set(String(r[0]).slice(0, 10), { d: String(r[0]).slice(0, 10), o: r[1], v }); }
+          if (it.td && Array.isArray(P.tot) && f.rtd != null) { stot = (+P.tot[f.rtd - 3] || 0) + (+P.tot[f.ctd - 3] || 0); sgp = P.gp; }
+        }
+        if (it.sp === 'nba' && (it.stat === 'pts' || it.stat === 'reb' || it.stat === 'ast')) {
+          let L = null; try { L = E.last4Of(it.team, it.name); } catch (e) { L = null; }
+          if (L && Array.isArray(L.rows)) for (const r of L.rows) { const d = String((r && r.date) || '').slice(0, 10); if (r && !r.dnp && num(r[it.stat]) && ok(d) && !by.has(d)) by.set(d, { d, o: r.opp, v: r[it.stat] }); }
+        }
+        const vals = [...by.values()].sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0));
+        if (vals.length) out = { vals, src: 'box scores', stot: stot != null ? stot : own.stot, sgp: stot != null ? sgp : own.sgp };
+        else if (stot != null) out = Object.assign({}, own, { stot, sgp });
       }
     } catch (e) { out = own; }
     SLOG.set(it.id, out); return out;
@@ -692,5 +704,6 @@ body:has(.bld-root.bld-side) #slipbar{display:none!important}
   // read-only hooks for tests
   window.__builder = { RISK, optsFor, get state() { return { mode: st.mode, sport: st.sport, day: st.day, n: st.n, risk: st.risk, props: st.props, seed: st.seed, opts: st.opts, T: st.T, cardId: st.cardId }; },
     deck: () => queue().map(x => x.id), list: () => liveList().map(x => x.id), item: id => deckList().find(x => x.id === id) || null, slipText: () => slipText(slipState()),
-    hits: id => { const it = deckList().find(x => x.id === id); return it ? hitsOf(it) : null; }, get seasonState() { return SEA.st; } };
+    hits: id => { const it = deckList().find(x => x.id === id); return it ? hitsOf(it) : null; }, log: id => { const it = deckList().find(x => x.id === id); return it ? logFor(it) : null; },
+    get seasonState() { return SEA.st; } };
 })();

@@ -9,20 +9,23 @@ const nameKey = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u
 const SEASON = JSON.parse(FX('season-2026-11-23.json'));
 const L4 = JSON.parse(FX('nbalast4-2026-11-23b.json'));
 const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
-// his games before `day`, oldest first, straight from the fixtures (NBA: season log with minutes > 0, joined with the last 4)
+// his games before `day`, oldest first, straight from the fixtures (NBA: season log with minutes > 0, joined with the last 4).
+// Logs are dated by the game's UTC start date, so `day` is the priced game's UTC date, and nothing after today's UTC date counts.
+const TODAY_UTC = '2026-11-23';
+const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
 function fixtureVals(sp, name, team, stat, day) {
   const S = SEASON.sports[sp], fi = f => 3 + S.fields.indexOf(f);
   let c = S.players.filter(p => nameKey(p.n) === nameKey(name));
   if (c.length > 1) c = c.filter(p => p.t === team);
   const by = new Map();
   if (c.length === 1) for (const r of c[0].log) {
-    if (!(r[0] < day)) continue;
+    if (!(r[0] < day && r[0] <= TODAY_UTC)) continue;
     if (sp === 'nba' && !(r[fi('min')] > 0)) continue;
     by.set(r[0], stat === 'td' ? (r[fi('rtd')] || 0) + (r[fi('ctd')] || 0) : r[fi(stat)]);
   }
   if (sp === 'nba' && L4.teams[team]) for (const g of L4.teams[team].games) {
     const e = Object.entries(g.players).find(([n]) => nameKey(n) === nameKey(name));
-    if (e && !e[1].dnp && g.date < day && !by.has(g.date)) by.set(g.date, e[1][stat]);
+    if (e && !e[1].dnp && g.date < day && g.date <= TODAY_UTC && !by.has(g.date)) by.set(g.date, e[1][stat]);
   }
   return { vals: [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(x => x[1]), P: c.length === 1 ? c[0] : null };
 }
@@ -38,6 +41,8 @@ const fr = await page.evaluate(() => SB.firstRender && SB.firstRender.ms);
 check('first render under 1,500 ms on the fixture slate', fr != null && fr < 1500, `${Math.round(fr)} ms`);
 const rr = await page.evaluate(() => { const t = performance.now(); SB.render(); return performance.now() - t; });
 check('a re-render stays fast', rr < 400, `${Math.round(rr)} ms`);
+const rms = await page.evaluate(() => __propan.renderMs);
+check('render time measured in the page: every render so far under 1,500 ms (incl. the cold one once the box scores load)', rms.n >= 2 && rms.max < 1500, `max ${Math.round(rms.max)} ms over ${rms.n} renders`);
 const t0 = await page.locator('.pa-root').innerText();
 check('header: kicker "Prop deep-dive" and the display title', /PROP DEEP-DIVE/i.test(t0) && /PROP\s*ANALYZER/i.test(await page.locator('.pa-root .ui-title').innerText()));
 check('honest line on the empty state: no sportsbook prop prices, model estimates, type your price', /No sportsbook prop prices/.test(t0) && /model estimates/.test(t0) && /type your book's price/.test(t0));
@@ -46,12 +51,13 @@ check('no certainty words', !/guarantee|\block\b|sure thing|can't lose|\bdue\b/i
 // ---------- empty state: the top 8 ----------
 const nTop = await page.locator('.pa-root .pa-trow').count();
 check('empty state lists the top 8 props on the slate', nTop === 8, `${nTop}`);
-const top0 = await page.evaluate(() => { const t = __propan.topProps()[0]; return { name: t.p.name, team: t.p.team, sp: t.p.sp, stat: t.stat, line: t.line, h: t.h, n: t.n, day: SB.engine.dayOf(t.p.start), rate: t.rate, ch: t.ch, rates: __propan.topProps().map(x => x.rate == null ? -1 : x.rate + ((SB.engine.STAT_PREF || {})[x.stat] || 0)) }; });
+const top0 = await page.evaluate(() => { const t = __propan.topProps()[0]; return { name: t.p.name, team: t.p.team, sp: t.p.sp, stat: t.stat, line: t.line, h: t.h, n: t.n, day: new Date(t.p.start).toISOString().slice(0, 10), rate: t.rate, ch: t.ch, rates: __propan.topProps().map(x => x.rate == null ? -1 : x.rate + ((SB.engine.STAT_PREF || {})[x.stat] || 0)) }; });
 const fx0 = fixtureVals(top0.sp, top0.name, top0.team, top0.stat, top0.day).vals.slice(-10);
 const fh0 = fx0.filter(v => (top0.stat === 'td' ? v >= 1 : v > top0.line)).length;
 check('top row: hit rate over the last 10 matches the fixture box scores', fh0 === top0.h && fx0.length === top0.n, `${top0.name} ${top0.stat} ${top0.line}: fixture ${fh0}/${fx0.length}, shown ${top0.h}/${top0.n}`);
 check('top list is ordered by hit rate (points get the owner\'s small selection bonus)', top0.rates.every((r, i, a) => i === 0 || a[i - 1] >= r - 1e-9), top0.rates.map(r => r.toFixed(2)).join(','));
 const row0 = await page.locator('.pa-root .pa-trow').first().innerText();
+check('top row labels the sample under the hit rate ("h of n")', row0.includes(`${top0.h} of ${top0.n}`), row0.replace(/\n/g, ' | '));
 check('top row shows name, line, fair odds and the hit rate', row0.includes(top0.name) && row0.includes(String(top0.line)) && /fair [+-]\d+/.test(row0) && row0.includes(String(Math.round(top0.h / top0.n * 100))), row0.replace(/\n/g, ' | '));
 await page.locator('[data-ui-seg="pa-sort|mu"]').click();
 const muOrder = await page.evaluate(() => __propan.topProps().map(x => (x.mu ? x.mu.s : -1)));
@@ -63,7 +69,7 @@ check('no horizontal scroll at 390 px (empty state)', await noScroll(page));
 const subj = await page.evaluate(() => {
   const L = __propan.slate().list.filter(p => p.sp === 'nba' && p.stats.pts && p.stats.pts.avg >= 14);
   const p = L[0], pl = p.stats.pts;
-  return { pk: p.pk, id: pl.id, name: p.name, team: p.team, gid: p.gid, day: SB.engine.dayOf(p.start) };
+  return { pk: p.pk, id: pl.id, name: p.name, team: p.team, gid: p.gid, day: new Date(p.start).toISOString().slice(0, 10) };
 });
 await page.evaluate(id => SB.goTab('propan', { id, line: 15 }), subj.id);
 await page.waitForSelector('.pa-root[data-pa="prop"]');
@@ -121,6 +127,19 @@ check('ladder: the current line (20.5, off the ladder) is marked', await page.ev
 await page.locator('[data-pa-line="14.5"]').click();
 R = await read();
 check('tapping a ladder line uses it', R.line === '14.5' && R.chance.startsWith(String(Math.round(eng.p15 * 100))), R.line);
+// a typed line fires 'change' on mousedown of the next click: the redraw must not swallow that click or pull focus back
+await page.fill('#pa-line', '18');
+await page.locator('[data-ui-seg="pa-ou|under"]').click();
+await page.waitForTimeout(50);
+R = await read();
+check('type a line, then click Under: both apply (the click is not lost to the redraw)', R.line === '17.5' && /Under 17\.5/.test(R.mk), `${R.line} ${R.mk}`);
+await page.locator('[data-ui-seg="pa-ou|over"]').click();
+await page.fill('#pa-line', '22');
+await page.keyboard.press('Tab');
+await page.waitForTimeout(50);
+const fA = await page.evaluate(() => ({ line: document.getElementById('pa-line').value, f: document.activeElement && document.activeElement.getAttribute('data-pa-step') }));
+check('type a line, then Tab: the line applies and focus moves on to + (not back into the box)', fA.line === '21.5' && fA.f === '1', JSON.stringify(fA));
+await page.locator('[data-pa-line="14.5"]').click();
 
 // ---------- game log, splits, factors (vs the fixture box scores) ----------
 const fx = fixtureVals('nba', subj.name, subj.team, 'pts', subj.day);
@@ -129,6 +148,8 @@ const bars = await page.evaluate(() => [...document.querySelectorAll('[data-pa-l
 const sum = await page.evaluate(() => document.querySelector('[data-pa-log] .ui-loghead b').textContent);
 check('game log: his last 10 games from the fixture box scores, oldest first', JSON.stringify(bars) === JSON.stringify(last10), `${bars} vs ${last10}`);
 check('game log summary: "h of n over 14.5"', sum === `${last10.filter(v => v > 14.5).length} of ${last10.length} over 14.5`, sum);
+const gl = await page.evaluate(() => [...document.querySelectorAll('[data-pa-log] .ui-log .b')].map(b => [b.getBoundingClientRect().width, b.querySelector('.bar').getBoundingClientRect().width, getComputedStyle(b.querySelector('.bar')).marginBottom]));
+check('game log at 390 px: every game gets the same column and a solid bar (the app\'s older .hit / .bar rules are undone)', gl.length > 0 && Math.max(...gl.map(x => x[0])) - Math.min(...gl.map(x => x[0])) < 1 && gl.every(x => x[1] >= 12 && x[2] === '0px'), JSON.stringify(gl.map(x => [Math.round(x[0]), Math.round(x[1])])));
 const splits = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-pa-split]')].map(d => [d.getAttribute('data-pa-split'), d.innerText.replace(/\n/g, ' | ')])));
 const l5 = fx.vals.slice(-5), l5avg = l5.reduce((a, b) => a + b, 0) / l5.length;
 check('split "Last 5": average and hits from the fixture, with its sample size', splits['Last 5'] && splits['Last 5'].includes(f1(l5avg)) && splits['Last 5'].includes(`${l5.filter(v => v > 14.5).length} of 5 over 14.5`) && /5 games/.test(splits['Last 5']), splits['Last 5']);
@@ -143,6 +164,21 @@ const t1 = await page.locator('.pa-root').innerText();
 check('notes: sample size, source, the half-point rule, fair odds not a book price', /Recent games: \d+ from ESPN box scores/.test(t1) && /over 14\.5 means 15 or more/.test(t1) && /not a book's price/.test(t1));
 check('no horizontal scroll at 390 px (analysis)', await noScroll(page));
 
+// ---------- back-to-back: last night's game is logged under today's UTC date and must count ----------
+{
+  const b2b = await page.evaluate(() => { const p = __propan.slate().list.find(x => x.name === 'Pascal Siakam' && x.stats.pts); return p ? { id: p.stats.pts.id, team: p.team, la: SB.engine.dayOf(p.start), utc: new Date(p.start).toISOString().slice(0, 10) } : null; });
+  if (b2b) {
+    await page.evaluate(id => SB.goTab('propan', { id, line: 15 }), b2b.id);
+    await page.waitForSelector('.pa-root[data-pa="prop"]');
+    const fxb = fixtureVals('nba', 'Pascal Siakam', b2b.team, 'pts', b2b.utc).vals.slice(-10);
+    const P = SEASON.sports.nba.players.find(x => x.n === 'Pascal Siakam'), last = P.log.find(r => r[0] === '2026-11-23');
+    const barsB = await page.evaluate(() => [...document.querySelectorAll('[data-pa-log] .ui-log .b .v')].map(v => +v.textContent));
+    check('back-to-back (IND, played Nov 22 PT, logged 2026-11-23): that game is in the log (cut at the priced game\'s UTC date, not the LA day)', b2b.la === '2026-11-23' && b2b.utc === '2026-11-24' && !!last && barsB[barsB.length - 1] === last[3 + SEASON.sports.nba.fields.indexOf('pts')] && JSON.stringify(barsB) === JSON.stringify(fxb), `${barsB} vs ${fxb}`);
+  } else check('the fixture slate has Pascal Siakam (IND back-to-back)', false);
+  await page.evaluate(id => SB.goTab('propan', { id, line: 15 }), subj.id);
+  await page.waitForSelector('.pa-root[data-pa="prop"]');
+}
+
 // ---------- your price -> edge ----------
 await page.fill('#pa-price', '-110');
 await page.press('#pa-price', 'Enter');
@@ -156,6 +192,16 @@ check('price -110: edge = model − implied, in points', tiles.some(t => t === `
 check('price -110: verdict vs your price per the spec', R.verdict === vPrice && /vs your price/.test(R.vk), `${R.verdict} edge ${edge.toFixed(1)}`);
 const vtxt = await page.locator('.pa-verd p').innerText();
 check('price -110: the verdict line names the implied chance and the edge', vtxt.includes('52.4%') && vtxt.includes(sg(edge)), vtxt);
+check('a big edge (10+ pts) carries a caution that the model may be missing news', edge >= 10 ? /rare against a real book/.test(vtxt) : !/rare against a real book/.test(vtxt), `edge ${edge.toFixed(1)}`);
+await page.fill('#pa-price', '-125');
+await page.keyboard.press('Shift+Tab');
+await page.waitForTimeout(450);
+const fP = await page.evaluate(() => ({ f: document.activeElement && (document.activeElement.id || document.activeElement.getAttribute('data-ui-seg')), tiles: [...document.querySelectorAll('.pa-px .ui-tile')].map(t => t.innerText.replace(/\n/g, ' ')).join(' · ') }));
+check('a typed price redraws without pulling focus back into the box once the viewer has moved on', fP.f === 'pa-ou|under' && /-125/.test(fP.tiles), JSON.stringify(fP));
+await page.fill('#pa-price', '50');
+await page.press('#pa-price', 'Enter');
+const b50 = await page.evaluate(() => ({ tiles: [...document.querySelectorAll('.pa-px .ui-tile')].map(t => t.innerText.replace(/\n/g, ' ')).join(' · '), v: document.querySelector('.ui-verdict .t').textContent }));
+check('a bare "50" is not read as a price (not valid American odds; was read as decimal 50.0)', /not read/i.test(b50.tiles) && b50.v === vNo, JSON.stringify(b50));
 await page.fill('#pa-price', '-2000');
 await page.waitForTimeout(600);
 R = await read();
@@ -254,9 +300,10 @@ await browser.close();
   await browser.close();
 }
 
-// ======================= season.json missing =======================
+// ======================= season.json and injuries.json missing =======================
 {
-  const { page, errors, browser } = await open({ width: 390, height: 844, tab: 'propan', pins: { 'season.json': null } });
+  const { page, errors, browser } = await open({ width: 390, height: 844, tab: 'propan', pins: { 'season.json': null, 'injuries.json': null } });
+  const cerr = []; page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) cerr.push(m.text().slice(0, 160)); });
   await page.waitForFunction(() => window.__propan && __propan.seasonState === 'none', null, { timeout: 20000 });
   await page.waitForTimeout(200);
   check('season.json missing: the empty state still lists props', (await page.locator('.pa-trow').count()) > 0);
@@ -268,6 +315,7 @@ await browser.close();
   const lg = await page.evaluate(() => [...document.querySelectorAll('[data-pa-log] .ui-log .b .v')].length);
   check('season.json missing: NBA game log falls back to the last-4 box scores / morning form', lg >= 3 && lg <= 5, String(lg));
   check('season.json missing: no page errors, no horizontal scroll', errors.length === 0 && await noScroll(page), errors.join(' | '));
+  check('injuries.json missing: the screen still draws (it crashed with "could not load" before)', !/could not load/.test(await page.locator('#main').innerText()) && cerr.length === 0, cerr.join(' | '));
   await browser.close();
 }
 await done(null);

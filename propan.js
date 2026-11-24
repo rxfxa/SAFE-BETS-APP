@@ -197,13 +197,18 @@
   }
 
   // ---------- his games before this one, oldest first: [{d, o, h, v, row}] ----------
+  // Box-score logs (season.json, nbalast4.json) are dated by the game's UTC start date, not the Los Angeles day (a 4 PM PT game
+  // on Nov 22 is logged 2026-11-23). So a logged game counts when its date is before the priced game's UTC date and not after
+  // today's UTC date; cutting at the LA day would drop last night's game for a team on a back-to-back.
+  const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
+  function cutOf(g) { const gd = utcDay(SB.startMs(g)), nd = utcDay(Date.now()); return d => { d = String(d); return d < gd && d <= nd; }; }
   function logOf(p, stat) {
-    const day = E.dayOf(p.start), X = SEAS && SEAS[p.sp];
+    const ok = cutOf(p.g), X = SEAS && SEAS[p.sp];
     const P = seasonPlayer(p.sp, p.name, p.team, p.teamName);
     const by = new Map(); let src = '';
     if (P && X) {
       for (const r of P.log) {
-        if (!Array.isArray(r) || !(String(r[0]) < day)) continue;
+        if (!Array.isArray(r) || !ok(r[0])) continue;
         if (p.sp === 'nba' && !((fval(X, r, 'min') || 0) > 0)) continue;   // a DNP is not a game played
         const v = statVal(X, r, stat); if (num(v)) by.set(r[0], { d: r[0], o: String(r[1] || ''), h: r[2] === 1 ? 1 : r[2] === 0 ? 0 : null, v, row: r });
       }
@@ -211,7 +216,7 @@
     }
     if (p.sp === 'nba' && (stat === 'pts' || stat === 'reb' || stat === 'ast')) {
       let L = null; try { L = E.last4Of(p.team, p.name); } catch (e) { L = null; }
-      if (L && Array.isArray(L.rows)) for (const r of L.rows) if (r && !r.dnp && num(r[stat]) && String(r.date) < day && !by.has(r.date)) by.set(r.date, { d: r.date, o: String(r.opp || ''), h: null, v: r[stat], row: null, min: r.min });
+      if (L && Array.isArray(L.rows)) for (const r of L.rows) if (r && !r.dnp && num(r[stat]) && ok(r.date) && !by.has(r.date)) by.set(r.date, { d: r.date, o: String(r.opp || ''), h: null, v: r[stat], row: null, min: r.min });
       if (by.size && !src) src = 'ESPN box scores (last 4)';
     }
     let rows = [...by.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));

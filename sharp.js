@@ -43,7 +43,6 @@
   // name, or nickname backed that way), 1 (a nickname or a distinctive word alone) or 0; a match needs one side at 3 and the other
   // at 1+, and a tie between two games (or both ways round) is no match at all. Home / away come from the teams, not the labels.
   const N = s => String(s == null ? '' : s).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\b(fc|cf|sc|afc|ac|cd|club)\b/g, ' ').replace(/\s+/g, ' ').trim();
-  const COMMON = new Set(['united', 'city', 'athletic', 'atletico', 'sporting', 'racing', 'olympique', 'borussia', 'dynamo', 'dinamo', 'union', 'rovers', 'wanderers', 'albion', 'county', 'state', 'saint', 'college', 'eastern', 'western', 'northern', 'southern', 'central']);
   const subseq = (a, b) => { if (!a) return false; let i = 0; for (const c of b) if (c === a[i] && ++i === a.length) return true; return false; };
   function sideFit(pt, ft) {
     if (!pt || !ft) return 0;
@@ -57,7 +56,7 @@
       if (x === ours) return 3;
       const X = ' ' + x + ' ';
       if (O.includes(X) || X.includes(O)) { best = Math.max(best, (O.includes(X) ? x : ours).includes(' ') || back ? 3 : 1); continue; }
-      if (x.split(' ').some(w => w.length >= 5 && !COMMON.has(w) && O.includes(' ' + w + ' '))) best = Math.max(best, 1);
+      if (x.split(' ').some(w => w.length >= 5 && O.includes(' ' + w + ' '))) best = Math.max(best, 1);
     }
     return best;
   }

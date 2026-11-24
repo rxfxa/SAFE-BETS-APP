@@ -46,31 +46,43 @@ check('top card: name, matchup, market, fair odds from the model chance, "$100 p
 check('progress reads "1 of N"', s.pos.trim() === `1 of ${s.n}`, s.pos);
 check('two cards wait behind the top one (inert, hidden from screen readers)', await page.evaluate(() => [...document.querySelectorAll('.bld-root .bld-under')].every(u => u.inert && u.getAttribute('aria-hidden') === 'true') && document.querySelectorAll('.bld-root .bld-under').length === 2));
 
-// ---------- NFL cards get their box scores even before Insights has been opened ----------
-// (bug: insights.js indexes season.json only when its own tab renders, so a first visit here showed no hit rate on any TD card)
+// ---------- recent games on the cards: box scores counted by the UTC date rule, even before Insights has been opened ----------
+// bugs: (1) insights.js indexes season.json only when its own tab renders, so a first visit here showed no hit rate on any TD card;
+// (2) box-score logs are dated by the game's UTC start date, so cutting at the Los Angeles day dropped last night's game on a back-to-back.
 await page.waitForFunction(() => ['ok', 'none'].includes(window.__builder.seasonState), null, { timeout: 30000 });
 const HB = await page.evaluate(async () => {
-  const E = SB.engine, d = await SB.season(), X = d.sports.nfl, fi = {}; X.fields.forEach((f, i) => { fi[f] = 3 + i; });
-  const ids = window.__builder.list().filter(id => window.__builder.item(id).sp !== 'nba'), out = {};
-  for (const id of ids) out[id] = window.__builder.hits(id).label;
-  // recompute one touchdown card by hand: his rushing + receiving TDs in games before the game day, last 10
-  const td = ids.map(id => window.__builder.item(id)).filter(it => it.td).find(it => X.players.filter(p => E.nameKey(p.n) === E.nameKey(it.name)).length === 1);
-  let want = null, got = null;
-  if (td) {
-    const P = X.players.find(p => E.nameKey(p.n) === E.nameKey(td.name)), day = E.dayOf(SB.startMs(SB.gameById(td.gid)));
-    const v = P.log.filter(r => r[0] < day).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(r => (+r[fi.rtd] || 0) + (+r[fi.ctd] || 0)).slice(-10);
-    want = `L${v.length} · ${v.filter(x => x >= 1).length} of ${v.length}` + (v.length < 5 ? ' (few games)' : ''); got = out[td.id];
-  }
-  return { ins: window.__insights.seasonState, out, n: ids.length, tdWith: ids.filter(id => window.__builder.item(id).td && /^L\d/.test(out[id])).length, tdAll: ids.filter(id => window.__builder.item(id).td).length, want, got, name: td && td.name };
+  const E = SB.engine, d = await SB.season(), B = window.__builder, utc = ms => new Date(ms).toISOString().slice(0, 10), today = utc(Date.now());
+  const fiOf = sp => { const fi = {}; d.sports[sp].fields.forEach((f, i) => { fi[f] = 3 + i; }); return fi; };
+  const ids = B.list(), out = {};
+  for (const id of ids) out[id] = B.hits(id).label;
+  const lab = v => `L${v.length} · ${v.filter(x => x.h).length} of ${v.length}` + (v.length < 5 ? ' (few games)' : '');
+  // one touchdown card by hand: rushing + receiving TDs in games dated before the game's UTC date (and not after today), last 10
+  const X = d.sports.nfl, fi = fiOf('nfl');
+  const td = ids.map(B.item).filter(it => it.td).find(it => X.players.filter(p => E.nameKey(p.n) === E.nameKey(it.name)).length === 1);
+  let tdWant = null;
+  if (td) { const P = X.players.find(p => E.nameKey(p.n) === E.nameKey(td.name)), cut = utc(SB.startMs(SB.gameById(td.gid)));
+    tdWant = lab(P.log.filter(r => r[0] < cut && r[0] <= today).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(r => ({ h: (+r[fi.rtd] || 0) + (+r[fi.ctd] || 0) >= 1 })).slice(-10)); }
+  // one NBA card on a back-to-back: season.json + nbalast4 rows by date, the game dated today (UTC) included
+  const N = d.sports.nba, fn = fiOf('nba');
+  const b2b = ids.map(B.item).find(it => it.sp === 'nba' && ['pts', 'reb', 'ast'].includes(it.stat) && N.players.filter(p => E.nameKey(p.n) === E.nameKey(it.name)).length === 1 &&
+    (E.last4Of(it.team, it.name) || { rows: [] }).rows.some(r => !r.dnp && r.date === today && r[it.stat] != null));
+  let nbaWant = null, nbaLast = null;
+  if (b2b) { const P = N.players.find(p => E.nameKey(p.n) === E.nameKey(b2b.name)), cut = utc(SB.startMs(SB.gameById(b2b.gid))), by = new Map();
+    for (const r of P.log) if (r[0] < cut && r[0] <= today) by.set(r[0], +r[fn[b2b.stat]]);
+    for (const r of E.last4Of(b2b.team, b2b.name).rows) if (!r.dnp && r[b2b.stat] != null && r.date < cut && r.date <= today && !by.has(r.date)) by.set(r.date, +r[b2b.stat]);
+    nbaWant = lab([...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, v]) => ({ h: v >= b2b.thr })).slice(-10)); nbaLast = B.log(b2b.id).vals.slice(-1)[0]; }
+  return { ins: window.__insights.seasonState, out, n: ids.length, tdWith: ids.filter(id => B.item(id).td && /^L\d/.test(out[id])).length, tdAll: ids.filter(id => B.item(id).td).length,
+    td: td && { name: td.name, got: out[td.id], want: tdWant }, nba: b2b && { name: b2b.name + ' ' + b2b.thr + '+ ' + b2b.stat, got: out[b2b.id], want: nbaWant, last: nbaLast && nbaLast.d, today } };
 });
 check('first visit (Insights never opened): touchdown cards show his recent games from season.json', HB.ins === 'idle' && HB.tdAll > 0 && HB.tdWith === HB.tdAll, `${HB.tdWith} of ${HB.tdAll} TD cards`);
-check('…and the count matches a hand recount of his box scores', HB.want && HB.got === HB.want, `${HB.name}: ${HB.got} vs ${HB.want}`);
+check('…a TD card\'s count matches a hand recount of his box scores', HB.td && HB.td.want && HB.td.got === HB.td.want, HB.td && `${HB.td.name}: ${HB.td.got} vs ${HB.td.want}`);
+check('back-to-back: last night\'s game (dated today, UTC) counts, and the NBA card matches a hand recount', HB.nba && HB.nba.got === HB.nba.want && HB.nba.last === HB.nba.today, HB.nba && `${HB.nba.name}: ${HB.nba.got} vs ${HB.nba.want}, last game ${HB.nba.last}`);
 await page.evaluate(() => SB.goTab('insights', {}));
 await page.waitForFunction(() => window.__insights.seasonState === 'ok', null, { timeout: 30000 });
 await page.evaluate(() => SB.goTab('builder', {}));
 await page.waitForSelector('.bld-root .bld-top');
 const HB3 = await page.evaluate(out => Object.keys(out).filter(id => { const h = window.__builder.hits(id); return !h || h.label !== out[id]; }).map(id => `${id}: ${out[id]} -> ${(window.__builder.hits(id) || {}).label}`), HB.out);
-check('…the same hit rates Insights computes once it has indexed the season', !HB3.length && HB.n > 0, HB3.slice(0, 3).join(' | ') || `${HB.n} non-NBA cards`);
+check('…and the cards\' hit rates stay the same once Insights has indexed the season', !HB3.length && HB.n > 0, HB3.slice(0, 3).join(' | ') || `${HB.n} cards`);
 
 // ---------- add / pass with the buttons ----------
 const t0 = s.top;

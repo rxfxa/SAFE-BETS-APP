@@ -222,7 +222,8 @@
     else if (!M) body = `<div class="sl-lean sl-none"><div class="sl-lk">No prices yet</div><div class="sl-lt">No sportsbook prices in the feed for this game yet, so there are no model lines.</div></div>`;
     else {
       const wb = `<div class="sl-wbar" role="img" aria-label="${esc(`Model win chances: ${A.name} ${pct(M.pA)}${M.pD ? `, draw ${pct(M.pD)}` : ''}, ${H.name} ${pct(M.pH)}`)}"><i style="width:${(M.pA * 100).toFixed(1)}%;--h:${U.hue(A.abbr)}"></i>${M.pD ? `<i class="sl-wd" style="width:${(M.pD * 100).toFixed(1)}%"></i>` : ''}<i style="width:${(M.pH * 100).toFixed(1)}%;--h:${U.hue(H.abbr)}"></i></div>`;
-      const lean = leans.length ? leans.map(leanHTML).join('') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p>${(q => (q ? `<p class="sl-pmq">${esc(q)}</p>` : ''))(pmQuiet(g))}</div>`;
+      const pq = leans.some(l => l.src === 'pm') ? '' : pmQuiet(g);   // Polymarket's word when it is not a lean
+      const lean = leans.length ? leans.map(leanHTML).join('') + (pq ? `<p class="sl-pmx" data-sl-pmq>${esc(pq)}</p>` : '') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p>${pq ? `<p class="sl-pmq" data-sl-pmq>${esc(pq)}</p>` : ''}</div>`;
       const ctx = `<div class="sl-ctx">${M.ctx.map(([l, p]) => `<div class="sl-r"><span>${esc(l)}</span><span class="sl-bar"><i style="width:${clamp(p * 100, 0, 100).toFixed(1)}%"></i></span><b>${esc(pct(p))}</b></div>`).join('')}</div>`;
       body = wb + lean + tilesHTML(g, M, hl) + ctx;
     }
@@ -352,6 +353,7 @@
 .sl-lean.sl-none .sl-lk{color:#ffffff80}.sl-lean.sl-none .sl-lt{font:600 15px/1.3 var(--fui);margin-top:6px}
 .sl-lean.sl-none p{margin:6px 0 0;font:400 12.5px/1.45 var(--fui);color:#ffffff99}
 .sl-lean.sl-none p.sl-pmq{color:#ffffffbf}
+.sl-pmx{margin:8px 16px 0;font:400 12.5px/1.45 var(--fui);color:#ffffffa6}
 .sl-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 14px 0}
 .sl-tile{min-width:0;padding:10px 11px;border-radius:14px;border:1px solid var(--hair2);background:rgba(255,255,255,.03)}
 .sl-tile .ui-lbl{display:block;margin-bottom:6px;font-size:9.5px}

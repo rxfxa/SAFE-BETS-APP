@@ -180,11 +180,13 @@ try {
   // ---------- click-through: tabs, game sheet, slip ----------
   await page.evaluate(() => SB.goTab('trending'));
   const tabs = await page.$$eval('.tab', bs => bs.map(b => b.dataset.t).filter(t => t !== 'ztest'));
-  for (const t of tabs) { await page.click(`.tab[data-t="${t}"]`); await page.waitForTimeout(120);
+  // phones: the sections live in the menu drawer (Pro interface), so open it before each click, as a viewer would
+  const clickTab = async t => { await page.evaluate(() => SB.openNav()); await page.click(`.tab[data-t="${t}"]`); };
+  for (const t of tabs) { await clickTab(t); await page.waitForTimeout(120);
     const sw = await page.evaluate(() => document.documentElement.scrollWidth);
     if (sw > 390) check(`no horizontal scroll on ${t}`, false, `scrollWidth ${sw}`); }
   check('visited every tab', tabs.includes('odds') && tabs.length >= 12, tabs.join(','));
-  await page.click('.tab[data-t="soccer"]');
+  await clickTab('soccer');
   await page.click('.mk .team');
   await page.waitForSelector('#sheet.on .csc');
   await page.click('#sheet .csc >> nth=11');
@@ -199,13 +201,13 @@ try {
   check('price check accepts fractional input and shows EV / Kelly', /Expected value/.test(chk) && /Kelly/.test(chk), chk.slice(0, 80));
   const minTxt = await page.textContent('#minOut');
   check('min price for +EV and 5% edge shown', /\+EV only at/.test(minTxt) && /5% edge/.test(minTxt));
-  await page.selectOption('#oddsFmt', 'decimal');
+  await page.evaluate(() => SB.openNav()); await page.selectOption('#oddsFmt', 'decimal'); await page.evaluate(() => SB.closeNav());
   const slipO = await page.textContent('#slipO');
   check('slip bar follows odds format', /^\d+\.\d+$/.test(slipO.trim()), slipO);
-  await page.selectOption('#oddsFmt', 'american');
+  await page.evaluate(() => SB.openNav()); await page.selectOption('#oddsFmt', 'american'); await page.evaluate(() => SB.closeNav());
   await page.click('#clearSlip');
   // odds tools tab works with live inputs
-  await page.click('.tab[data-t="odds"]');
+  await clickTab('odds');
   await page.fill('[data-ot="conv"]', '3/2');
   const conv = await page.textContent('#o-conv');
   check('odds converter live update', /\+150/.test(conv) && /40\.00%/.test(conv), conv.slice(0, 60));

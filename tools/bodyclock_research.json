@@ -291,7 +291,7 @@
  "rule": {
   "nfl": "A Pacific-time team (LAR, LAC, SF, SEA, LV) against an Eastern-time team, kicking off at 8 PM ET or later.",
   "nba": "A Pacific-time team (LAL, LAC, GS, SAC, POR) against an Eastern-time team, tipping off at 8 PM ET or later.",
-  "soccer": "MLS: a Pacific club against an Eastern club, kicking off at 8 PM ET or later. The list also shows other clubs whose home clocks are 2+ hours apart, for context."
+  "soccer": "In MLS, a Pacific club against an Eastern club, kicking off at 8 PM ET or later. The list also shows other clubs whose home clocks are 2+ hours apart, for context."
  },
  "notVerified": [
   "The 1997 paper's full text: we read its abstract and later write-ups only, so its game count and the exact 67.9% were not seen in the paper.",

@@ -131,7 +131,7 @@
     html += section('The market', `${mk.book || ''}${mk.fetched ? ` · checked ${dateOnly(mk.fetched)}` : ''}`,
       `<div class="pc">${SB.ui && SB.ui.tiles ? SB.ui.tiles(tiles) : tiles.map(t => `<div>${esc(t[0])}: ${esc(t[1])}</div>`).join('')}
        ${mk.move ? `<div class="why">${esc(mk.move)}</div>` : ''}
-       <div class="note">"Market chance" is the moneyline with the bookmaker's margin taken out.${M.predictor ? ` ${esc(M.predictor.source || '')}.` : ''}${M.polymarket && M.polymarket.note ? ` Polymarket: ${esc(M.polymarket.note)}.` : ''} Prices move: check yours before betting.</div></div>`);
+       <div class="note">"Market chance" is the moneyline with the bookmaker's margin taken out.${M.predictor ? ` ${esc(M.predictor.source || '')}.` : ''}${M.polymarket && M.polymarket.note ? ` ${/^Polymarket/.test(M.polymarket.note) ? '' : 'Polymarket: '}${esc(M.polymarket.note)}.` : ''} Prices move: check yours before betting.</div></div>`);
     // the model + parlays
     html += section("The app's model", 'the engine, from the feed\'s prices', modelBlock(M, mdl, hA, aA, mk));
     // last meeting

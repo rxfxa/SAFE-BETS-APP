@@ -58,11 +58,16 @@ def warn(msg):
 # ---------------------------------------------------------------- network + cache
 _last = [0.0]
 _down = [0]  # consecutive failed URLs; after 5 the network is taken as down and the rest fail fast
+NET = {'fail': False}  # True when the last get() failed for network reasons (not a definite 400 / 404 answer)
+_sec = ['']  # the section being built; failed summary / schedule fetches are counted against it
+FAILS = Counter()
 
 
 def get(url, timeout=30):
+    NET['fail'] = False
     if _down[0] >= 5:
         STATS['failed'] += 1
+        NET['fail'] = True
         return None
     for i in range(4):  # the first try and up to 3 retries
         wait = 0.25 - (time.time() - _last[0])
@@ -84,6 +89,7 @@ def get(url, timeout=30):
         if i < 3:
             time.sleep(1.5 * (i + 1))
     STATS['failed'] += 1
+    NET['fail'] = True
     _down[0] += 1
     if _down[0] == 5:
         warn('5 requests in a row failed: treating the network as down for the rest of this run')
@@ -120,6 +126,9 @@ def summary(path, eid):
         STATS['cached'] += 1
     else:
         d = get(f'{API}{path}/summary?event={eid}')
+        if d is None and NET['fail']:
+            FAILS[_sec[0]] += 1
+            return None  # not remembered: a later call tries again, and the section is failed
         if d:
             d = {k: d[k] for k in KEEP if k in d}
             if 'drives' in d:  # only what the last-score line needs
@@ -138,7 +147,7 @@ def summary(path, eid):
     return d
 
 
-def cached_get(url, name):
+def cached_get(url, name, count=True):
     """For data that never changes (past seasons' schedules, a club's home league): fetched once, kept in .work/espn."""
     fn = os.path.join(CACHE, name)
     d = jload(fn)
@@ -146,6 +155,8 @@ def cached_get(url, name):
         d = get(url)
         if d is not None:
             jsave(fn, d)
+        elif NET['fail'] and count:
+            FAILS[_sec[0]] += 1
     else:
         STATS['cached'] += 1
     return d
@@ -386,11 +397,15 @@ def nfl_upcoming(rows):
         if pe:
             west = r['home'] if zh == 'Pacific' else r['away']
             east = r['away'] if west == r['home'] else r['home']
-            g['why'] = f"{west} (Pacific) vs {east} (Eastern), night kickoff: the reel's rule would back {west}. Our tests found no edge in this spot once the prices are counted."
+            g['why'] = f"{west} (Pacific) vs {east} (Eastern), night kickoff: the reel's rule would back {west}. " + NFL_TEST['home' if west == r['home'] else 'away']
             g['west'] = west
             g['westLine'] = None if not L or L['hs'] is None else (L['hs'] if west == r['home'] else -L['hs'])
         games.append(g)
     return games, tbd
+
+
+NFL_TEST = {'away': 'Our NFL test: 54.5% over 55 decisions, too few to tell from chance; when the West team travelled east, 13-7-1 (20 decisions).',
+            'home': 'Our NFL test: 54.5% over 55 decisions, too few to tell from chance; with the West team at home, 17-18-1 (35 decisions).'}
 
 
 def ats_word(x):
@@ -431,7 +446,7 @@ def team_games(rows, ab):
         L = lines(summary(NFLP, r['id']))
         sp = None if not L or L['hs'] is None else (L['hs'] if home else -L['hs'])
         tot = L['tot'] if L else None
-        out.append({'date': r['t'].strftime('%Y-%m-%d'), 'opp': r['away'] if home else r['home'], 'home': home, 'pf': int(pf), 'pa': int(pa),
+        out.append({'date': str(etd(r['t'])), 'opp': r['away'] if home else r['home'], 'home': home, 'pf': int(pf), 'pa': int(pa),
                     'res': 'W' if pf > pa else 'L' if pf < pa else 'T', 'spread': sp, 'total': tot,
                     'ats': None if sp is None else ('W' if pf - pa + sp > 0 else 'L' if pf - pa + sp < 0 else 'P'),
                     'ou': None if tot is None else ('O' if pf + pa > tot else 'U' if pf + pa < tot else 'P'), '_t': r['t']})
@@ -471,13 +486,14 @@ def h2h_games(rows, Y, r):
     games.sort(key=lambda x: x['t'])
     out = []
     for x in games:
-        L = lines(summary(NFLP, x['id']))
+        sm = summary(NFLP, x['id'])
+        L = lines(sm)
         hsp, tot = (L['hs'], L['tot']) if L else (None, None)
         cov = None if hsp is None else (x['home'] if x['hs'] - x['as'] + hsp > 0 else x['away'] if x['hs'] - x['as'] + hsp < 0 else 'push')
         T = x['hs'] + x['as']
-        out.append({'date': x['t'].strftime('%Y-%m-%d'), 'away': x['away'], 'home': x['home'], 'score': f"{x['away']} {int(x['as'])} - {x['home']} {int(x['hs'])}",
+        out.append({'date': str(etd(x['t'])), 'away': x['away'], 'home': x['home'], 'score': f"{x['away']} {int(x['as'])} - {x['home']} {int(x['hs'])}",
                     'line': (L['details'] if L and hsp is not None else None), 'cover': cov,
-                    'ou': None if tot is None else ('O' if T > tot else 'U' if T < tot else 'P'), '_x': x, '_L': L})
+                    'ou': None if tot is None else ('O' if T > tot else 'U' if T < tot else 'P'), '_x': x, '_L': L, '_got': sm is not None})
     return out
 
 
@@ -563,6 +579,8 @@ def injuries(summ, r):
     for s, tid in (('away', r['aid']), ('home', r['hid'])):
         ro = get(f'{API}{NFLP}/teams/{tid}/roster')
         if not ro:
+            if NET['fail']:
+                warn(f"roster {tid} could not be fetched: injuries from the game summary only")
             continue
         have = {p['name'] for p in out[s]}
         extra = []
@@ -594,13 +612,12 @@ WORDS = {0: 'on game day', 1: 'one day out', 2: 'two days out', 3: 'three days o
 
 def weather(summ, r):
     w = nested(summ, 'gameInfo', 'weather')
-    roof = 'Indoor stadium (ESPN venue flag): weather does not apply.' if r['indoor'] else 'Open-air stadium (ESPN venue flag).'
+    roof = 'Indoor stadium: weather does not apply.' if r['indoor'] else 'Open-air stadium.'
     if r['indoor']:
         return roof, None
     if not w:
         return 'No forecast on ESPN yet. ' + roof, None
-    m = re.search(r'[?&]day=(\d+)', nested(w, 'link', 'href') or '')
-    days = int(m.group(1)) if m else (etd(r['t']) - NOW.astimezone(ET).date()).days
+    days = (etd(r['t']) - NOW.astimezone(ET).date()).days  # not AccuWeather's day= (its day=1 is today)
     cond = WX.get(int(num(w.get('conditionId')) or -1))
     parts = [cond] if cond else []
     if w.get('temperature') is not None:
@@ -608,7 +625,7 @@ def weather(summ, r):
     if w.get('gust') is not None:
         parts.append(f"gusts {fl(num(w['gust']))} mph")
     if w.get('precipitation') is not None:
-        parts.append(f"precipitation {fl(num(w['precipitation']))} (probably a % chance)")
+        parts.append(f"a {fl(num(w['precipitation']))}% chance of precipitation (AccuWeather via ESPN)")
     txt = f"AccuWeather forecast {WORDS.get(days, f'{days} days out')}: {', '.join(parts)}. {roof} Re-check on game day."
     return txt, {'cond': cond or '', 'precip': num(w.get('precipitation')), 'gust': num(w.get('gust')), 'temp': num(w.get('temperature'))}
 
@@ -627,9 +644,14 @@ def polymarket(r):
         return None
     g = hits[0]
     v = int(round(num(nested(g, 'ml', 'v')) or 0))
-    note = ('thin: ' if v < 5000 else '') + f"about ${v:,} traded on the winner market (polymarket.json, {(pm.get('updated') or '')[:16]}Z)"
+    try:
+        pre = f"Polymarket (checked {mday(P(pm['updated']).astimezone(ET).date())})"
+    except Exception:  # noqa: BLE001
+        pre = 'Polymarket'
+    note = (f"{pre}: only about ${v:,} traded on the winner market, so treat it lightly" if v < 5000 else
+            f"{pre}: about ${v:,} traded on the winner market")
     if g.get('stale'):
-        note += '; marked stale'
+        note += '; these prices may be out of date'
     return {'home': nested(g, 'ml', 'home', 'm'), 'away': nested(g, 'ml', 'away', 'm'), 'volume': v, 'url': g.get('url'), 'note': note}
 
 
@@ -732,7 +754,8 @@ def build_mnf(Y, rows):
     cand = [r for r in rows if monday_night(r) and r['state'] != 'post' and etd(r['t']) >= NOW.astimezone(ET).date() - timedelta(days=1)]
     if not cand:
         return None, None
-    r = cand[0]
+    same = [x for x in cand if etd(x['t']) == etd(cand[0]['t'])]  # a doubleheader: the rule game, else the later kickoff
+    r = next((x for x in same if is_pe(NFL_ZONE[x['away']], NFL_ZONE[x['home']]) and x['t'].astimezone(ET).hour >= 20), None) or max(same, key=lambda x: x['t'])
     A, H = r['away'], r['home']
     za, zh = NFL_ZONE[A], NFL_ZONE[H]
     summ = summary(NFLP, r['id'])
@@ -800,7 +823,14 @@ def build_mnf(Y, rows):
             hl = sum(1 for x in athome if x['_x']['hs'] < x['_x']['as'])
             txt += (f", {rec(hw, hl)} at home" if win[H] > win[A] else f"; {lc['home']} is {rec(hw, hl)} at home in these games")
         wl_ = sum(1 for x in h2 if x['line'])
-        txt += '.' + ('' if wl_ == n else ' ESPN has no lines for these games.' if not wl_ else f" ESPN has lines for only {wl_} of the {n}.") + ' A small sample; rosters change.'
+        got = sum(1 for x in h2 if x['_got'])  # 'no lines' only where ESPN's summary was actually read
+        if wl_ == n:
+            ln = ''
+        elif got == n:
+            ln = ' ESPN has no lines for these games.' if not wl_ else f" ESPN has lines for only {wl_} of the {n}."
+        else:
+            ln = f" ESPN lines found for {wl_} of the {n} (no ESPN game page for {n - got})."
+        txt += '.' + ln + ' A small sample; rosters change.'
         this_season = [x for x in h2 if x['_x']['t'].year >= Y and x['_x']['t'] > datetime(Y, 8, 1, tzinfo=UTC)]
         swept_by = None
         if this_season:
@@ -869,11 +899,13 @@ def build_mnf(Y, rows):
             bits.append(f"{lc[s]}: " + '; '.join(f"{join(v)} {k}" for k, v in by.items()))
     watch.append('The injury report before kickoff: ' + ('. '.join(bits) + '.' if bits else 'neither team lists anyone as questionable, doubtful or out yet.'))
     if wx and (re.search(r'storm|rain|snow|shower|sleet|ice|flurr', wx['cond']) or (wx['precip'] or 0) >= 40 or (wx['gust'] or 0) >= 20 or (wx['temp'] is not None and wx['temp'] <= 32)):
-        why_ = [x for x in (wx['cond'], f"precipitation {fl(wx['precip'])}" if (wx['precip'] or 0) >= 40 else '',
+        why_ = [x for x in (wx['cond'], f"a {fl(wx['precip'])}% chance of precipitation" if (wx['precip'] or 0) >= 40 else '',
                             f"gusts {fl(wx['gust'])} mph" if (wx['gust'] or 0) >= 20 else '', f"{fl(wx['temp'])}°F" if wx['temp'] is not None and wx['temp'] <= 32 else '') if x]
         watch.append(f"The weather in {r['city']}: {', '.join(why_)} in the forecast (open-air stadium).")
-    if market:
-        if L['hs_open'] is not None and L['hs'] is not None and L['hs_open'] != L['hs']:
+    if market and L['hs'] is not None:
+        if L['hs_open'] is None:
+            watch.append('Line moves: ESPN shows no opening spread.')
+        elif L['hs_open'] != L['hs']:
             d = abs(L['hs'] - L['hs_open'])
             toward = lc['away'] if L['hs'] > L['hs_open'] else lc['home']
             watch.append(f"Line moves: it has moved {fl(d)} {'point' if d == 1 else 'points'} toward {toward} since opening.")
@@ -885,10 +917,11 @@ def build_mnf(Y, rows):
         west = H if zh == 'Pacific' else A
         ok = r['t'].astimezone(ET).hour >= 20
         rule = {'applies': ok, 'text': (f"{west} (Pacific) vs {A if west == H else H} (Eastern) at {k_et} ET, {clock(r['t'], ZTZ['Pacific'])} on {west}'s body clock: "
-                                        f"the reel's rule would back {west}. Our tests found no edge once the prices are counted." if ok else
+                                        f"the reel's rule would back {west}. " + NFL_TEST['home' if west == H else 'away'] if ok else
                                         'Pacific vs Eastern, but kickoff is before 8 PM ET, so the rule does not apply.')}
-    elif za == zh:
-        rule = {'applies': False, 'text': f"Both teams are on {za} time, so kickoff is {za_k} on both body clocks. The reel's rule says nothing about this game."}
+    elif za_k == zh_k:  # compare the clocks, not the zone names (Arizona has no daylight saving time)
+        rule = {'applies': False, 'text': (f"Both teams are on {za} time, so kickoff is {za_k} on both body clocks." if za == zh else
+                                           f"Kickoff is {za_k} on both teams' body clocks.") + " The reel's rule says nothing about this game."}
     else:
         rule = {'applies': False, 'text': f"{A} ({za}) vs {H} ({zh}): kickoff is {za_k} on {A}'s body clock and {zh_k} on {H}'s. The rule covers only Pacific vs Eastern."}
     nv_ = ['Past lines come from one book (DraftKings, through ESPN); no second odds source is reachable here.',
@@ -990,9 +1023,12 @@ def app_legs(r, nfl):
                     legs.setdefault((l.get('gid'), l.get('key')), l)
     if not legs:
         return None
-    graded = []
+    graded, voids, pushes = [], 0, 0
     for l in legs.values():
         res = l.get('res')
+        if res == 'void':  # did not play: neither landed nor missed
+            voids += 1
+            continue
         pl = l.get('player')
         if res is None and pl:
             tm = al(pl.get('team') or '')
@@ -1007,19 +1043,21 @@ def app_legs(r, nfl):
                 val = g['rtd'] + g['ctd']
             if val is not None and pl.get('thr') is not None:
                 res = (val < pl['thr']) if pl.get('under') else (val >= pl['thr'])
-        if res is not None and res != 'push':
-            graded.append((bool(res), float(l.get('p') or 0), l.get('label')))
+        if res == 'push':
+            pushes += 1
+        elif res is not None:
+            graded.append((res is True, float(l.get('p') or 0), l.get('label')))
     n, g_ = len(legs), len(graded)
+    extra = ''.join(x for x in (f"; {n - g_ - voids - pushes} could not be graded" if n - g_ - voids - pushes else '',
+                                f"; {pushes} pushed" if pushes else '', f"; {voids} voided (did not play)" if voids else '') if x)
     if not g_:
-        return f"The app recommended {n} {'leg' if n == 1 else 'legs'} on this game; none could be graded from the box score."
+        return f"The app recommended {n} {'leg' if n == 1 else 'legs'} on this game; none could be graded from the box score{extra}."
     hit = sum(x[0] for x in graded)
     exp = sum(x[1] for x in graded)
     s = (f"All {g_} legs the app recommended on this game landed" if hit == g_ and g_ > 1 else
          f"{hit} of {g_} graded legs the app recommended on this game landed")
     low = min((x for x in graded if x[0] and x[1] < 0.5), key=lambda x: x[1], default=None)
-    s += (f", including {low[2]} at {low[1]:.1%}" if low else '') + f" (about {exp:.1f} expected)"
-    if n > g_:
-        s += f"; {n - g_} could not be graded"
+    s += (f", including {low[2]} at {low[1]:.1%}" if low else '') + f"; the model expected about {exp:.1f} of the {g_} to land" + extra
     word = NUMW.get(g_, str(g_))
     return s + f". {word[0].upper() + word[1:]} {'leg is' if g_ == 1 else 'legs is'} far too few to judge the pricing."
 
@@ -1132,7 +1170,7 @@ def nba_upcoming():
         g = {'sport': 'nba', 'espnId': r['id'], 'label': r['short'], 'slot': '', 'kickoffUTC': iso(r['t']),
              'away': team(r['away'], za, ta, record=r['arec']), 'home': team(r['home'], zh, th, record=r['hrec']),
              'venue': ', '.join(x for x in (r['city'], r['region']) if x), 'applies': bool(pe and late)}
-        why = (f"Pacific vs Eastern at 8 PM ET or later: the reel's rule would back {west}. Our NBA test found no edge in this spot (about 50% against the spread)." if pe and late else
+        why = (f"Pacific vs Eastern at 8 PM ET or later: the reel's rule would back {west}. Our NBA test found no edge in this spot (about 50% against the spread over 1,318 decisions)." if pe and late else
                'Pacific vs Eastern, but before 8 PM ET.' if pe else
                f"{za} vs {zh} ({hrs(gap)}-hour gap): not the Pacific vs Eastern match-up the rule is about.")
         if d <= to:
@@ -1248,13 +1286,14 @@ def venue_tz(r):
 def soccer_upcoming():
     f, to = window()
     pm = (f.replace(day=1) - timedelta(days=1))
-    evs, failed = [], []
+    evs, failed, bad = [], [], set()
     for lg in LEAGUES:
         got = 0
         for y, m in months(pm, f, to):
             sb = get(f'{API}soccer/{lg}/scoreboard?dates={y}{m:02d}&limit=1000')
             if sb is None:
                 failed.append(f'{lg} {y}{m:02d}')
+                bad.add(lg)  # this league keeps its old games
                 continue
             for e in sb.get('events') or []:
                 r = ev_row(e)
@@ -1265,7 +1304,7 @@ def soccer_upcoming():
                     got += 1
     if failed:
         warn('soccer scoreboards not fetched: ' + ', '.join(failed))
-    if not evs:
+    if not evs or len(bad) == len(LEAGUES):
         raise RuntimeError('no soccer scoreboards could be fetched')
     # club home zones: hand list, league keywords (MLS, Liga MX, A-League), the venue of a home match, then ESPN's team record
     home_venue = {}
@@ -1281,7 +1320,10 @@ def soccer_upcoming():
             return zone_of[name]
         tz = HAND.get(name) or keyword_tz(lg, name) or home_venue.get(name)
         if not tz:
-            d = cached_get(f'{API}soccer/{lg}/teams/{tid}', f'team_soccer_{lg}_{tid}.json')
+            d = cached_get(f'{API}soccer/{lg}/teams/{tid}', f'team_soccer_{lg}_{tid}.json', count=False)
+            if d is None and NET['fail']:
+                bad.add(lg)  # could not look the club up: keep this league's old games
+                return None
             slug = nested(d, 'team', 'defaultLeague', 'slug') or ''
             tz = SLUG.get(slug.split('.')[0])
         zone_of[name] = tz
@@ -1295,6 +1337,8 @@ def soccer_upcoming():
             continue
         seen.add(r['id'])
         lg = r['lg']
+        if lg in bad:
+            continue
         if any(re.search(r'\b(TBD|TBA|Winner|Loser)\b', n) for n in (r['hname'], r['aname'])):
             continue  # knockout placeholders
         th, ta = club(lg, r['hname'], r['hteam']), club(lg, r['aname'], r['ateam'])
@@ -1308,7 +1352,7 @@ def soccer_upcoming():
         zh_, za_ = us.get(th), us.get(ta)
         pe = lg == 'usa.1' and is_pe(za_, zh_)
         late = r['t'].astimezone(ET).hour >= 20
-        c = lambda n, tz: {'abbr': n, 'name': n, 'zone': tz.split('/')[-1].replace('_', ' '), 'tz': tz}
+        c = lambda n, ab, tz: {'abbr': ab or initials(n), 'name': n, 'zone': tz.split('/')[-1].replace('_', ' '), 'tz': tz}
         if lg == 'usa.1' and pe:
             west = r['hname'] if zh_ == 'Pacific' else r['aname']
             why = (f"MLS Pacific vs Eastern at 8 PM ET or later: the reel's rule would back {west}. Our MLS test found no edge against the odds." if late else
@@ -1317,14 +1361,14 @@ def soccer_upcoming():
             a_, b_ = sorted((za_, zh_), key=['Pacific', 'Mountain', 'Central', 'Eastern'].index)
             why = f"MLS {a_} vs {b_}: a {hrs(gap)}-hour gap, not the Pacific vs Eastern match-up the rule is about."
         else:
-            why = f"Home zones {hrs(gap)} hours apart. The reel's idea has not been shown to matter in soccer."
+            why = f"Home zones {hrs(gap)} hours apart. Not shown to beat the odds in soccer (studies of results alone do find travel effects)."
         o = (r['odds'] or [None])[0]
         nv = None
         if o:
             g3 = lambda s: mli(nested(o, 'moneyline', s, 'close', 'odds'))
             nv = novig(g3('home'), g3('draw'), g3('away'))
         g = {'sport': 'soccer', 'league': LEAGUES[lg], 'espnId': r['id'], 'label': f"{r['hname']} v {r['aname']}", 'slot': '', 'kickoffUTC': iso(r['t']),
-             'away': c(r['aname'], ta), 'home': c(r['hname'], th), 'venue': ', '.join(x for x in (r['city'], r['region'], r['country']) if x),
+             'away': c(r['aname'], r['away'], ta), 'home': c(r['hname'], r['home'], th), 'venue': ', '.join(x for x in (r['city'], r['region'], r['country']) if x),
              'applies': bool(pe and late), 'gap': gap, 'why': why,
              'odds': {'text': '3-way, margin removed', 'book': nested(o, 'provider', 'name') or 'DraftKings', 'noVig': {'home': nv[0], 'draw': nv[1], 'away': nv[2]}} if nv else None}
         if pe:
@@ -1334,7 +1378,15 @@ def soccer_upcoming():
         games.append(g)
     if unknown:
         warn(f"{len(unknown)} soccer clubs with no known home zone (their games skipped): " + ', '.join(sorted(unknown)[:8]))
-    return games
+    games = [g for g in games if g['league'] not in {LEAGUES[x] for x in bad}]  # a club lookup can fail after its league's games were built
+    if bad:
+        warn('soccer: kept the previous games for ' + ', '.join(sorted(LEAGUES[x] for x in bad)))
+    return games, {LEAGUES[x] for x in bad}
+
+
+def initials(n):
+    w = [x for x in re.split(r'[\s\-]+', n) if x[:1].isalnum()]
+    return (''.join(x[0] for x in w).upper()[:4] or n[:3].upper()) if len(w) > 1 else n[:3].upper()
 
 
 # ================================================================ assemble
@@ -1359,8 +1411,12 @@ def main():
     built = []
 
     def section(key, fn):
+        _sec[0], FAILS[key] = key, 0
         try:
-            out[key] = fn()
+            v = fn()
+            if FAILS[key]:
+                raise RuntimeError(f"{FAILS[key]} ESPN game summary or schedule fetches failed")
+            out[key] = v
             built.append(key)
         except Exception as e:  # noqa: BLE001
             warn(f"{key}: {type(e).__name__}: {e} (kept the previous {key})")
@@ -1377,8 +1433,12 @@ def main():
     parts, sport_ok, notes, sport_bad = {}, {}, [], []
     oldg = [g for g in (old.get('upcoming') or {}).get('games') or [] if g.get('kickoffUTC') and P(g['kickoffUTC']) > NOW]
     for sp, fn in (('nfl', lambda: nfl_upcoming(need())), ('nba', nba_upcoming), ('soccer', soccer_upcoming)):
+        _sec[0] = k = f'upcoming {sp}'
+        FAILS[k] = 0
         try:
             parts[sp] = fn()
+            if FAILS[k]:
+                raise RuntimeError(f"{FAILS[k]} ESPN game summary fetches failed")
             sport_ok[sp] = True
         except Exception as e:  # noqa: BLE001
             warn(f'upcoming {sp}: {type(e).__name__}: {e} (kept the previous {sp} games that have not started)')
@@ -1391,16 +1451,16 @@ def main():
             games += ng
             near = [g for g in ng if etd(P(g['kickoffUTC'])) <= to]
             app = [g['label'] for g in near if g['applies']]
-            notes.append(f"NFL: {len(near)} night {'game' if len(near) == 1 else 'games'} (8 PM ET or later) through {mday(to)}; the rule applies to "
-                         + (join(app) if app else 'none of them') + '.')
+            notes.append((f"NFL: {len(near)} night {'game' if len(near) == 1 else 'games'} (8 PM ET or later) through {mday(to)}; the rule applies to "
+                          + (join(app) if app else 'none of them') + '.', 'nfl'))
             lat = [g for g in ng if etd(P(g['kickoffUTC'])) > to]
             if lat:
-                notes.append(f"Later this season: {len(lat)} more Pacific vs Eastern night {'game' if len(lat) == 1 else 'games'} ("
-                             + join(f"{g['label']} {mday(etd(P(g['kickoffUTC'])))}" for g in lat) + '); late-season kickoff times can still be moved (flexed).')
+                notes.append((f"Later this season: {len(lat)} more Pacific vs Eastern night {'game' if len(lat) == 1 else 'games'} ("
+                              + join(f"{g['label']} {mday(etd(P(g['kickoffUTC'])))}" for g in lat) + '); late-season kickoff times can still be moved (flexed).', 'nfl'))
             pe_tbd = [r for r, pe in tbd if pe]
             if tbd:
-                notes.append(f"{len(tbd)} later NFL {'game has' if len(tbd) == 1 else 'games have'} no kickoff time yet (ESPN TBD)"
-                             + (f"; {join(r['short'] for r in pe_tbd)} would count if set at 8 PM ET or later." if pe_tbd else '; none is Pacific vs Eastern.'))
+                notes.append((f"{len(tbd)} later NFL {'game has' if len(tbd) == 1 else 'games have'} no kickoff time yet (ESPN TBD)"
+                              + (f"; {join(r['short'] for r in pe_tbd)} would count if set at 8 PM ET or later." if pe_tbd else '; none is Pacific vs Eastern.'), 'nfl'))
         else:
             games += [g for g in oldg if g['sport'] == 'nfl']
         if sport_ok.get('nba'):
@@ -1408,27 +1468,29 @@ def main():
             games += near + later
             pe_near = [g for g in near if 'west' in g]
             if not pe_near:
-                notes.append('No Pacific vs Eastern NBA game in the next 8 days' + (f"; the next one ESPN lists (later dates may still be added) is {later[0]['label']} on {etd(P(later[0]['kickoffUTC'])):%a} {mday(etd(P(later[0]['kickoffUTC'])))}."
-                                                                                     if later else ' or the 30 days after.'))
+                notes.append(('No Pacific vs Eastern NBA game in the next 8 days' + (f"; the next one ESPN lists (later dates may still be added) is {later[0]['label']} on {etd(P(later[0]['kickoffUTC'])):%a} {mday(etd(P(later[0]['kickoffUTC'])))}."
+                                                                                      if later else ' or the 30 days after.'), 'nba'))
             else:
-                notes.append(f"NBA: {len(pe_near)} Pacific vs Eastern {'game' if len(pe_near) == 1 else 'games'} in the next 8 days; "
-                             f"{sum(g['applies'] for g in pe_near)} tip at 8 PM ET or later.")
+                notes.append((f"NBA: {len(pe_near)} Pacific vs Eastern {'game' if len(pe_near) == 1 else 'games'} in the next 8 days; "
+                              f"{sum(g['applies'] for g in pe_near)} tip at 8 PM ET or later.", 'nba'))
         else:
             games += [g for g in oldg if g['sport'] == 'nba']
         if sport_ok.get('soccer'):
-            sg = parts['soccer']
-            games += sg
+            sg, bad_l = parts['soccer']
+            games += sg + [g for g in oldg if g['sport'] == 'soccer' and g.get('league') in bad_l]
             mls_ = [g for g in sg if g['league'] == 'MLS']
-            if mls_ and not any('west' in g for g in mls_):
+            if 'MLS' in bad_l:
+                notes.append(('MLS could not be fetched from ESPN this time; its games are from the previous run.', 'soccer'))
+            elif mls_ and not any('west' in g for g in mls_):
                 pairs = sorted({re.match(r'MLS (\w+ vs \w+)', g['why']).group(1) for g in mls_ if re.match(r'MLS (\w+ vs \w+)', g['why'])})
-                notes.append(f"MLS games with clubs 2+ hours apart this week are {join(pairs)}, not Pacific vs Eastern." if pairs else
-                             'No MLS game this week is Pacific vs Eastern.')
+                notes.append((f"MLS games with clubs 2+ hours apart this week are {join(pairs)}, not Pacific vs Eastern." if pairs else
+                              'No MLS game this week is Pacific vs Eastern.', 'soccer'))
             elif not mls_:
-                notes.append('No MLS game in this window has clubs 2+ hours apart.')
+                notes.append(('No MLS game in this window has clubs 2+ hours apart.', 'soccer'))
         else:
             games += [g for g in oldg if g['sport'] == 'soccer']
-        notes.append("These games prove nothing either way: they show where the reel's rule would point, priced by the market.")
-        out['upcoming'] = {'from': str(f), 'to': str(to), 'notes': notes, 'games': games}
+        notes.append(("These games prove nothing either way: they show where the reel's rule would point, priced by the market.", 'all'))
+        out['upcoming'] = {'from': str(f), 'to': str(to), 'notes': [n for n, _ in notes], 'noteSports': [s_ for _, s_ in notes], 'games': games}
         built.append('upcoming')
     else:
         out['upcoming'] = old.get('upcoming')

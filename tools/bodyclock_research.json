@@ -1,0 +1,309 @@
+{
+ "claim": {
+  "who": "an Instagram reel by @healthivora.in (posted 2026-11-24)",
+  "says": "Bet the West Coast team in night games against an East Coast team. Over 25 seasons of Monday Night Football that beat the Las Vegas point spread 68% of the time, whoever travelled, because performance peaks around 4 to 8 PM on the body clock.",
+  "found": "It describes a real study fairly, with three catches. The 68% (67.9%) appears only in write-ups about the 1997 paper, not in its abstract; the samples were small (about 64 to 106 games); and the 4-8 PM peak was the authors' proposal, not something measured on the players. Nothing peer-reviewed has tested NFL games after 2011, so we re-tested it ourselves on real betting lines in the NFL, the NBA and soccer."
+ },
+ "studies": [
+  {
+   "sport": "nfl",
+   "who": "Smith, Guilleminault & Efron",
+   "year": 1997,
+   "where": "Sleep 20(5):362-365",
+   "found": "25 seasons of Monday Night Football (1970-1994): West Coast teams won more often and beat the Las Vegas spread (p < 0.01) against East Coast teams. The 67.9% against the spread behind the reel's 68% comes from later write-ups (Football Outsiders 2012); the game count was not in the abstract.",
+   "url": "https://academic.oup.com/sleep/article/20/5/362/2725950"
+  },
+  {
+   "sport": "nfl",
+   "who": "Smith, Efron, Mah & Malhotra",
+   "year": 2013,
+   "where": "Sleep 36(12):1999-2001",
+   "found": "1970-2011, 106 West vs East games after 8 PM ET: West Coast teams 70-36 against the spread (66%), beating it by 5.26 points a game; in 293 day games, 143-150 (no edge). Same lead author and much of the same data as 1997.",
+   "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3825451"
+  },
+  {
+   "sport": "nfl",
+   "who": "Jehue, Street & Huizenga",
+   "year": 1993,
+   "where": "Med Sci Sports Exerc 25(1):127-131",
+   "found": "1978-1987 win-loss records: West Coast teams appeared to have an advantage in night games. No point spreads.",
+   "url": "https://pubmed.ncbi.nlm.nih.gov/8423745/"
+  },
+  {
+   "sport": "nfl",
+   "who": "Football Outsiders (informal)",
+   "year": 2012,
+   "where": "blog post",
+   "found": "Monday nights after the 1997 study: West Coast teams 16-5 against the spread (a small sample). Thursday, Saturday and Sunday nights since 1985: 22-22, no edge.",
+   "url": "https://www.footballoutsiders.com/extra-points/2012/effect-circadian-rhythms-monday-night-football"
+  },
+  {
+   "sport": "nfl",
+   "who": "Tenan, Rezai & Vigotsky",
+   "year": 2025,
+   "where": "Am J Epidemiol 194(9):2499-2506",
+   "found": "6,245 college football games with spreads: no detectable jet-lag effect (p = 0.13), and the earlier finding that West Coast teams beat the spread could not be reproduced.",
+   "url": "https://academic.oup.com/aje/article/194/9/2499/8158079"
+  },
+  {
+   "sport": "nba",
+   "who": "Nutting & Price",
+   "year": 2017,
+   "where": "J Sports Econ 18(5):471-478",
+   "found": "NBA 2002-2013: no significant time-zone effect on visiting teams in day or night games (in 1991-2002 one showed up in day games only).",
+   "url": ""
+  },
+  {
+   "sport": "nba",
+   "who": "Leota et al.",
+   "year": 2022,
+   "where": "Front Physiol",
+   "found": "11,481 NBA games: home teams just back from travelling east did worse (about 6% fewer wins, p = 0.051). Jet lag mattered more than the West Coast night-game idea.",
+   "url": ""
+  },
+  {
+   "sport": "nba",
+   "who": "Ashman et al.",
+   "year": 2010,
+   "where": "betting-market study",
+   "found": "The only NBA paper tested against betting lines: an edge on home teams on the second night of a back-to-back after travelling east, not on West Coast teams at night.",
+   "url": ""
+  },
+  {
+   "sport": "soccer",
+   "who": "Goumas",
+   "year": 2014,
+   "where": "J Sci Med Sport (A-League)",
+   "found": "Home advantage grew with the time zones the visitors crossed (p < 0.001). Wins only, no betting odds.",
+   "url": ""
+  },
+  {
+   "sport": "soccer",
+   "who": "Reilly",
+   "year": 2007,
+   "where": "review",
+   "found": "Footballers' physical performance peaks around 4-8 PM, the source of the reel's window; dribbling skill showed no time-of-day effect (p = 0.55).",
+   "url": ""
+  },
+  {
+   "sport": "soccer",
+   "who": "(none found)",
+   "year": null,
+   "where": "",
+   "found": "We found no study that tests a time-zone or kickoff-time effect against soccer betting odds.",
+   "url": ""
+  }
+ ],
+ "tests": [
+  {
+   "sport": "nfl",
+   "title": "NFL",
+   "found": false,
+   "headline": "30-25-2 against the spread (54.5%)",
+   "what": "Every Pacific vs Eastern game kicking off at 8 PM ET or later, 2012-2026 seasons with a line on ESPN (DraftKings / TeamRankings). Arizona left out. Pacific teams: LAR, LAC, SF, SEA, LV.",
+   "rows": [
+    {
+     "label": "Night games, West team against the spread",
+     "rec": "30-25-2",
+     "pct": 0.545,
+     "ci": [
+      0.406,
+      0.68
+     ],
+     "p": 0.59,
+     "n": 55
+    },
+    {
+     "label": "West team at home",
+     "rec": "17-18-1",
+     "pct": 0.486,
+     "ci": [
+      0.314,
+      0.66
+     ],
+     "p": 1.0,
+     "n": 35
+    },
+    {
+     "label": "West team travelled east",
+     "rec": "13-7-1",
+     "pct": 0.65,
+     "ci": [
+      0.408,
+      0.846
+     ],
+     "p": 0.26,
+     "n": 20
+    },
+    {
+     "label": "Monday nights only",
+     "rec": "14-12",
+     "pct": 0.538,
+     "ci": null,
+     "p": 0.85,
+     "n": 26
+    },
+    {
+     "label": "Control: day games (before 4 PM ET)",
+     "rec": "76-62-4",
+     "pct": 0.551,
+     "ci": null,
+     "p": 0.27,
+     "n": 138
+    }
+   ],
+   "points": [
+    "West teams won 33 of 57 straight up; the spreads expected 32.7. The market already priced them right.",
+    "The reel's 68% sits at the very top of our range (p = 0.04 against 68%), so 68% is not what happened in these seasons.",
+    "Night games did no better than the day-game control (55.1%), so there is no extra night-time effect.",
+    "55 games can't rule out a small edge of a few percent: finding a true 55% would take about 780 games.",
+    "ESPN has no lines for 2006-2011 or 2024, so those seasons are left out."
+   ],
+   "verdict": "Not found. 54.5% is inside the noise, and straight-up results matched the prices."
+  },
+  {
+   "sport": "nba",
+   "title": "NBA",
+   "found": false,
+   "headline": "About 50% over 1,318 games",
+   "what": "Pacific teams (LAL, LAC, GS, SAC, POR) against Eastern teams, regular season, 2012-13 to 2022-23 and 2025-26 to now (seasons with lines on ESPN). Neutral sites left out.",
+   "rows": [
+    {
+     "label": "West team at home, tip 10 PM ET or later",
+     "rec": "289-289-14",
+     "pct": 0.5,
+     "ci": [
+      0.458,
+      0.542
+     ],
+     "p": 1.0,
+     "n": 578
+    },
+    {
+     "label": "West team playing in the East",
+     "rec": "371-369-12",
+     "pct": 0.501,
+     "ci": [
+      0.465,
+      0.538
+     ],
+     "p": 0.97,
+     "n": 740
+    },
+    {
+     "label": "The NFL definition: every tip at 8 PM ET or later",
+     "rec": "407-379-18",
+     "pct": 0.518,
+     "ci": [
+      0.482,
+      0.553
+     ],
+     "p": 0.34,
+     "n": 786
+    },
+    {
+     "label": "East team visiting the West",
+     "rec": "375-384-16",
+     "pct": 0.494,
+     "ci": [
+      0.458,
+      0.53
+     ],
+     "p": 0.77,
+     "n": 759
+    }
+   ],
+   "points": [
+    "Betting the West team at -110 lost 4.4% (late home tips) and 4.2% (in the East).",
+    "The NFL papers' 66% is ruled out by a wide margin (p < 0.001).",
+    "More hours of body-clock gap made no difference: +0.16 points per hour (range -0.47 to +0.80).",
+    "Straight-up wins matched the spreads: 373 of 592 late home tips against 365.7 expected.",
+    "No line on ESPN for 2008-2012 or 2023-2025, so those seasons are left out."
+   ],
+   "verdict": "Not found, firmly. This sample is about 20 times the NFL's."
+  },
+  {
+   "sport": "soccer",
+   "title": "Soccer (MLS and Liga MX)",
+   "found": false,
+   "headline": "MLS: -0.04 points a game against the odds (588 games)",
+   "what": "MLS 2012-2026 (Pacific clubs vs Eastern clubs) and Liga MX (Tijuana, the only Pacific-time club), against closing 1X2 odds from football-data.co.uk (Pinnacle where available), margin removed. 2020 left out.",
+   "unit": "ppg",
+   "rows": [
+    {
+     "label": "MLS: West club at home, kickoff 10 PM ET or later",
+     "diff": -0.182,
+     "ci": [
+      -0.364,
+      -0.001
+     ],
+     "p": 0.049,
+     "n": 182,
+     "note": "the wrong way; p 0.15 after correcting for three tests"
+    },
+    {
+     "label": "MLS: West club away in the East",
+     "diff": 0.012,
+     "ci": [
+      -0.125,
+      0.149
+     ],
+     "p": 0.86,
+     "n": 296
+    },
+    {
+     "label": "MLS: every Pacific vs Eastern game",
+     "diff": -0.038,
+     "ci": [
+      -0.138,
+      0.061
+     ],
+     "p": 0.45,
+     "n": 588
+    },
+    {
+     "label": "Liga MX: Tijuana at home, 9 PM+ on the visitor's clock",
+     "diff": 0.068,
+     "ci": [
+      -0.1,
+      0.235
+     ],
+     "p": 0.43,
+     "n": 221
+    },
+    {
+     "label": "Liga MX: Tijuana away",
+     "diff": -0.149,
+     "ci": null,
+     "p": 0.051,
+     "n": 239,
+     "note": "the wrong way"
+    }
+   ],
+   "points": [
+    "Backing the West club to win at closing odds returned -7.6% in MLS.",
+    "All MLS home teams: +0.02 points a game against the odds (p = 0.15): the closing odds are well calibrated.",
+    "The odds already give home teams more when the visitor comes from further east, so travel looks priced in.",
+    "In Europe nearly every league sits in one time zone; only UEFA and Asian cup games cross 2+ hours, too few to test."
+   ],
+   "verdict": "Not found. The only result near significance went against the reel."
+  }
+ ],
+ "verdict": {
+  "multi": false,
+  "title": "It doesn't carry over",
+  "text": "Tested in three sports against real closing prices: NFL 54.5% (55 games, could be chance), NBA 50% (1,318 games), MLS and Liga MX no better than the odds (1,073 games). The prices already account for body clocks, so this tab is not marked multi game. Past patterns are not guarantees."
+ },
+ "rule": {
+  "nfl": "A Pacific-time team (LAR, LAC, SF, SEA, LV) against an Eastern-time team, kicking off at 8 PM ET or later.",
+  "nba": "A Pacific-time team (LAL, LAC, GS, SAC, POR) against an Eastern-time team, tipping off at 8 PM ET or later.",
+  "soccer": "Clubs whose home time zones are 2+ hours apart. Only MLS Pacific vs Eastern games match the reel's idea."
+ },
+ "notVerified": [
+  "The 1997 paper's full text: we read its abstract and later write-ups only, so its game count and the exact 67.9% were not seen in the paper.",
+  "ESPN stores one line per game (its last DraftKings or TeamRankings price); we treat it as the closing line.",
+  "A team's body clock is taken as its home time zone. Teams on long road trips may have partly adjusted; nobody measured that.",
+  "Player rest, injuries and travel plans are not in the tests."
+ ],
+ "sources": "ESPN scoreboards and game summaries (lines: DraftKings, TeamRankings), football-data.co.uk (MLS and Liga MX closing odds), journal abstracts. Research run 2026-11-25; every headline number was recounted by a second, independent check."
+}

@@ -5,7 +5,7 @@
 //   Low   (Fantasy, $9.99/mo)  the fantasy football screens, Fantasy Parlay and Players.
 //   Mid   (Betting + Fantasy, $24.99/mo)  Low plus every betting screen, the AI Chat, Sharp Board and Polymarket.
 //   High  (Everything, $39.99/mo)  Mid plus Slip Check, the Simulator and the 500,000-run sims, and the research tabs
-//         (Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer).
+//         (Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer, Body Clock).
 //
 // Payment: Stripe payment links (plans.json "links"). Access: an unlock code the owner makes after a payment and sends to
 // the customer. A code is "SB1-<payload>.<signature>": payload = base64url JSON {v, t: tier, e: expiry (unix s, 0 = never),
@@ -35,7 +35,7 @@
   // Free (owner, 2026-11-25): odds only (Games, the sport tabs, game pages, Odds tools), the parlay builder without
   // Generate, and yesterday's settled slips (Past Slips). No generated parlays, picks or leans: `picks` is that pseudo-screen.
   const NEED = { slate: 0, soccer: 0, nba: 0, nfl: 0, nhl: 0, ncaaf: 0, odds: 0, builder: 0, pastslips: 0, plans: 0, trending: 2, picks: 2, 'ff-startsit': 1, 'ff-trade': 1, 'ff-rate': 1, 'ff-rank': 1, fantasy: 1, players: 1, mine: 1,
-    slipcheck: 3, sim: 3, pattern: 3, trends: 3, upsets: 3, statx: 3 };
+    slipcheck: 3, sim: 3, pattern: 3, trends: 3, upsets: 3, statx: 3, bodyclock: 3 };
   const needOf = k => (k in NEED ? NEED[k] : 2);
   const FREE_LINE = "Free: odds (Games, the sport tabs, game pages), the parlay builder and yesterday's settled slips.";
   // buttons that run the simulations: 500,000 runs and Watch live on every card, the soccer tab's simulate button
@@ -254,7 +254,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     ['Odds: Games, the sport tabs, game pages, Odds tools', 0], ['The parlay builder (build your own) and your slip', 0], ["Past Slips: yesterday's settled slips", 0],
     ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players, My Parlays (saved parlays)', 1],
     ['Trending with My Parlay Picks, generated parlays, leans, recommended swaps and live slips', 2], ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, UFC, Sharp Lab', 2],
-    ['Slip Check, Simulator, 500,000-run sims, Watch live', 3], ['Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer', 3],
+    ['Slip Check, Simulator, 500,000-run sims, Watch live', 3], ['Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer, Body Clock', 3],
   ];
   function linkOf(id, per) { const L = CFG && CFG.links && CFG.links[id] && CFG.links[id][per]; return typeof L === 'string' && /^https:\/\/[^\s"'<>]+$/.test(L) ? L : null; }
   function plansHTML(params) {

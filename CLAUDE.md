@@ -111,6 +111,18 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
     - unbeaten runs of 10+ ended less often than priced (155 vs 179).
   - **🐦 The tweet:** the 90-day test of "weekends when all big teams lose / 80% draws" (not true), the live round and its parlay mix.
 - **📈 Team Trends (trends.js, trends.json from tools/team_trends.py):** every team's last 7 / 30 days, months and season: record, over/under rates, as favourite / underdog vs prices, streaks; upset watch and over/under leans for next games with reasons and sample sizes (soccer from football-data.co.uk CSVs, NBA from ESPN scores and posted lines); a trend parlay card.
+- **🌙 Body Clock (bodyclock.js, bodyclock.json from tools/body_clock.py; research in tools/bodyclock_research.json; High tier):** the owner's Instagram reel (2026-11-25: "Make a different tab based on how she breaks down this… use real data and let's make a Monday night football to remember… take a look at NBA and soccer as well. Does this also change? If so, please mark the tab multi game").
+  - **The claim:** West Coast teams beat the spread 68% in night games against East Coast teams (Smith et al., Sleep 1997 / 2013: 70-36 after 8 PM ET, 1970-2011). The 67.9% appears only in later write-ups; nothing peer-reviewed tests NFL games after 2011.
+  - **Our re-tests on real closing lines (ESPN pickcenter; football-data.co.uk for soccer), each recounted by a second check:**
+    - NFL 2012-2026: 30-25-2 (54.5%, p 0.59; straight-up wins matched the spreads).
+    - NBA: 289-289-14 late home tips, 371-369-12 in the East (about 50% over 1,318).
+    - MLS: -0.04 points a game against the odds over 588 games. The one near-significant cut went the wrong way.
+    - **No edge anywhere, so the tab is NOT marked "Multi game"** (`research.verdict.multi`; the label follows it).
+  - **Three views:**
+    - **Monday night** (the next Monday game, broken down): rule check, market (no-vig), ESPN predictor, Polymarket, last meeting, form vs closing lines, key players from season.json (median next to the average), injuries, Monday nights this season, "check before you bet", last Monday's recap. Once the game is priced in the feed: the model's chances, the spread cover from the 100,000 sims, and two same game parlays (4 and 7 legs, ⇄ + 500,000 runs).
+    - **The study:** papers and the re-tests with 95% ranges.
+    - **Night games:** each team's body-clock time, the 4-8 PM window, where the rule points (Pacific vs Eastern at 8 PM ET+), market and model.
+  - The feed adds NFL games ~4-5 days ahead and prices them with a win chance only (no total), so total-points legs stay out of the parlays.
 - **Other tabs:** Soccer Parlays, Point Lottos, Polymarket, Weekly Plan, Best Parlays, NBA Props, First TD, UFC.
 - **Your bets:** My Parlays (ledger, grading) and Slip Check (screenshot or typed slips, 500,000-run simulation, recommended changes).
 
@@ -162,6 +174,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | firsttd.json | tools/leg_pairs.py refreshes every NFL team's season TDs from box scores (game-day "status" notes kept) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
+| bodyclock.json | tools/body_clock.py (7:32 AM run, after season_tables.py): this week's night games with body-clock times, the next Monday game's breakdown (ESPN summaries, cached in .work/espn), last Monday's recap; the research block is copied from tools/bodyclock_research.json |
 | season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports (NBA 0-minute games skipped), and every team's results with scores (`results`) |
 | news.json | tools/news_fetch.py (3:47 AM and 7:32 AM runs; ESPN news API): headlines and videos for Highlights |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
@@ -182,7 +195,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 48 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 49 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -223,6 +236,8 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Keyboard access:** on phones the menu is a closed drawer now, so content comes first. On desktop the sidebar's ~30 items still come before the page: a skip link would fix that.
 
 ## Change log
+- 2026-11-25 (afternoon):
+  - 🌙 Body Clock tab from the owner's Instagram reel. The research (4 agents, then an independent recount) found no edge against closing lines in the NFL, NBA or soccer, so the tab is not marked multi game. It has the Monday night breakdown (CAR @ TB) and tests/bodyclock.test.mjs.
 - 2026-11-22:
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.

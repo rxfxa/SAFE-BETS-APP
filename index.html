@@ -1176,7 +1176,7 @@ let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('sa
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};
 // Tabs sit in a fixed order so related ones stay together: find a bet → your bets → games by sport → tools.
 // Known keys (including module tabs: soccerparlays, odds, sim) always take their place here; other keys use registerTab's `after`.
-const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','slipcheck','pastslips','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','odds','sim','lab','plans'];
+const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','slipcheck','pastslips','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','bodyclock','odds','sim','lab','plans'];
 const TABS=[['trending','🔥 Trending'],['parlays','🎯 Best Parlays'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['mine','⭐ My Parlays'],['soccer','⚽ Soccer Games'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['lab','⚡ Sharp Lab']];
 const CUSTOM={},tabParams={};
 function registerTab(t){
@@ -1193,7 +1193,7 @@ function goTab(key,params){if(!inMode(key)){mode=modeOf(key)==='fantasy'?'fantas
 function applyTheme(){document.documentElement.classList.add('dark');document.body.classList.add('dark');}
 $('q').oninput=e=>{q=e.target.value.toLowerCase().trim();render();};
 const TAB_GROUP={ask:'research',insights:'research',propan:'research',explorer:'research',slate:'research',sharp:'research',news:'research',builder:'research',players:'research',statx:'research',
-  'ff-startsit':'ff','ff-trade':'ff','ff-rate':'ff','ff-rank':'ff',plans:'tools',trending:'bets',ufc:'bets',upsets:'bets',pattern:'bets',trends:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',plan:'bets',parlays:'bets',props:'bets',firsttd:'bets',fantasy:'bets',mine:'mine',pastslips:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
+  'ff-startsit':'ff','ff-trade':'ff','ff-rate':'ff','ff-rank':'ff',plans:'tools',trending:'bets',ufc:'bets',upsets:'bets',pattern:'bets',trends:'bets',bodyclock:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',plan:'bets',parlays:'bets',props:'bets',firsttd:'bets',fantasy:'bets',mine:'mine',pastslips:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
 const TAB_GROUPNAME={research:'Research',ff:'Fantasy football',bets:'Safe Bets picks',mine:'Your bets',games:'Games',tools:'Tools'};
 // in fantasy mode the shared screens sit with the fantasy ones
 const groupOf=k=>mode==='fantasy'?(k==='ask'?'research':'ff'):(TAB_GROUP[k]||'bets');
@@ -1232,7 +1232,7 @@ Object.assign(TAB_ICON,{
   'ff-trade':'<path d="M4 8.5h13.5l-3.2-3.2M20 15.5H6.5l3.2 3.2"/>',
   'ff-rate':'<path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
   'ff-rank':'<path d="M5 20V10M10 20V4M15 20v-7M20 20v-4"/>'});
-TAB_ICON.pointlottos=TAB_ICON.lotto=TAB_ICON.lottos;TAB_ICON.ufc=TAB_ICON.injuries;TAB_ICON.upsets=TAB_ICON.fantasy;TAB_ICON.pattern=TAB_ICON.trending;TAB_ICON.trends=TAB_ICON.trending;TAB_ICON.injury=TAB_ICON.injuries;TAB_ICON.firsttd=TAB_ICON.nfl;
+TAB_ICON.pointlottos=TAB_ICON.lotto=TAB_ICON.lottos;TAB_ICON.bodyclock='<path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1z"/><path d="M16.5 3.5v3M15 5h3"/>';TAB_ICON.ufc=TAB_ICON.injuries;TAB_ICON.upsets=TAB_ICON.fantasy;TAB_ICON.pattern=TAB_ICON.trending;TAB_ICON.trends=TAB_ICON.trending;TAB_ICON.injury=TAB_ICON.injuries;TAB_ICON.firsttd=TAB_ICON.nfl;
 // "🔥 Trending" -> icon span (keeps the emoji as hidden text, so the label's text stays exactly as registered) + " Trending"
 function tabLabelHTML(k,l){const m=/^(\S+)\s+([\s\S]*)$/.exec(String(l));if(!m||/^[\w(]/.test(m[1]))return TAB_ICON[k]?`<span class="ti svg" aria-hidden="true"><svg viewBox="0 0 24 24">${TAB_ICON[k]}</svg></span><span class="tl">${esc(l)}</span>`:`<span class="tl">${esc(l)}</span>`;
   const ic=TAB_ICON[k];
@@ -2821,6 +2821,7 @@ window.__fm2={legMeta,legRho,jointP,bvnP,gameJoint,helpPairs,helpGroups,sgpTicke
 <script src="upsets.js"></script>
 <script src="pattern.js"></script>
 <script src="trends.js"></script>
+<script src="bodyclock.js"></script>
 <script src="plan.js"></script>
 <script src="firsttd.js"></script>
 <script src="ask.js"></script>

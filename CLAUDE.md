@@ -172,7 +172,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 49 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 48 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -220,7 +220,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Plans and access tiers: Free / Fantasy $9.99 / Betting + Fantasy $24.99 / Everything $39.99.
   - Signed unlock codes, Stripe links, blurred previews, the Plans page, owner tools and tools/license.mjs.
   - 3 independent reviewers found no crypto holes; ~20 findings fixed: Weekly Plan sims, builder and save gates, the load window, clock rollback, readable previews, first-visit landing, focus and announcements, wording.
-  - 49 suites. Plans are off until the owner's key is added.
+  - 48 suites. Plans are off until the owner's key is added.
 - 2026-11-23 (evening):
   - Legs that help each other, reviewed (14 confirmed findings fixed): within-player links with Holm; yards calibrated (v156 had overpriced rushing lines, about 65% priced vs 52% landed); the card's joint price now conditions on the game's simulations (the old 500,000-run sim had the team-win link's sign reversed); spreads and double chance linked; partner legs gated by cost; TD swaps; help pairs follow the sport filter and are grouped by sport. Engine kept fast (normal scores taken from the sim's own model; the help section fills in after the Fantasy tab paints).
   - Pro interface (owner: "an exact 1:1 kind of interface" of rotobot.ai): captured the site (network access approved for rotobot.ai), built the shell (sidebar, Betting / Fantasy modes, phone drawer, navy / cyan), ui.js components, SB.engine, season.json and the spec (docs/pro-interface.md). The screens were built and adversarially reviewed by agents (8 in parallel after the owner asked to "make it quicker"); 47 suites pass; published as version 163 (2026-11-24 ~09:00 UTC).

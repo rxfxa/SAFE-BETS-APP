@@ -981,7 +981,8 @@
       split: { home: { n: home.length, v: avg(home, mf) }, away: { n: away.length, v: avg(away, mf) }, l5: { n: l5.length, v: avg(l5, mf) }, sel: filt.length ? { n: rows.length, v: avg(rows, mf), lbl: filt.join(', ') } : null },
       nx, lines: AL.lines, slate: AL.e, inj: injuryOf(P.name, sp), news: newsOfPlayer(P.name) };
   }
-  const nearTol = (f, line) => (/yd$/.test(f) ? Math.max(5, Math.round(Math.abs(line) * .1)) : f === 'pts' || f === 'min' ? Math.max(1, Math.round(Math.abs(line) * .08)) : 1);
+  // how far off still counts as a near miss; a yes / no leg (an anytime TD, a goal, a point: line under 1.5) has none
+  const nearTol = (f, line) => (Math.abs(line) < 1.5 ? 0 : /yd$/.test(f) ? Math.max(5, Math.round(Math.abs(line) * .1)) : f === 'pts' || f === 'min' ? Math.max(1, Math.round(Math.abs(line) * .08)) : 1);
   // one game for one player: the stat vs the line (or vs his average in his other games), how close, the workload, the game's
   // result, and reasons: facts from the data, and possibilities named as possibilities
   function reviewOf(P, i, f, line, under) {
@@ -1664,7 +1665,7 @@
     const L = leadersOf(sp, f, { pos, pg: a.per_game === true || a.per_game === 'true', n: a.n, mg: a.min_games });
     if (!L || !L.rows.length) return { error: `No ${SPN[sp]} players qualify${pos ? ` at ${pos}` : ''}.` };
     if (ctx) ctx.card({ t: 'lead', sp, st: f, pos: pos || undefined, pg: L.pg ? 1 : undefined, n: L.rows.length, mg: L.mg });
-    return { title: leadTitle(L), rule: leadRule(L), leaders: L.rows.map((e, i) => `${i + 1}. ${e.name} (${e.team}${e.pos ? ' ' + e.pos : ''}): ${L.pg ? f1(e.x) : fN(e.x)}${L.pg ? ' a game' : ''} in ${e.gp} games`),
+    return { title: leadTitle(L), rule: leadRule(L), leaders: L.rows.map((e, i) => `${i + 1}. ${e.name} (${e.team}${e.pos ? ' ' + e.pos : ''}): ${L.pg ? f1(e.x) : bigN(e.x)}${L.pg ? ' a game' : ''} in ${e.gp} games`),
       notes: [`From this season's ESPN box scores (${L.total} players qualify). A traded player is counted once with his latest team${sp === 'ncaaf' ? '; college players with the same name are kept apart by team' : ''}.`, ...(f === 'td' ? ['Touchdowns are rushing + receiving.'] : [])] };
   }
   async function tTrackRecord(a, ctx) {

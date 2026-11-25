@@ -18,7 +18,7 @@
   const P = x => (num(x) ? Math.round(x * 100) + '%' : '—');
   const P1 = x => (num(x) ? (x * 100).toFixed(1) + '%' : '—');
   const am = x => (num(x) ? (x > 0 ? '+' : '') + Math.round(x) : '—');
-  const sp = x => (num(x) ? (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x) : 'PK');
+  const sp = x => (num(x) && x !== 0 ? (x > 0 ? '+' : '−') + Math.abs(x) : 'PK');
   const pv = p => (!num(p) ? '—' : p < 0.001 ? '< 0.001' : p < 0.01 ? p.toFixed(3) : p.toFixed(2));
   const team = (a, big) => (SB.ui && SB.ui.team ? SB.ui.team(a, big) : '');
   let BC = null, LOADED = false, SEASON = null, SEASON_ASKED = false;
@@ -93,7 +93,7 @@
     if (!M) return '<div class="pc"><div class="why">No Monday night game is scheduled in the next week (the regular season may be over). The study and the night games are in the other two views.</div></div>';
     const a = M.away, h = M.home, mk = M.market || {}, hA = h.abbr, aA = a.abbr;
     const x = { sport: 'nfl', kickoffUTC: M.kickoffUTC, away: a, home: h };
-    const mdl = model(x, num(mk.spread) ? (mk.fav === hA ? mk.spread : -mk.spread) : null);
+    const mdl = model(x, num(mk.spread) ? (!mk.fav ? 0 : mk.fav === hA ? mk.spread : -mk.spread) : null);
     const kickET = `${dayLbl(M.kickoffUTC)} · ${clock(M.kickoffUTC, 'America/New_York')} (${clock(M.kickoffUTC, 'America/Los_Angeles')})`;
     const started = Date.now() >= Date.parse(M.kickoffUTC);
     let html = `<div class="pc bc-hero"><div class="bc-kick">Monday Night Football · week ${esc(M.week)}${M.tv ? ` · ${esc(M.tv)}` : ''}</div>
@@ -101,10 +101,10 @@
       <div class="bc-when">${esc(kickET)}${M.venue ? ` · ${esc(M.venue)}` : ''}${started ? ' · <b>started</b>' : ''}</div>
       ${clockRow(M.kickoffUTC, a, h)}
       <div class="bc-rule">${tag(M.rule && M.rule.applies ? 'The reel\'s rule applies' : 'The reel\'s rule doesn\'t apply', M.rule && M.rule.applies ? 'y' : 'n')}<span>${esc(M.rule ? M.rule.text : '')}${M.rule && M.rule.applies ? ' Our re-tests found no edge in this spot (see The study).' : ''}</span></div>
-      ${M.stakes ? `<div class="why">${esc(M.stakes)}</div>` : ''}</div>`;
+      ${M.stakes ? `<div class="why">${esc(M.stakes)}</div>` : ''}${M.weather ? `<div class="why"><b>Weather:</b> ${esc(M.weather)}</div>` : ''}</div>`;
     // the market
     const tiles = [];
-    if (num(mk.spread)) tiles.push(['Spread', `${mk.fav} ${sp(mk.spread)}${mk.spreadOdds ? ` (${am(mk.fav === hA ? mk.spreadOdds.home : mk.spreadOdds.away)})` : ''}`]);
+    if (num(mk.spread)) tiles.push(['Spread', mk.fav ? `${mk.fav} ${sp(mk.spread)}${mk.spreadOdds ? ` (${am(mk.fav === hA ? mk.spreadOdds.home : mk.spreadOdds.away)})` : ''}` : 'Pick’em']);
     if (num(mk.total)) tiles.push(['Total', String(mk.total)]);
     if (mk.ml) tiles.push(['Moneyline', `${hA} ${am(mk.ml.home)} · ${aA} ${am(mk.ml.away)}`]);
     if (mk.noVig) tiles.push(['Market chance (margin removed)', `${hA} ${P(mk.noVig.home)} · ${aA} ${P(mk.noVig.away)}`, true]);
@@ -138,7 +138,8 @@
     html += section('Key players', "this season's box scores", `<div id="bcPlayers">${playersHTML(M)}</div>`);
     // injuries
     if (M.injuries) {
-      const inj = k => (M.injuries[k] || []).map(i => `<div class="mrow"><div class="lbl">${esc(i.name)} <span class="bc-pos">${esc(i.pos || '')}</span><small>${esc(i.injury || '')}</small></div><span class="bc-st ${/out|reserve/i.test(i.status) ? 'out' : 'q'}">${esc(i.status)}</span></div>`).join('') || '<div class="why">None listed.</div>';
+      const RANK = st => (/^out/i.test(st) ? 0 : /doubt/i.test(st) ? 1 : /quest/i.test(st) ? 2 : 3);
+      const inj = k => [...(M.injuries[k] || [])].sort((x, y) => RANK(x.status) - RANK(y.status)).map(i => `<div class="mrow"><div class="lbl">${esc(i.name)} <span class="bc-pos">${esc(i.pos || '')}</span><small>${esc(i.injury || '')}</small></div><span class="bc-st ${/out|reserve/i.test(i.status) ? 'out' : 'q'}">${esc(i.status)}</span></div>`).join('') || '<div class="why">None listed.</div>';
       html += section('Injuries', M.injuries.asOf ? `as of ${dateOnly(M.injuries.asOf)}` : '', `<div class="bc-two"><div class="pc"><div class="pchead"><span class="pctitle">${esc(a.abbr)}</span></div>${inj('away')}</div><div class="pc"><div class="pchead"><span class="pctitle">${esc(h.abbr)}</span></div>${inj('home')}</div></div>${M.injuries.note ? `<div class="note">${esc(M.injuries.note)}</div>` : ''}`);
     }
     // Monday nights this season

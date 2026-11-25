@@ -57,25 +57,36 @@ def warn(msg):
 
 # ---------------------------------------------------------------- network + cache
 _last = [0.0]
+_down = [0]  # consecutive failed URLs; after 5 the network is taken as down and the rest fail fast
 
 
 def get(url, timeout=30):
-    for i in range(3):
+    if _down[0] >= 5:
+        STATS['failed'] += 1
+        return None
+    for i in range(4):  # the first try and up to 3 retries
         wait = 0.25 - (time.time() - _last[0])
         if wait > 0:
             time.sleep(wait)
         _last[0] = time.time()
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'safe-bets-app'}), timeout=timeout) as r:
+                d = json.loads(r.read().decode())
                 STATS['fetched'] += 1
-                return json.loads(r.read().decode())
+                _down[0] = 0
+                return d
         except urllib.error.HTTPError as e:
-            if e.code in (400, 404):
-                break
+            if e.code in (400, 404):  # a definite answer: no retry
+                STATS['failed'] += 1
+                return None
         except Exception:  # noqa: BLE001 (timeouts, resets, bad JSON: retry)
             pass
-        time.sleep(1.5 * (i + 1))
+        if i < 3:
+            time.sleep(1.5 * (i + 1))
     STATS['failed'] += 1
+    _down[0] += 1
+    if _down[0] == 5:
+        warn('5 requests in a row failed: treating the network as down for the rest of this run')
     return None
 
 
@@ -677,7 +688,7 @@ def stakes_text(st, r, games_left, swept_by):
         i = [x[0] for x in t].index(ab)
         me, top = t[i], t[0]
         gb = ((top[1] - me[1]) + (me[2] - top[2])) / 2
-        parts.append(f"{ab} is {ordinal(i + 1)} in the {n} at {rec(*me[1:])}" + (f", {fl(gb)} games behind {top[0]}" if gb > 0 else ''))
+        parts.append(f"{ab} is {ordinal(i + 1)} in the {n} at {rec(*me[1:])}" + (f", {fl(gb)} {'game' if gb == 1 else 'games'} behind {top[0]}" if gb > 0 else ''))
     return ('; '.join(parts) + '.') if parts else f"{A} is {r['arec']}; {H} is {r['hrec']}."
 
 
@@ -711,8 +722,9 @@ def team_fact(name, gs, home_side):
             s += f" Its {len(ou)} {per} games with a line all went {'over' if o else 'under'} ({avg:.1f} points a game)."
         elif o / len(ou) >= 0.8 or o / len(ou) <= 0.2:
             s += f" {o} of its {len(ou)} {per} games with a line went over ({avg:.1f} points a game)."
-    if len(vs) < 10:
-        s += f" {len(vs)} {per} games: a small sample."
+    small = [f"{len(x)} {lab}" for x, lab in ((one, 'one-score games'), (vs, f'{per} games')) if 0 < len(x) < 10]
+    if small:
+        s += f" Small samples: {join(small)}."
     return s
 
 
@@ -788,7 +800,7 @@ def build_mnf(Y, rows):
             hl = sum(1 for x in athome if x['_x']['hs'] < x['_x']['as'])
             txt += (f", {rec(hw, hl)} at home" if win[H] > win[A] else f"; {lc['home']} is {rec(hw, hl)} at home in these games")
         wl_ = sum(1 for x in h2 if x['line'])
-        txt += '.' + (f" ESPN has lines for only {wl_} of the {n}." if wl_ < n else '') + ' A small sample; rosters change.'
+        txt += '.' + ('' if wl_ == n else ' ESPN has no lines for these games.' if not wl_ else f" ESPN has lines for only {wl_} of the {n}.") + ' A small sample; rosters change.'
         this_season = [x for x in h2 if x['_x']['t'].year >= Y and x['_x']['t'] > datetime(Y, 8, 1, tzinfo=UTC)]
         swept_by = None
         if this_season:
@@ -857,7 +869,9 @@ def build_mnf(Y, rows):
             bits.append(f"{lc[s]}: " + '; '.join(f"{join(v)} {k}" for k, v in by.items()))
     watch.append('The injury report before kickoff: ' + ('. '.join(bits) + '.' if bits else 'neither team lists anyone as questionable, doubtful or out yet.'))
     if wx and (re.search(r'storm|rain|snow|shower|sleet|ice|flurr', wx['cond']) or (wx['precip'] or 0) >= 40 or (wx['gust'] or 0) >= 20 or (wx['temp'] is not None and wx['temp'] <= 32)):
-        watch.append(f"The weather: {wx['cond'] or 'a wet or windy forecast'} in the forecast for {r['city']} (open-air stadium).")
+        why_ = [x for x in (wx['cond'], f"precipitation {fl(wx['precip'])}" if (wx['precip'] or 0) >= 40 else '',
+                            f"gusts {fl(wx['gust'])} mph" if (wx['gust'] or 0) >= 20 else '', f"{fl(wx['temp'])}°F" if wx['temp'] is not None and wx['temp'] <= 32 else '') if x]
+        watch.append(f"The weather in {r['city']}: {', '.join(why_)} in the forecast (open-air stadium).")
     if market:
         if L['hs_open'] is not None and L['hs'] is not None and L['hs_open'] != L['hs']:
             d = abs(L['hs'] - L['hs_open'])
@@ -1281,6 +1295,8 @@ def soccer_upcoming():
             continue
         seen.add(r['id'])
         lg = r['lg']
+        if any(re.search(r'\b(TBD|TBA|Winner|Loser)\b', n) for n in (r['hname'], r['aname'])):
+            continue  # knockout placeholders
         th, ta = club(lg, r['hname'], r['hteam']), club(lg, r['aname'], r['ateam'])
         if not th or not ta:
             continue
@@ -1420,7 +1436,7 @@ def main():
     mnf_row = [None]
 
     def mk_mnf():
-        m, r = build_mnf(nfl['Y'], need())
+        m, r = build_mnf(nfl.get('Y'), need())
         mnf_row[0] = r
         return m
     section('mnf', mk_mnf)

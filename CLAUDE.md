@@ -43,8 +43,10 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - **Tiers:**
   - **Free (owner, 2026-11-25: "only be able to see odds ... parlay builder is accessible but thats it. No generated parlays or your parlay picks"):**
     - odds only: Games (leans locked), the sport tabs (no "Easiest parlay"), game pages, Odds tools;
-    - the parlay builder: Swipe and the slip (Generate locked, `GEN_SEL` upsell);
-    - Past Slips (pastslips.js): the day before's settled slips from recs.json, never today's or upcoming ones. A slip shows only once every one of its games is over and it has a result, so a slip with a leg still to play stays hidden. Paid plans can pick any past day.
+    - the parlay builder: Swipe and the slip (Generate locked; the slip's ⇄ recommended swaps and the soccer game page's "Best same-game pairs" are left out; `GEN_SEL` upsell as a backstop);
+    - saving (cards' ＋ My Parlays, the slip's Save, the builder's Save) needs Fantasy (`SAVE_SEL`);
+    - Games: a game with a paid lean shows "Lean 🔒" (never its side, reasons or a highlighted tile); other games show "No lean";
+    - Past Slips (pastslips.js): the day before's settled slips from recs.json, never today's or upcoming ones. A slip shows only once every one of its games is over and it has a result, so a slip with a leg still to play stays hidden. A slip whose games are over with no missed leg but a leg nobody could grade (recs.mjs grades NBA player legs only) shows as "Not fully graded". Betting + Fantasy and up can pick any past day.
     - Every other screen shows a blurred, inert preview whose words and numbers are replaced by dots, with an Upgrade card. A first visit lands on Games.
   - **Low, Fantasy ($9.99/mo, $99.99/yr):** the fantasy screens, Fantasy Parlay, Players, My Parlays.
   - **Mid, Betting + Fantasy ($24.99/mo, $249.99/yr):** every other screen, including Trending with My Parlay Picks, generated parlays and leans (the pseudo-screen `picks`: builder Generate, the sport tabs' parlay, Games leans), AI Chat, Sharp Board, Polymarket.
@@ -222,6 +224,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
 - 2026-11-25 (later):
   - Free tier redefined by the owner: odds, the parlay builder (no Generate) and Past Slips (yesterday's settled slips only); Trending / My Parlay Picks, generated parlays and leans moved to Mid. New pastslips.js; recs fixture tests/fixtures/recs-2026-11-25.json; tests/plans.test.mjs covers the new rules.
+  - Reviewed by 3 independent agents with a skeptic per angle: fixed the slip's recommended swaps and soccer same-game pairs reaching free, free saves to a locked My Parlays, a lock on every Games card (now only where a lean exists), Past Slips headings / ungradable legs / a raw "pairs" title / screen-reader results, and the Plans table hiding its plan columns on phones (old bug). Kept: Games' key props (odds per line, like the builder deck).
 - 2026-11-25:
   - Plans and access tiers: Free / Fantasy $9.99 / Betting + Fantasy $24.99 / Everything $39.99.
   - Signed unlock codes, Stripe links, blurred previews, the Plans page, owner tools and tools/license.mjs.

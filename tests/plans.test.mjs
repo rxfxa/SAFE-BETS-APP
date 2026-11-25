@@ -50,9 +50,16 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   check('free: Trending (My Parlay Picks) is locked: part of Betting + Fantasy', tr.locked && tr.gate && /Betting \+ Fantasy/.test(tr.text) && /\$24\.99/.test(tr.text), tr.text.slice(0, 160));
   await view(page, 'nba');
   check('free: a sport tab shows its markets but no generated parlay', await page.evaluate(() => /NBA markets/.test(document.getElementById('main').innerText) && !/Easiest NBA parlay/.test(document.getElementById('main').innerText) && !document.querySelector('#main .pc [data-addp]')));
-  await view(page, 'slate'); await page.waitForTimeout(300);
-  const sl = await page.evaluate(() => ({ locked: document.querySelectorAll('[data-sl-lean="locked"]').length, leans: document.querySelectorAll('[data-sl-lean="pm"],[data-sl-lean="trend"],[data-sl-lean="none"]').length, cards: document.querySelectorAll('.sl-card').length }));
-  check('free: Games shows the odds and win chances, with leans locked (no picks)', sl.cards > 0 && sl.locked > 0 && sl.leans === 0, JSON.stringify(sl));
+  // Games on 24 Nov (several games have a lean for paid plans): free sees that a lean exists, never its side or reasons
+  await view(page, 'slate');
+  await page.evaluate(() => { const b = document.querySelector('[data-ui-pill="sl-day|2026-11-24"]'); if (b) b.click(); });
+  await page.waitForFunction(() => !/still checking/.test((document.querySelector('.sl-sum') || {}).textContent || 'still checking'), null, { timeout: 15000 }).catch(() => {});
+  const sl = await page.evaluate(() => ({ locked: document.querySelectorAll('[data-sl-lean="locked"]').length, open: document.querySelectorAll('[data-sl-lean="pm"],[data-sl-lean="trend"],.sl-why').length, hl: document.querySelectorAll('.sl-tile.sl-hl').length,
+    n: +(((document.querySelector('.sl-sum') || {}).textContent || '').match(/(\d+) with a lean backed by evidence \(paid plans\)/) || [0, -1])[1], cards: document.querySelectorAll('.sl-card').length }));
+  check('free: Games shows odds and win chances; a game with a lean shows a lock (no side, reasons or highlighted tile)', sl.cards > 0 && sl.n > 0 && sl.locked === sl.n && sl.open === 0 && sl.hl === 0, JSON.stringify(sl));
+  // a soccer game page: odds, but not the model's same-game pairs
+  const gp = await page.evaluate(() => { const g = SB.DATA.games.find(g => g.sport === 'soccer' && SB.openG(g) && g.prob); SB.openGame(g.id); const S = document.getElementById('sheet'); const r = { gid: g.id, pairs: S.querySelectorAll('[data-pair]').length, best: /Win together/i.test(S.innerText), lock: /part of Betting \+ Fantasy/.test(S.innerText), odds: S.querySelectorAll('[data-k]').length }; SB.closeSheet(); return r; });
+  check("free: a soccer game page shows its markets but not the model's same-game pairs", !gp.pairs && !gp.best && gp.lock, JSON.stringify(gp));
   // the builder: build your own (Swipe); Generate asks for Betting + Fantasy
   await view(page, 'builder');
   await page.evaluate(() => document.querySelector('[data-ui-seg="bld-mode|gen"]').click()); await page.waitForTimeout(200);
@@ -61,7 +68,15 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100);
   const add = await page.evaluate(() => { const g = SB.DATA.games.find(g => SB.openG(g) && SB.marketsFor(g).length); const m = SB.marketsFor(g)[0]; SB.toggleLeg(g.id, m.key); return { n: SB.slip.length, sheet: !!(document.getElementById('sheet') && document.getElementById('sheet').classList.contains('open')) }; });
   await page.evaluate(() => document.getElementById('slipbar') && document.getElementById('slipbar').click()); await page.waitForTimeout(200);
-  check('free: legs go on the slip and the slip opens (the builder is free)', add.n === 1 && !/part of Betting/.test(await page.evaluate(() => (document.getElementById('sheet') || {}).innerText || '')), JSON.stringify(add));
+  const sh = await page.evaluate(() => { const S = document.getElementById('sheet') || {}; return { txt: S.innerText || '', swaps: S.querySelectorAll ? S.querySelectorAll('[data-sub^="slip|"]').length : -1, save: !!document.getElementById('saveP') }; });
+  check('free: legs go on the slip and the slip opens (the builder is free), without the recommended-swap button', add.n === 1 && /Parlay builder/i.test(sh.txt) && !/part of Betting/.test(sh.txt) && sh.swaps === 0, JSON.stringify({ n: add.n, swaps: sh.swaps, txt: sh.txt.slice(0, 160) }));
+  // saving needs Fantasy: the slip sheet's Save and the builder's Save open the upsell and save nothing
+  await page.evaluate(() => document.getElementById('saveP').click()); await page.waitForTimeout(200);
+  const sv1 = await page.evaluate(() => ({ up: /Saved parlays start at Fantasy/.test((document.getElementById('sheet') || {}).innerText || ''), saved: JSON.parse(localStorage.getItem('fm2.saved') || '[]').length }));
+  await page.evaluate(() => SB.closeSheet()); await view(page, 'builder');
+  await page.evaluate(() => { const b = document.querySelector('[data-bld-save]'); if (b) { b.disabled = false; b.click(); } }); await page.waitForTimeout(200);
+  const sv2 = await page.evaluate(() => ({ up: /Saved parlays start at Fantasy/.test((document.getElementById('sheet') || {}).innerText || ''), saved: JSON.parse(localStorage.getItem('fm2.saved') || '[]').length }));
+  check('free: Save to My Parlays (slip sheet and builder) asks for Fantasy and saves nothing', sv1.up && sv2.up && !sv1.saved && !sv2.saved, JSON.stringify({ sv1, sv2 }));
   await page.evaluate(() => { SB.closeSheet(); SB.setSlip && SB.setSlip([]); }); await page.waitForTimeout(100);
   // Past Slips: the day before only, settled slips only
   await view(page, 'pastslips'); await page.waitForTimeout(200);
@@ -71,6 +86,9 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   check("free: Past Slips shows only yesterday's (22 Nov) settled slips, with no day picker", ps.cards.length === 9 && ps.cards.every(r => r === 'won' || r === 'lost') && !ps.picker && /Sunday, Nov 22/.test(ps.txt) && !/Nov 23|Nov 24/.test(ps.txt), JSON.stringify({ n: ps.cards.length, picker: ps.picker }));
   check('Past Slips: a slip with a game still to play stays hidden even when it already lost a leg; one whose games are over shows', ps.future === 0 && ps.over === 1, JSON.stringify({ future: ps.future, over: ps.over }));
   check('free: Past Slips offers the paid plans for today\'s slips', /Today's and upcoming slips/.test(ps.txt));
+  const ng = await page.evaluate(() => { const now = Date.parse('2026-11-23T12:00:00Z'), P = { id: 'z', legs: [{ res: true, start: '2026-11-22T20:00:00Z' }, { res: null, start: '2026-11-22T21:00:00Z' }] };
+    return { r: __pastslips.resultOf(P, now), n: __pastslips.settled({ parlays: [P] }, now).length, t: __pastslips.titleOf({ id: 'pairs', title: 'pairs' }) }; });
+  check('Past Slips: a slip whose games are over with one leg nobody could grade shows as "Not fully graded" (not hidden, not a hit); titles are readable', ng.r === 'nograde' && ng.n === 1 && ng.t === 'Paired parlay', JSON.stringify(ng));
   const ins = await view(page, 'insights');
   check('free: a betting screen shows a blurred, inert preview with the Mid plan and its price', ins.locked && ins.inert && ins.gate && /Betting \+ Fantasy/.test(ins.text) && /\$24\.99/.test(ins.text), ins.text.slice(0, 160));
   const ff = await view(page, 'ff-trade');
@@ -147,6 +165,9 @@ for (const [t, open1, closed] of [['low', ['ff-trade', 'fantasy', 'players', 'bu
     await view(page, 'slate'); await page.waitForTimeout(300);
     const m = await page.evaluate(() => ({ locked: document.querySelectorAll('[data-sl-lean="locked"]').length, gen: (SB.goTab('builder', {}), document.querySelector('[data-ui-seg="bld-mode|gen"]').click(), __builder.state.mode) }));
     check('mid code: leans and the builder\'s Generate are open', m.locked === 0 && m.gen === 'gen', JSON.stringify(m));
+    const m2 = await page.evaluate(() => { const g = SB.DATA.games.find(g => g.sport === 'soccer' && SB.openG(g) && g.prob); SB.openGame(g.id); const pairs = document.getElementById('sheet').querySelectorAll('[data-pair]').length; SB.closeSheet();
+      SB.toggleLeg(g.id, 'H'); SB.openSlip(); const swaps = document.getElementById('sheet').querySelectorAll('[data-sub^="slip|"]').length; SB.closeSheet(); SB.setSlip([]); return { pairs, swaps }; });
+    check('mid code: same-game pairs and the slip\'s swaps are there', m2.pairs > 0 && m2.swaps > 0, JSON.stringify(m2));
     await page.evaluate(() => { document.querySelector('[data-ui-seg="bld-mode|swipe"]').click(); });
   }
   check(`${t} code: no page errors`, !errors.length, errors.join(' | '));

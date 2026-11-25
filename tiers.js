@@ -41,7 +41,10 @@
   // buttons that run the simulations: 500,000 runs and Watch live on every card, the soccer tab's simulate button
   const SIM_SEL = '[data-sim5],[data-simp],[data-sp-sim],[data-pl-sim],[data-pl-week]';
   // generated parlays and picks outside the locked screens: the builder's Generate
-  const GEN_SEL = '[data-ui-seg="bld-mode|gen"],[data-bld-build]', SAVE_SEL = '[data-savep]';
+  // (plus backstops for the model's same-game pairs and the slip's recommended swaps, which free screens leave out)
+  const GEN_SEL = '[data-ui-seg="bld-mode|gen"],[data-bld-build],[data-pair],[data-sub^="slip|"]';
+  // saving a parlay (cards, the slip sheet, the builder): My Parlays starts at Fantasy
+  const SAVE_SEL = '[data-savep],#saveP,[data-bld-save]';
   const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
   let CFG = null, CFGST = 'loading', ST = { tier: 'free', exp: 0, id: null, why: '', checked: false }, OWNER = false, KEY = null, KEYJ = '';
@@ -144,7 +147,8 @@ main.pw-lock,#sub.pw-lock{filter:blur(7px) saturate(.7);opacity:.55;pointer-even
 .pw-plan ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px;font:400 13.5px/1.4 var(--fui);color:#ffffffd9}
 .pw-plan li::before{content:"✓";color:var(--good);font-weight:800;margin-right:8px}
 .pw-plan .ui-cta,.pw-plan .ui-ghost{margin-top:auto;width:100%}
-.pw-tbl td:first-child{white-space:normal}
+.pw-tbl .ui-table td:first-child,.pw-tbl .ui-table th:first-child{white-space:normal;min-width:0;max-width:52vw}
+@media(min-width:700px){.pw-tbl .ui-table td:first-child{max-width:none}}
 .pw-in{width:100%;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--hair2);background:rgba(255,255,255,.04);color:#fff;font:500 14px var(--fmono)}
 .pw-in:focus{outline:none;border-color:var(--acc)}
 textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5px}
@@ -237,7 +241,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     if (!enforced() || pending() || !e.target.closest) return;
     const r = rank(); let hit = null;
     if (r < 3 && e.target.closest(SIM_SEL)) hit = [3, 'Simulations', 'The 500,000-run sims, Watch live and the game Simulator'];
-    else if (r < 2 && e.target.closest(GEN_SEL)) hit = [2, 'Generated parlays', 'Parlays the model builds for you, My Parlay Picks and the leans'];
+    else if (r < 2 && e.target.closest(GEN_SEL)) hit = [2, 'Generated parlays', 'Parlays the model builds for you, My Parlay Picks, recommended swaps and the leans'];
     else if (r < 1 && e.target.closest(SAVE_SEL)) hit = [1, 'Saved parlays', 'Saving parlays to My Parlays'];
     if (!hit) return;
     e.preventDefault(); e.stopImmediatePropagation(); upsell(...hit);
@@ -249,7 +253,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
   const featureRows = [
     ['Odds: Games, the sport tabs, game pages, Odds tools', 0], ['The parlay builder (build your own) and your slip', 0], ["Past Slips: yesterday's settled slips", 0],
     ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players, My Parlays (saved parlays)', 1],
-    ['Trending with My Parlay Picks, generated parlays, leans and live slips', 2], ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, UFC, Sharp Lab', 2],
+    ['Trending with My Parlay Picks, generated parlays, leans, recommended swaps and live slips', 2], ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, UFC, Sharp Lab', 2],
     ['Slip Check, Simulator, 500,000-run sims, Watch live', 3], ['Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer', 3],
   ];
   function linkOf(id, per) { const L = CFG && CFG.links && CFG.links[id] && CFG.links[id][per]; return typeof L === 'string' && /^https:\/\/[^\s"'<>]+$/.test(L) ? L : null; }
@@ -262,7 +266,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     const cards = plans().map((P, i) => {
       const tierR = i + 1, cur = on && !OWNER && r === tierR, L = linkOf(P.id, per), price = per === 'year' ? P.year : P.month;
       const inc = featureRows.filter(([, n]) => n > 0 && n <= tierR && (n === tierR || tierR === 1)).map(([t]) => t);
-      const list = tierR === 1 ? inc : [`Everything in ${plans()[i - 1].name}`, ...inc];
+      const list = [tierR === 1 ? 'Everything in Free' : `Everything in ${plans()[i - 1].name}`, ...inc];
       return `<div class="pw-plan${P.popular ? ' pop' : ''}${cur ? ' cur' : ''}">
         <div class="ui-row" style="justify-content:space-between"><span class="ui-kick">${esc(P.tag)}</span>${P.popular ? '<span class="ui-badge">Popular</span>' : ''}${cur ? '<span class="ui-badge good">Your plan</span>' : ''}</div>
         <div class="nm">${esc(P.name)}</div><div class="pr"><b>${money(price)}</b><span>/${per === 'year' ? 'year' : 'month'}</span>${per === 'year' ? `<span>· ${money(price / 12)}/mo</span>` : ''}</div>
@@ -284,7 +288,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
       <div class="ui-card" id="pwCodeBox"><div class="ui-lbl">Have an unlock code?</div>
         <div class="ui-row" style="margin-top:8px;flex-wrap:nowrap"><input class="pw-in" id="pwCode" placeholder="SB1-…" autocomplete="off" spellcheck="false" aria-label="Unlock code"><button type="button" class="ui-cta sm" data-pw-unlock>Unlock</button></div>
         <p class="pw-msg ${UI.msgOk ? 'good' : 'bad'}" id="pwMsg" role="status" aria-live="polite" tabindex="-1">${esc(UI.msg)}</p></div>
-      <h2>What each plan opens</h2>${tbl}
+      <h2>What each plan opens</h2><div class="pw-tbl">${tbl}</div>
       <p class="ui-note">A code opens its plan on the browser you enter it in; renewals come with a new code. This app runs in your browser, so the lock keeps out casual visitors rather than determined ones. Bets are placed at your own sportsbook; 21+.</p>
       ${ownerHTML()}</div>`;
   }

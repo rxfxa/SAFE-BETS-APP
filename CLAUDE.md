@@ -238,6 +238,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 ## Change log
 - 2026-11-25 (afternoon):
   - 🌙 Body Clock tab from the owner's Instagram reel. The research (4 agents, then an independent recount) found no edge against closing lines in the NFL, NBA or soccer, so the tab is not marked multi game. It has the Monday night breakdown (CAR @ TB) and tests/bodyclock.test.mjs.
+  - Two review rounds (3 reviewers each) found ~60 problems, all fixed. Among them: study wording stronger than its sources, games vs decisions, this week vs later games, an empty odds object shown as "None", soccer name matching (LAFC, D.C. United, derbies), a weather day count off by one, and failed ESPN fetches overwriting good sections (they now keep the old ones). tools/body_clock.py joined the 7:32 AM run (prompt only). Full suite 49/49; published as version 189.
 - 2026-11-22:
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.

@@ -175,7 +175,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Hourly at :55, "FirstMove hourly games refresh"** (trig_011dcsKBB9zytWc2jL2e3jdQ): owns data.json. Not ours to change without the owner's OK.
 
 ## How to publish
-- Artifact publish with url = the app, file_path = index.html, files = only the changed modules and data files. Leave data.json out: the hourly task owns it. tiers.js and plans.json must be on the artifact (plans only switch on with both); publish plans.json again whenever its key, links or revoked list change.
+- Artifact publish with url = the app, file_path = index.html, files = only the changed modules and data files. (brand/icon-*.png are on the artifact but git-ignored by `*.png`; the local copies match.) Leave data.json out: the hourly task owns it. tiers.js and plans.json must be on the artifact (plans only switch on with both); publish plans.json again whenever its key, links or revoked list change.
 - **If refused for a newer version:**
   1. Compare the saved live copy's sha256 with `git show <commit>:index.html` for recent commits.
   2. If it equals one of ours, publish again unchanged and it goes through.
@@ -213,6 +213,8 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Missing soccer leagues:** Europa League, Eredivisie and Primeira Liga aren't in data.json (the hourly feed), so the Soccer tabs can't price them.
 - **pattern.json:** results come only from the CSVs (finished games in data.json carry no pre-match chance), so it lags until football-data.co.uk updates.
 - **Plans:** not switched on yet. The owner still has to create the signing key in Owner tools and send its public key, make the 6 Stripe payment links, and choose a contact. For a Low (fantasy-only) customer, Chat (Mid) and Stat Explorer (High) stay locked in fantasy mode, per the owner's tier choices; confirm whether that is wanted.
+- **Free tier question for the owner:** Games cards show free visitors "Key props · likeliest legs" (the model's 3 likeliest player lines per game, with chance and fair odds), treated as odds like the builder deck. Lock them if the owner counts them as picks (slate.js card(), picksLocked()).
+- **Grading coverage:** tools/recs.mjs grades game legs and NBA player legs only, so slips with NFL / college / NHL / soccer player legs show "Not fully graded" on Past Slips and in Chat until those are graded too (the box scores are already in leg_pairs.py's cache).
 - **Pro interface follow-ups:**
   - Highlights images come from ESPN's image servers; the artifact may block them, in which case sport tiles show.
   - season.json lacks full names for a few college teams (ALB, RGV, WES).
@@ -226,6 +228,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
+- 2026-11-24 nightly save (Los Angeles date; the 2026-11-25 entries below are the same evening in UTC): 39 commits today: pro interface published (v163), plans and tiers, the owner's new free tier with Past Slips (v181), Chat breakdowns (v182), season.json team results. Live app = repo.
 - 2026-11-25 (night):
   - Chat breakdowns: 6 new tools and cards (player stats, a player's game reviewed, a parlay reviewed, team, leaders, track record), offline intents for each; two reviewers found 18 problems (QB anytime TD graded on passing TDs, wrong player in typed parlays, traded players' old games, two players with one name, dates, made-up lines through typed dates, a player who sat, pushes, unplayed parlays called missed, a 430px card at 390, ...), all fixed. tests/ask.test.mjs: 190 checks (fixture recs-askbd-2026-11-23.json). Full suite 48/48; published as version 182 with season.json (team results).
 - 2026-11-25 (later):

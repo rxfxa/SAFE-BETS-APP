@@ -37,6 +37,35 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - A line counts only if the viewer typed it or it is the app's own.
 - **Polymarket matching** (Sharp Board, Games leans, Polymarket tab): a strict matcher, `__sharp.match`. A bare college nickname counts only when the abbreviation runs through the full name, and ties don't match.
 
+## Plans and access tiers (2026-11-25; tiers.js, plans.json, tools/license.mjs)
+- The owner asked for "a subscription based payment system ... fantasy only, betting and fantasy ... and everything the app offers (Low-Mid-High Tier). More money more access".
+- **Owner's choices:** unlock codes on this link (no server), Stripe payment links, these prices and tiers, and a free preview.
+- **Tiers:**
+  - **Free:** Trending (with My Parlay Picks), Games and game pages. Every other screen shows a blurred, inert preview whose words and numbers are replaced by dots, with an Upgrade card.
+  - **Low, Fantasy ($9.99/mo, $99.99/yr):** the fantasy screens, Fantasy Parlay, Players, My Parlays.
+  - **Mid, Betting + Fantasy ($24.99/mo, $249.99/yr):** every other screen, including AI Chat, Sharp Board, Polymarket, the parlay builder and slip.
+  - **High, Everything ($39.99/mo, $399.99/yr):** adds Slip Check, the Simulator, every 500,000-run / Watch live button (cards, soccer, Weekly Plan) and the research tabs (Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer).
+  - The map is `NEED` in tiers.js; an unlisted screen needs Mid.
+- **Codes:**
+  - Format `SB1-<base64url JSON {v,t,e,i}>.<ECDSA P-256 signature>`, checked in the browser against plans.json `publicKey`.
+  - Expiry is checked against the newer of the device clock and the feed's server time.
+  - plans.json `revoked` lists cancelled code ids.
+  - A code unlocks one browser (localStorage `fm2.pw.code`).
+- **Owner tools** (Plans page, bottom; everything stays in the owner's browser):
+  - create or restore the signing key, which unlocks that browser automatically through a possession check;
+  - make codes (month +3 days, year +3, 7-day trial, never) with a message to send;
+  - cancel codes;
+  - make the plans.json settings (public key, Stripe links, contact, revoked).
+  - `node tools/license.mjs keygen|issue|check` does the same from a computer (key file mode 600, outside the repo).
+- **Switches:**
+  - Plans stay off (everything open) while plans.json has no `publicKey`; on localhost too unless `enforceLocal`, so the other suites never see the lock.
+  - A key once seen is remembered (`fm2.pw.pk`), so a slow or blocked plans.json does not open the lock.
+- **Honest limits, shown on the Plans page:**
+  - The app's files are public, so this stops casual visitors, not determined ones.
+  - The owner sends each code by hand, and payments are checked by the owner.
+  - Automatic code emails would need a server.
+- **To switch plans on:** the owner sends the public key, Stripe links and contact from Owner tools → "Make plans.json settings". Put them in plans.json and publish with tiers.js and plans.json.
+
 ## Tabs (Find bets group, roughly in order)
 - **Trending → 🧠 My Parlay Picks.** Chosen once a day for one Los Angeles day:
   - three 3-leg exact-score parlays;
@@ -136,14 +165,14 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Hourly at :55, "FirstMove hourly games refresh"** (trig_011dcsKBB9zytWc2jL2e3jdQ): owns data.json. Not ours to change without the owner's OK.
 
 ## How to publish
-- Artifact publish with url = the app, file_path = index.html, files = only the changed modules and data files. Leave data.json out: the hourly task owns it.
+- Artifact publish with url = the app, file_path = index.html, files = only the changed modules and data files. Leave data.json out: the hourly task owns it. tiers.js and plans.json must be on the artifact (plans only switch on with both); publish plans.json again whenever its key, links or revoked list change.
 - **If refused for a newer version:**
   1. Compare the saved live copy's sha256 with `git show <commit>:index.html` for recent commits.
   2. If it equals one of ours, publish again unchanged and it goes through.
   3. For supporting files that weren't read this session, read them first (action read, paths).
 
 ## Tests
-- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 37 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
+- `node tests/<name>.test.mjs` (Playwright + Chromium preinstalled). There are 49 suites, all on saved fixtures with a fixed clock, so they don't depend on the live feed.
 - New features get a test file. Run the whole suite before publishing:
 
   `for t in tests/*.test.mjs; do node $t; done`
@@ -173,6 +202,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
 - **Search box:** does nothing on most module tabs.
 - **Missing soccer leagues:** Europa League, Eredivisie and Primeira Liga aren't in data.json (the hourly feed), so the Soccer tabs can't price them.
 - **pattern.json:** results come only from the CSVs (finished games in data.json carry no pre-match chance), so it lags until football-data.co.uk updates.
+- **Plans:** not switched on yet. The owner still has to create the signing key in Owner tools and send its public key, make the 6 Stripe payment links, and choose a contact. For a Low (fantasy-only) customer, Chat (Mid) and Stat Explorer (High) stay locked in fantasy mode, per the owner's tier choices; confirm whether that is wanted.
 - **Pro interface follow-ups:**
   - Highlights images come from ESPN's image servers; the artifact may block them, in which case sport tiles show.
   - season.json lacks full names for a few college teams (ALB, RGV, WES).
@@ -186,6 +216,11 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
+- 2026-11-25:
+  - Plans and access tiers: Free / Fantasy $9.99 / Betting + Fantasy $24.99 / Everything $39.99.
+  - Signed unlock codes, Stripe links, blurred previews, the Plans page, owner tools and tools/license.mjs.
+  - 3 independent reviewers found no crypto holes; ~20 findings fixed: Weekly Plan sims, builder and save gates, the load window, clock rollback, readable previews, first-visit landing, focus and announcements, wording.
+  - 49 suites. Plans are off until the owner's key is added.
 - 2026-11-23 (evening):
   - Legs that help each other, reviewed (14 confirmed findings fixed): within-player links with Holm; yards calibrated (v156 had overpriced rushing lines, about 65% priced vs 52% landed); the card's joint price now conditions on the game's simulations (the old 500,000-run sim had the team-win link's sign reversed); spreads and double chance linked; partner legs gated by cost; TD swaps; help pairs follow the sport filter and are grouped by sport. Engine kept fast (normal scores taken from the sim's own model; the help section fills in after the Fantasy tab paints).
   - Pro interface (owner: "an exact 1:1 kind of interface" of rotobot.ai): captured the site (network access approved for rotobot.ai), built the shell (sidebar, Betting / Fantasy modes, phone drawer, navy / cyan), ui.js components, SB.engine, season.json and the spec (docs/pro-interface.md). The screens were built and adversarially reviewed by agents (8 in parallel after the owner asked to "make it quicker"); 47 suites pass; published as version 163 (2026-11-24 ~09:00 UTC).

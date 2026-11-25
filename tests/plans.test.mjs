@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { open, check, done, ROOT } from './lib/harness.mjs';
 
@@ -55,7 +56,7 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   check('free: the sidebar footer says Free', /Free/.test(await page.textContent('#pwStat')));
   // the gate's button opens Plans
   await view(page, 'insights'); await page.click('#pwGate [data-gotab="plans"]'); await page.waitForTimeout(150);
-  check('the gate\'s "See plans" opens the Plans page', await page.evaluate(() => SB.tab === 'plans' && /Pick your plan/i.test(document.getElementById('main').innerText)));
+  check('the gate\'s "Upgrade" opens the Plans page', await page.evaluate(() => SB.tab === 'plans' && /Pick your plan/i.test(document.getElementById('main').innerText)));
   // a 500,000-run button on a free screen (My Parlay Picks) asks for High instead of running
   await page.evaluate(() => SB.goTab('trending', {})); await page.waitForTimeout(400);
   // any card's 500,000-run / Watch live button (one is added to the open screen so the check does not depend on the slate)
@@ -64,10 +65,47 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
     check(`free: a ${a === 'sim5' ? '500,000-run' : 'Watch live'} button opens the upgrade sheet, not a simulation`, await page.evaluate(() => /Simulations are part of Everything/.test((document.getElementById('sheet') || {}).innerText || '')));
     await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100); }
   await page.evaluate(() => SB.closeSheet());
+  // the parlay builder (slip bar / Open in builder) is Mid; saving a parlay starts at Fantasy
+  for (const [sel, re] of [['addp', /parlay builder and your slip are part of Betting \+ Fantasy/], ['savep', /Saved parlays start at Fantasy/]]) {
+    await page.evaluate(a => { const b = document.createElement('button'); b.dataset[a] = 'x'; document.getElementById('pwGate').before(b); b.click(); b.remove(); }, sel); await page.waitForTimeout(200);
+    check(`free: ${sel === 'addp' ? 'Open in builder' : '＋ My Parlays'} asks for the right plan`, await page.evaluate(re => new RegExp(re).test((document.getElementById('sheet') || {}).innerText || ''), re.source));
+    await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100); }
+  // a locked preview keeps its shape but not its words or numbers; the filter chips above it are locked too
+  const lk = await view(page, 'nba');
+  const hid = await page.evaluate(() => ({ letters: (document.getElementById('main').innerText.match(/[A-Za-z0-9]/g) || []).length, sub: document.getElementById('sub').inert, lab: document.getElementById('labHost').hidden }));
+  check('free: a locked preview has no readable words or numbers, and its filter chips are inert', lk.locked && hid.letters === 0 && hid.sub, JSON.stringify(hid));
+  // Weekly Plan's 500,000-run buttons are simulations too
+  await page.evaluate(() => { const b = document.createElement('button'); b.dataset.plSim = '1'; document.getElementById('pwGate').before(b); b.click(); b.remove(); }); await page.waitForTimeout(200);
+  check('free: Weekly Plan\'s 500,000-run button asks for Everything', await page.evaluate(() => /Simulations are part of Everything/.test((document.getElementById('sheet') || {}).innerText || '')));
+  await page.evaluate(() => SB.closeSheet());
   const ov = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   check('390px: no horizontal scroll with the gate', ov <= 0, String(ov));
   check('free: no page errors', !errors.length, errors.join(' | '));
   await browser.close();
+}
+
+// ---------- first visit, a blocked plans.json, the clock ----------
+{
+  // a first visit (nothing stored) opens on a free screen, not on locked Chat
+  const { page, browser } = await open({ width: 390, before: withPlans(cfg()) });
+  await ready(page); await page.waitForTimeout(200);
+  check('first visit with plans on: opens on Trending (free), not locked Chat', await page.evaluate(() => SB.tab === 'trending' && !document.getElementById('main').classList.contains('pw-lock')));
+  await browser.close();
+  // someone who has seen the paywall: a blocked / failed plans.json keeps it on with the remembered key
+  const b2 = await open({ width: 390, tab: 'insights', init: { 'fm2.pw.pk': PUB }, before: async p => { await p.route(/\/plans\.json(\?.*)?$/, r => r.abort()); } });
+  await b2.page.waitForTimeout(800);
+  const s2 = await b2.page.evaluate(() => ({ cfg: __tiers.state.cfg, enf: __tiers.enforced(), locked: document.getElementById('main').classList.contains('pw-lock') }));
+  // (on localhost the remembered key alone is not enforced; the production rule is checked through enforced() with enforceLocal off)
+  check('a failed plans.json falls back to the remembered key (no open window); on localhost tests stay open', s2.cfg === 'missing' && !s2.enf && !s2.locked, JSON.stringify(s2));
+  await b2.browser.close();
+  // the feed's server time decides expiry: a code good by this device's clock but expired by the feed's time is refused
+  const near = (() => { const e = Math.floor(Date.UTC(2026, 10, 23, 18) / 1000), pay = b64u(JSON.stringify({ v: 1, t: 'high', e, i: 'CLOCK1' })); return `SB1-${pay}.${b64u(crypto.sign('sha256', Buffer.from(pay), { key: privateKey, dsaEncoding: 'ieee-p1363' }))}`; })();
+  const b3 = await openAs(near, { tab: 'statx' });
+  await ready(b3.page);
+  const before = await b3.page.evaluate(() => __tiers.state.tier);
+  const after = await b3.page.evaluate(async () => { SB.DATA.updated = '2026-11-24T09:00:00Z'; await __tiers.refreshState(); return __tiers.state; });
+  check('expiry uses the newer of the device clock and the feed\'s server time (rolling the clock back does not help)', before === 'high' && after.tier === 'free' && /expired/.test(after.why), JSON.stringify({ before, after: after.tier }));
+  await b3.browser.close();
 }
 
 // ---------- each tier ----------
@@ -153,7 +191,7 @@ for (const [name, c, re] of [['expired', code('high', -2), /expired/], ['revoked
 
 // ---------- the command-line tool makes the same codes ----------
 {
-  const dir = fs.mkdtempSync(path.join(ROOT, '.work', 'lic-')), key = path.join(dir, 'k.json');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lic-')), key = path.join(dir, 'k.json');
   const out = execFileSync('node', [path.join(ROOT, 'tools/license.mjs'), 'keygen', '--key', key], { encoding: 'utf8' });
   const pub = JSON.parse(out.trim().split('\n').pop());
   const c = execFileSync('node', [path.join(ROOT, 'tools/license.mjs'), 'issue', '--tier', 'low', '--days', '34', '--key', key], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();

@@ -28,23 +28,30 @@
   const RANK = { free: 0, low: 1, mid: 2, high: 3 }, TIER_OF = ['free', 'low', 'mid', 'high'];
   const DEF_PLANS = [
     { id: 'low', tag: 'Low', name: 'Fantasy', month: 9.99, year: 99.99, blurb: 'Fantasy football: start / sit, trades, your team, rankings, Fantasy Parlay and player pages.' },
-    { id: 'mid', tag: 'Mid', name: 'Betting + Fantasy', month: 24.99, year: 249.99, popular: true, blurb: 'Everything in Fantasy plus every betting screen: AI Chat, props, parlays, games, Sharp Board, Polymarket, highlights.' },
+    { id: 'mid', tag: 'Mid', name: 'Betting + Fantasy', month: 24.99, year: 249.99, popular: true, blurb: 'Everything in Fantasy plus the betting screens: AI Chat, props, parlays, the parlay builder, Sharp Board, Polymarket, highlights.' },
     { id: 'high', tag: 'High', name: 'Everything', month: 39.99, year: 399.99, blurb: 'Everything in Betting + Fantasy plus Slip Check, the game Simulator and 500,000-run sims, and the research tabs.' },
   ];
   // what each screen needs (0 free … 3 high); a screen not listed needs Mid (every other betting screen)
-  const NEED = { trending: 0, slate: 0, plans: 0, 'ff-startsit': 1, 'ff-trade': 1, 'ff-rate': 1, 'ff-rank': 1, fantasy: 1, players: 1,
+  const NEED = { trending: 0, slate: 0, plans: 0, 'ff-startsit': 1, 'ff-trade': 1, 'ff-rate': 1, 'ff-rank': 1, fantasy: 1, players: 1, mine: 1,
     slipcheck: 3, sim: 3, pattern: 3, trends: 3, upsets: 3, statx: 3 };
   const needOf = k => (k in NEED ? NEED[k] : 2);
   // buttons that run the simulations: 500,000 runs and Watch live on every card, the soccer tab's simulate button
-  const SIM_SEL = '[data-sim5],[data-simp],[data-sp-sim]';
+  const SIM_SEL = '[data-sim5],[data-simp],[data-sp-sim],[data-pl-sim],[data-pl-week]';
+  const BUILD_SEL = '#slipbar,[data-addp]', SAVE_SEL = '[data-savep]';
   const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
   let CFG = null, CFGST = 'loading', ST = { tier: 'free', exp: 0, id: null, why: '', checked: false }, OWNER = false, KEY = null, KEYJ = '';
   const plans = () => (CFG && Array.isArray(CFG.plans) && CFG.plans.length === 3 ? CFG.plans : DEF_PLANS);
   const planOf = r => plans()[Math.max(0, Math.min(2, r - 1))];
   const pubOk = j => j && j.kty === 'EC' && j.crv === 'P-256' && typeof j.x === 'string' && typeof j.y === 'string';
-  const enforced = () => CFGST === 'ok' && pubOk(CFG.publicKey) && !(isLocal() && !CFG.enforceLocal);
-  const pending = () => CFGST === 'loading' || (enforced() && !ST.checked);
+  // plans are on when plans.json has a key; while it loads (or if it fails) a key seen here before keeps them on
+  const PK0 = (() => { const k = LS.get('pk', null); return pubOk(k) ? k : null; })();
+  const keyNow = () => (CFGST === 'ok' ? (pubOk(CFG.publicKey) ? CFG.publicKey : null) : PK0);
+  const enforced = () => !!keyNow() && !(isLocal() && !(CFG && CFG.enforceLocal));
+  const pending = () => enforced() && (CFGST === 'loading' || !ST.checked);
+  // expiry against the newer of this device's clock and the feed's server time (setting a phone back doesn't extend a code)
+  const nowMs = () => Math.max(Date.now(), Date.parse(((SB.DATA || {}).updated) || '') || 0);
+  const firstVisit = (() => { try { return localStorage.getItem('fm2.tab') == null; } catch (e) { return false; } })();
   const rank = () => (!enforced() ? 3 : OWNER ? 3 : RANK[ST.tier] || 0);
   const can = k => rank() >= needOf(k);
   const money = x => '$' + Number(x).toFixed(2);
@@ -54,7 +61,7 @@
   const b64d = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
   const subtle = () => (window.crypto && crypto.subtle) || null;
   async function verifyKey() {
-    const j = CFG.publicKey, k = j.x + '|' + j.y; if (KEY && KEYJ === k) return KEY;
+    const j = keyNow(), k = j.x + '|' + j.y; if (KEY && KEYJ === k) return KEY;
     KEY = await subtle().importKey('jwk', { kty: 'EC', crv: 'P-256', x: j.x, y: j.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']); KEYJ = k; return KEY;
   }
   // -> {ok, tier, exp, id, why}
@@ -67,22 +74,22 @@
     let good = false; try { good = await subtle().verify({ name: 'ECDSA', hash: 'SHA-256' }, await verifyKey(), b64d(m[2]), new TextEncoder().encode(m[1])); } catch (e) { good = false; }
     if (!good) return { ok: false, why: "This code isn't valid for this app. Copy it again exactly as it was sent, or ask for a new one." };
     if (!p || p.v !== 1 || !RANK[p.t] || typeof p.i !== 'string') return { ok: false, why: 'This code is from a newer version of the app. Reload the page.' };
-    if ((CFG.revoked || []).includes(p.i)) return { ok: false, tier: p.t, id: p.i, why: 'This code has been cancelled. Ask the app owner for a new one.' };
-    if (p.e && p.e * 1000 < Date.now()) return { ok: false, tier: p.t, id: p.i, exp: p.e, why: `This code expired on ${new Date(p.e * 1000).toLocaleDateString()}. Renew your plan for a new code.` };
+    if (((CFG && CFG.revoked) || []).includes(p.i)) return { ok: false, tier: p.t, id: p.i, why: 'This code has been cancelled. Ask the app owner for a new one.' };
+    if (p.e && p.e * 1000 < nowMs()) return { ok: false, tier: p.t, id: p.i, exp: p.e, why: `This code expired on ${new Date(p.e * 1000).toLocaleDateString()}. Renew your plan for a new code.` };
     return { ok: true, tier: p.t, exp: p.e || 0, id: p.i };
   }
   async function refreshState() {
     ST = { tier: 'free', exp: 0, id: null, why: '', checked: false }; OWNER = false;
     if (!enforced()) { ST.checked = true; return; }
     const code = LS.get('code', null);
-    if (code) { const r = await checkCode(code); if (r.ok) ST = { tier: r.tier, exp: r.exp, id: r.id, why: '', checked: true }; else ST = { tier: 'free', exp: 0, id: r.id || null, why: r.why, checked: true }; }
+    if (code) { const r = await checkCode(code); if (r.ok) ST = { tier: r.tier, exp: r.exp, id: r.id, why: '', checked: true }; else ST = { tier: 'free', exp: r.exp || 0, id: r.id || null, why: r.why, checked: true }; }
     OWNER = await ownerCheck();
     ST.checked = true;
   }
   // the owner's browser holds the private key; prove it by signing a fresh challenge that the published key accepts
   async function ownerCheck() {
     const j = LS.get('owner', null); if (!j || !enforced() || !subtle()) return false;
-    if (j.x !== CFG.publicKey.x || j.y !== CFG.publicKey.y) return false;
+    const K = keyNow(); if (!K || j.x !== K.x || j.y !== K.y) return false;
     try {
       const k = await subtle().importKey('jwk', j, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
       const msg = crypto.getRandomValues(new Uint8Array(32)), sig = await subtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, k, msg);
@@ -101,8 +108,12 @@
   // ---------- config ----------
   function loadCfg() {
     return fetch('plans.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null).then(async d => {
-      if (d && typeof d === 'object') { CFG = d; CFGST = 'ok'; } else { CFG = { plans: DEF_PLANS }; CFGST = 'missing'; }
-      await refreshState(); SB.render(); paintChrome();
+      if (d && typeof d === 'object') { CFG = d; CFGST = 'ok'; if (pubOk(d.publicKey)) LS.set('pk', { kty: 'EC', crv: 'P-256', x: d.publicKey.x, y: d.publicKey.y }); else LS.del('pk'); }
+      else { CFG = { plans: DEF_PLANS }; CFGST = 'missing'; }
+      await refreshState();
+      // a first visit opens on a screen the visitor can use (the default screen, Chat, is part of Betting + Fantasy)
+      if (enforced() && firstVisit && !OWNER && !can(SB.tab)) SB.goTab('trending', {}); else SB.render();
+      paintChrome();
     });
   }
 
@@ -115,7 +126,8 @@
 .pw-card h2{font:800 22px/1.15 'Rubik',sans-serif!important;margin:0!important}.pw-card h2::before{display:none!important}
 .pw-card p{font:400 14.5px/1.5 var(--fui);color:#ffffffbf;margin:0}
 .pw-price{font:600 14px var(--fui);color:#ffffffb3}.pw-price b{font:900 italic 30px/1 'Rubik',sans-serif;color:#fff;margin-right:4px}
-main.pw-lock{filter:blur(7px) saturate(.7);opacity:.55;pointer-events:none;user-select:none;max-height:1500px;overflow:hidden}
+main.pw-lock,#sub.pw-lock{filter:blur(7px) saturate(.7);opacity:.55;pointer-events:none;user-select:none;max-height:1500px;overflow:hidden}
+.pw-card h2:focus{outline:none}
 .pw-lk{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08);font:700 9.5px var(--fmono);letter-spacing:.1em;color:#ffffff99}
 .pw-stat{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:40px;padding:4px 10px;border:1px solid var(--hair2);border-radius:10px;background:rgba(255,255,255,.04);color:#fff;font:600 12.5px var(--fui);cursor:pointer;text-align:left}
 .pw-stat small{font:500 11px var(--fui);color:var(--acc2)}
@@ -142,66 +154,97 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
 
   function screenName(k) { const b = document.querySelector(`#tabs .tab[data-t="${CSS.escape ? CSS.escape(k) : k}"] .tl`); return b ? b.textContent.trim() : 'This screen'; }
   function gateHTML(view) {
-    if (pending()) return `<div class="pw-card" role="status"><div class="ui-kick">Your plan</div><h2>Checking your plan…</h2></div>`;
+    if (pending()) return `<div class="pw-card" role="status"><div class="ui-kick">Your plan</div><h2 id="pwGateH" tabindex="-1">Checking your plan…</h2></div>`;
     const need = needOf(view), P = planOf(need), name = screenName(view);
     const what = need === 1 ? 'Fantasy football screens start at the Fantasy plan.' : need === 2 ? 'Betting screens start at the Betting + Fantasy plan.' : 'Slip Check, the Simulator, the 500,000-run sims and the research tabs come with Everything.';
     return `<div class="pw-card" role="region" aria-label="Locked: ${esc(name)}">
       <div class="ui-kick">${esc(P.tag)} plan · ${esc(P.name)}</div>
-      <h2>${esc(name)} is part of ${esc(P.name)}</h2>
+      <h2 id="pwGateH" tabindex="-1">${esc(name)} is part of ${esc(P.name)}</h2>
       <p>${esc(what)} ${ST.why ? esc(ST.why) : ''}</p>
       <div class="pw-price"><b>${money(P.month)}</b>/month · or ${money(P.year)}/year</div>
-      <div class="ui-row"><button type="button" class="ui-cta" data-gotab="plans">See plans</button><button type="button" class="ui-ghost" data-pw-code>Have a code?</button></div>
-      <p style="font-size:12.5px;color:#ffffff80">Free: My Parlay Picks and Games. Everything else shows a preview.</p></div>`;
+      <div class="ui-row"><button type="button" class="ui-cta" data-gotab="plans">Upgrade</button><button type="button" class="ui-ghost" data-pw-code>Have a code?</button></div>
+      <p style="font-size:12.5px;color:#ffffff80">Free: Trending (with My Parlay Picks) and Games. Everything else shows a preview.</p></div>`;
   }
+  const LOCKED_IDS = ['main', 'sub', 'labHost'];
+  const blank = root => { if (!root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (/[A-Za-z0-9]/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/[A-Za-z0-9]/g, '•'); };
+  let LOCKED = false, LASTV = null, BLANKQ = false;
   function gate(view) {
-    const G = $('pwGate'), M = $('main'); if (!G || !M) return;
-    const locked = enforced() && (pending() ? needOf(view) > 0 : !can(view));  // nothing is gated before plans.json says plans are on
-    if (!locked) { if (!G.hidden || M.classList.contains('pw-lock')) { G.hidden = true; G.innerHTML = ''; M.classList.remove('pw-lock'); M.inert = false; M.removeAttribute('aria-hidden'); } return; }
-    M.classList.add('pw-lock'); M.inert = true; M.setAttribute('aria-hidden', 'true');
+    const G = $('pwGate'); if (!G || !$('main')) return;
+    const locked = enforced() && (pending() ? needOf(view) > 0 : !can(view));  // nothing is gated before plans are on
+    const changed = view !== LASTV; LASTV = view; LOCKED = locked;
+    if (!locked) {
+      if (!G.hidden) { G.hidden = true; G.innerHTML = ''; }
+      for (const id of LOCKED_IDS) { const E = $(id); if (E && E.classList.contains('pw-lock')) { E.classList.remove('pw-lock'); E.inert = false; E.removeAttribute('aria-hidden'); } }
+      if ($('labHost') && view === 'lab') $('labHost').hidden = false;
+      return;
+    }
+    for (const id of LOCKED_IDS) { const E = $(id); if (!E) continue; E.classList.add('pw-lock'); E.inert = true; E.setAttribute('aria-hidden', 'true'); blank(E); }
+    if ($('labHost')) $('labHost').hidden = true;
     G.hidden = false; G.innerHTML = gateHTML(view);
+    // keyboard: a locked screen opened from the sidebar puts focus on the gate, so it is announced and reachable
+    const a = document.activeElement;
+    if (changed && (!a || a === document.body || (a.closest && a.closest('#tabs')))) requestAnimationFrame(() => { const h = $('pwGateH'); if (h) h.focus({ preventScroll: true }); });
   }
-  // the phone menu frees `main` when it closes: keep a locked screen inert
-  new MutationObserver(() => { const M = $('main'); if (M && M.classList.contains('pw-lock') && !M.inert) M.inert = true; }).observe($('main'), { attributes: true, attributeFilter: ['inert'] });
+  // keep a locked screen inert (the phone menu frees `main` when it closes) and keep later redraws (async modules) blanked
+  const watch = new MutationObserver(recs => {
+    if (!LOCKED) return;
+    for (const id of LOCKED_IDS) { const E = $(id); if (E && E.classList.contains('pw-lock') && !E.inert) E.inert = true; }
+    if (!BLANKQ && recs.some(r => r.type !== 'attributes')) { BLANKQ = true; requestAnimationFrame(() => { BLANKQ = false; if (LOCKED) for (const id of LOCKED_IDS) { const E = $(id); if (E && E.classList.contains('pw-lock')) blank(E); } }); }
+  });
+  for (const id of LOCKED_IDS) { const E = $(id); if (E) watch.observe(E, { attributes: true, attributeFilter: ['inert'], childList: true, subtree: true, characterData: true }); }
 
   // sidebar: lock badges on screens above your plan, your plan at the bottom; phones: Upgrade instead of Ask when Chat is locked
   function badges(T) {
     if (!T) return;
     for (const b of T.querySelectorAll('.tab[data-t]')) {
-      const old = b.querySelector('.pw-lk'); if (old) old.remove();
+      const old = b.querySelector('.pw-lk'); if (old) old.remove(); b.removeAttribute('aria-label');
       if (!enforced() || pending() || can(b.dataset.t)) continue;
-      const P = planOf(needOf(b.dataset.t)); const s = document.createElement('span'); s.className = 'pw-lk'; s.textContent = '🔒 ' + P.tag.toUpperCase(); s.title = 'Part of ' + P.name; b.appendChild(s);
-      b.setAttribute('aria-label', (b.textContent.replace(s.textContent, '').trim()) + ' (locked, ' + P.name + ' plan)');
+      const P = planOf(needOf(b.dataset.t)); const s = document.createElement('span'); s.className = 'pw-lk'; s.textContent = '🔒 ' + P.tag.toUpperCase(); s.title = 'Part of ' + P.name; s.setAttribute('aria-hidden', 'true'); b.appendChild(s);
+      const tl = b.querySelector('.tl'); b.setAttribute('aria-label', ((tl ? tl.textContent : b.textContent) || '').trim() + ' (locked, ' + P.name + ' plan)');
     }
   }
   function paintChrome() {
     const F = document.querySelector('.side-foot'); if (F) {
-      let s = $('pwStat'); if (!s) { s = document.createElement('button'); s.type = 'button'; s.id = 'pwStat'; s.className = 'pw-stat'; s.dataset.gotab = 'plans'; F.insertBefore(s, F.firstChild); }
-      const r = rank(), label = !enforced() ? 'Plans' : OWNER ? 'Owner' : r === 0 ? 'Free' : planOf(r).name;
-      s.innerHTML = `${esc(label)}<small>${!enforced() ? 'See the tiers' : r >= 3 ? 'Full access' : 'Upgrade'}</small>`;
-      s.setAttribute('aria-label', `Your plan: ${label}. Open Plans`);
-      const span = F.querySelector('span:not(#pwStat *)'); if (span) span.style.display = 'none';
+      let s = $('pwStat');
+      if (!enforced()) { if (s) s.remove(); }
+      else {
+        if (!s) { s = document.createElement('button'); s.type = 'button'; s.id = 'pwStat'; s.className = 'pw-stat'; s.dataset.gotab = 'plans'; F.insertBefore(s, F.firstChild); F.style.flexWrap = 'wrap'; }
+        const r = rank(), label = OWNER ? 'Owner' : r === 0 ? 'Free' : planOf(r).name;
+        s.innerHTML = `${esc(label)}<small>${r >= 3 ? 'Full access' : 'Upgrade'}</small>`;
+        s.setAttribute('aria-label', `Your plan: ${label}. Open Plans`);
+      }
     }
-    const A = document.querySelector('.askpill'); if (A) { const up = enforced() && !pending() && !can('ask'); A.textContent = up ? 'Upgrade' : 'Ask'; A.dataset.gotab = up ? 'plans' : 'ask'; }
+    // the phone Ask button and the logos open Chat; while Chat is locked they offer Upgrade / the free screen instead
+    const chatLocked = enforced() && !pending() && !can('ask');
+    const A = document.querySelector('.askpill'); if (A) { A.textContent = chatLocked ? 'Upgrade' : 'Ask'; A.dataset.gotab = chatLocked ? 'plans' : 'ask'; }
+    for (const B of document.querySelectorAll('.brand')) B.dataset.gotab = chatLocked ? 'trending' : 'ask';
     badges($('tabs'));
   }
   SB.on('rendered', v => { gate(v); paintChrome(); });
   SB.on('tabs', T => badges(T));
+  // a new feed brings a newer server time: re-check the code's expiry
+  SB.on('data', () => { if (enforced() && ST.checked && (ST.exp || ST.why)) refreshState().then(() => { SB.render(); paintChrome(); }); });
 
   // the simulation buttons on every card (High)
+  const upsell = (need, title, what) => { const P = planOf(need);
+    SB.openSheet(`<h2>${esc(title)} ${need === 1 ? 'start at' : 'are part of'} ${esc(P.name)}</h2><div class="note">${esc(what)} come with the ${esc(P.name)} plan (${money(P.month)}/month) and above.</div>
+      <div class="ui-row" style="margin-top:12px"><button type="button" class="ui-cta" data-gotab="plans">Upgrade</button><button type="button" class="ui-ghost" data-pw-code>Have a code?</button></div>`, { label: 'Upgrade' }); };
   document.addEventListener('click', e => {
-    const b = e.target.closest(SIM_SEL); if (!b || !enforced() || pending() || rank() >= 3) return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    const P = planOf(3);
-    SB.openSheet(`<h2>Simulations are part of ${esc(P.name)}</h2><div class="note">The 500,000-run sims, Watch live and the game Simulator come with the ${esc(P.name)} plan (${money(P.month)}/month).</div>
-      <div class="ui-row" style="margin-top:12px"><button type="button" class="ui-cta" data-gotab="plans">See plans</button><button type="button" class="ui-ghost" data-pw-code>Have a code?</button></div>`, { label: 'Upgrade' });
+    if (!enforced() || pending() || !e.target.closest) return;
+    const r = rank(); let hit = null;
+    if (r < 3 && e.target.closest(SIM_SEL)) hit = [3, 'Simulations', 'The 500,000-run sims, Watch live and the game Simulator'];
+    else if (r < 2 && e.target.closest(BUILD_SEL)) hit = [2, 'The parlay builder and your slip', 'The parlay builder, your slip and its price checks'];
+    else if (r < 1 && e.target.closest(SAVE_SEL)) hit = [1, 'Saved parlays', 'Saving parlays to My Parlays'];
+    if (!hit) return;
+    e.preventDefault(); e.stopImmediatePropagation(); upsell(...hit);
   }, true);
-  document.addEventListener('click', e => { if (e.target.closest('[data-pw-code]')) { e.preventDefault(); SB.goTab('plans', { code: true }); } });
+  document.addEventListener('click', e => { if (e.target.closest('[data-pw-code]')) { e.preventDefault(); UI.focused = false; SB.goTab('plans', { code: true }); } });
 
   // ---------- the Plans screen ----------
   const UI = { period: LS.get('period', 'month'), msg: '', msgOk: false, own: { out: null, msg: '' } };
   const featureRows = [
-    ['My Parlay Picks, Games', 0], ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players', 1],
-    ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Parlay builder, Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, game pages, UFC', 2],
+    ['Trending with My Parlay Picks, Games and game pages', 0], ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players, My Parlays (saved parlays)', 1],
+    ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Parlay builder and slip, Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, the sport tabs, UFC, Odds tools, Sharp Lab', 2],
     ['Slip Check, Simulator, 500,000-run sims, Watch live', 3], ['Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer', 3],
   ];
   function linkOf(id, per) { const L = CFG && CFG.links && CFG.links[id] && CFG.links[id][per]; return typeof L === 'string' && /^https:\/\/[^\s"'<>]+$/.test(L) ? L : null; }
@@ -209,7 +252,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     const r = rank(), on = enforced(), per = UI.period === 'year' ? 'year' : 'month';
     const st = !on ? (CFGST === 'loading' ? 'Checking your plan…' : 'Plans are not switched on yet: every screen is open.')
       : OWNER ? 'Owner: full access on this browser.'
-      : r === 0 ? 'Free: My Parlay Picks and Games, with previews of the rest.'
+      : r === 0 ? 'Free: Trending (with My Parlay Picks) and Games, with previews of the rest.'
       : `${planOf(r).name}${ST.exp ? ` · until ${new Date(ST.exp * 1000).toLocaleDateString()}` : ''}`;
     const cards = plans().map((P, i) => {
       const tierR = i + 1, cur = on && !OWNER && r === tierR, L = linkOf(P.id, per), price = per === 'year' ? P.year : P.month;
@@ -223,19 +266,19 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     }).join('');
     const tbl = U.table({ name: 'pwcmp', cols: [{ k: 'f', label: 'What you get', sort: false }, ...['Free', ...plans().map(p => p.tag)].map((l, i) => ({ k: 'c' + i, label: l, sort: false }))],
       rows: featureRows.map(([t, n]) => ({ f: t, html: esc(t), c0: n === 0 ? '✓' : '—', c1: n <= 1 ? '✓' : '—', c2: n <= 2 ? '✓' : '—', c3: '✓' })) });
-    const after = (CFG && CFG.afterPay) || 'After you pay, the app owner sends your unlock code by email or message (usually within 12 hours). Paste it below to open your plan on this browser.';
+    const after = (CFG && CFG.afterPay) || 'After you pay, the app owner sends you an unlock code by email or message. Paste it below to open your plan on this browser.';
     const contact = CFG && typeof CFG.contact === 'string' && CFG.contact.trim() ? CFG.contact.trim() : '';
     return `<div class="ui-page pw-page">
       ${U.page({ kicker: 'Pick your plan', title: 'More access,', accent: 'more edge', sub: 'Three plans: fantasy only, betting and fantasy, or everything the app does. Every number in the app is a model estimate, never a guarantee.' })}
       <div class="ui-card"><div class="ui-lbl">Your plan</div><div style="font:700 18px 'Rubik',sans-serif;margin-top:6px" id="pwState">${esc(st)}</div>
         ${ST.why && on && !OWNER && r === 0 ? `<p class="pw-msg bad" style="margin-top:6px">${esc(ST.why)}</p>` : ''}
         ${on && LS.get('code', null) ? `<button type="button" class="ui-link" data-pw-forget>Remove my code from this browser</button>` : ''}</div>
-      ${U.seg([{ k: 'month', label: 'Monthly' }, { k: 'year', label: 'Yearly · 2 months free' }], per, 'pwper')}
+      ${U.seg([{ k: 'month', label: 'Monthly' }, { k: 'year', label: 'Yearly · about 2 months free' }], per, 'pwper')}
       <div class="pw-plans">${cards}</div>
       <p class="ui-note">${esc(after)}${contact ? ' Questions: ' + esc(contact) + '.' : ''} Payments are handled by Stripe; this page never sees your card.</p>
       <div class="ui-card" id="pwCodeBox"><div class="ui-lbl">Have an unlock code?</div>
         <div class="ui-row" style="margin-top:8px;flex-wrap:nowrap"><input class="pw-in" id="pwCode" placeholder="SB1-…" autocomplete="off" spellcheck="false" aria-label="Unlock code"><button type="button" class="ui-cta sm" data-pw-unlock>Unlock</button></div>
-        <p class="pw-msg ${UI.msgOk ? 'good' : 'bad'}" id="pwMsg" role="status" aria-live="polite">${esc(UI.msg)}</p></div>
+        <p class="pw-msg ${UI.msgOk ? 'good' : 'bad'}" id="pwMsg" role="status" aria-live="polite" tabindex="-1">${esc(UI.msg)}</p></div>
       <h2>What each plan opens</h2>${tbl}
       <p class="ui-note">A code opens its plan on the browser you enter it in; renewals come with a new code. This app runs in your browser, so the lock keeps out casual visitors rather than determined ones. Bets are placed at your own sportsbook; 21+.</p>
       ${ownerHTML()}</div>`;
@@ -282,7 +325,13 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     const el = $(id); if (!el) return;
     try { await navigator.clipboard.writeText(el.value || el.textContent); SB.toast('Copied'); } catch (e) { el.focus(); el.select && el.select(); SB.toast('Select the text and copy it (the browser blocked the clipboard)'); }
   }
-  function rerender() { if (SB.tab === 'plans') SB.render(); }
+  // redraw the Plans page and put focus back on the control the viewer used (by its data attribute or id)
+  function rerender(focusSel) {
+    if (SB.tab !== 'plans') return;
+    const a = document.activeElement, sel = focusSel || (a && a !== document.body ? (['data-ui-seg', 'data-ui-select', 'data-pw-own', 'data-pw-copy', 'data-pw-unlock'].map(k => a.getAttribute && a.getAttribute(k) != null ? `[${k}="${CSS.escape(a.getAttribute(k))}"]` : null).find(Boolean) || (a.id ? '#' + CSS.escape(a.id) : null)) : null);
+    SB.render(); if (sel) { const el = document.querySelector('#main ' + sel); if (el) el.focus({ preventScroll: true }); }
+  }
+  const announce = () => { const m = $('pwMsg'); if (m) { m.focus({ preventScroll: true }); m.scrollIntoView({ block: 'center' }); } };
 
   SB.registerTab({
     key: 'plans', label: 'Plans', render(main, params) {
@@ -292,14 +341,14 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
   });
   document.addEventListener('click', async e => {
     const t = e.target;
-    const seg = t.closest('[data-ui-seg^="pwper|"]'); if (seg) { UI.period = seg.dataset.uiSeg.split('|')[1]; LS.set('period', UI.period); rerender(); return; }
+    const seg = t.closest('[data-ui-seg^="pwper|"]'); if (seg) { UI.period = seg.dataset.uiSeg.split('|')[1]; LS.set('period', UI.period); rerender(`[data-ui-seg="${seg.dataset.uiSeg}"]`); return; }
     if (t.closest('[data-pw-unlock]')) {
       const code = ($('pwCode') || {}).value || ''; const r = await checkCode(code);
-      if (r.ok) { LS.set('code', code.replace(/\s+/g, '')); await refreshState(); UI.msg = `Unlocked: ${planOf(RANK[r.tier]).name}${r.exp ? ' until ' + new Date(r.exp * 1000).toLocaleDateString() : ''}.`; UI.msgOk = true; }
-      else { UI.msg = r.why; UI.msgOk = false; }
-      SB.render(); paintChrome(); const m = $('pwMsg'); if (m) m.scrollIntoView({ block: 'center' }); return;
+      if (!r.ok) { UI.msg = r.why; UI.msgOk = false; const m = $('pwMsg'); if (m) { m.textContent = r.why; m.className = 'pw-msg bad'; } const i = $('pwCode'); if (i) i.focus(); return; }
+      LS.set('code', code.replace(/\s+/g, '')); await refreshState(); UI.msg = `Unlocked: ${planOf(RANK[r.tier]).name}${r.exp ? ' until ' + new Date(r.exp * 1000).toLocaleDateString() : ''}.`; UI.msgOk = true;
+      SB.render(); paintChrome(); announce(); return;
     }
-    if (t.closest('[data-pw-forget]')) { LS.del('code'); await refreshState(); UI.msg = 'Your code was removed from this browser.'; UI.msgOk = true; SB.render(); paintChrome(); return; }
+    if (t.closest('[data-pw-forget]')) { LS.del('code'); await refreshState(); UI.msg = 'Your code was removed from this browser.'; UI.msgOk = true; SB.render(); paintChrome(); announce(); return; }
     const cp = t.closest('[data-pw-copy]'); if (cp) { copyEl(cp.dataset.pwCopy); return; }
     const own = t.closest('[data-pw-own]'); if (!own) return; const act = own.dataset.pwOwn; UI.own.open = true;
     try {

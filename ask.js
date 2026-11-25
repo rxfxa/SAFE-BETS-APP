@@ -43,9 +43,12 @@
     if (SIDX || !SEASON) return SIDX;
     SIDX = {};
     for (const [sp, S] of Object.entries(SEASON.sports || {})) {
+      if (!S || typeof S !== 'object') continue;
       const m = new Map();
-      for (const p of S.players || []) { if (!p || !p.n) continue; const k = E.nameKey(p.n); if (!m.has(k)) m.set(k, []); m.get(k).push(p); }
-      SIDX[sp] = { m, fields: S.fields || [] };
+      for (const p of Array.isArray(S.players) ? S.players : []) { if (!p || typeof p.n !== 'string' || !p.n) continue; const k = E.nameKey(p.n); if (!m.has(k)) m.set(k, []); m.get(k).push(p); }
+      const obj = x => (x && typeof x === 'object' && !Array.isArray(x) ? x : {});
+      const teams = obj(S.teams), results = obj(S.results);
+      SIDX[sp] = { sp, m, fields: Array.isArray(S.fields) ? S.fields : [], teams, results, byTeam: new Map(Object.entries(teams).map(([ab, nm]) => [E.nameKey(nm), ab])), rc: new Map() };
     }
     return SIDX;
   }

@@ -1176,7 +1176,7 @@ let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('sa
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};
 // Tabs sit in a fixed order so related ones stay together: find a bet → your bets → games by sport → tools.
 // Known keys (including module tabs: soccerparlays, odds, sim) always take their place here; other keys use registerTab's `after`.
-const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','pastslips','slipcheck','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','odds','sim','lab','plans'];
+const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','slipcheck','pastslips','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','odds','sim','lab','plans'];
 const TABS=[['trending','🔥 Trending'],['parlays','🎯 Best Parlays'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['mine','⭐ My Parlays'],['soccer','⚽ Soccer Games'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['lab','⚡ Sharp Lab']];
 const CUSTOM={},tabParams={};
 function registerTab(t){

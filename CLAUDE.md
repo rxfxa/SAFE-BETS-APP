@@ -20,7 +20,11 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - default screen: Chat.
 - **Sidebar groups:** Research (the new screens), Safe Bets picks, Your bets, Games, Tools. Fantasy mode shows Chat, Start / Sit, Trade Analyzer, Rate My Team, Rankings, Players, Stat Explorer, Fantasy Parlay.
 - **New screens (one module each, `SB.ui` components from ui.js, `SB.engine` read-only model access):**
-  - ask.js (Chat: the `sample` capability with page tools; a model-only mode when AI isn't available);
+  - ask.js (Chat: the `sample` capability with page tools; a model-only mode when AI isn't available). Breakdowns (2026-11-25, owner: "a breakdown of what went right or wrong with players stats or parlay ... fully verse ... any sport question about any player"):
+    - tools player_stats (any player in season.json: totals, per game, last games, splits, next game, injuries, headlines), review_player (one game vs the line or his average: how close, workload, margin, opponent, form; reasons split into facts and possibilities), review_parlay (the app's picks, My Parlays or typed legs: each leg graded, the leg that broke it, near misses, links, track record), team_report, leaders, track_record; each draws a card;
+    - rules: tools for every current-season number; general knowledge only for background, labelled "general knowledge (may be out of date)"; breakdowns go what happened → why it likely happened → how close → what it says; no hindsight words, never "due";
+    - grading matches the morning run's `res` on every recs.json leg; anytime TD = TDs he scored (passing TDs only when said); a push is its own status; a player with no box-score line since his last game is said to have not played;
+    - limits said in the app: soccer club codes differ between the feed and ESPN (unlinked clubs say so), season.json keeps 15 games for NBA / NHL / soccer, no threes / steals / blocks / shooting / saves;
   - insights.js (Insights flip cards + Prop Explorer table);
   - propan.js (Prop Analyzer), players.js, statx.js (Stat Explorer);
   - slate.js (Games), sharp.js (Sharp Board: Polymarket vs the books, since we have no money / ticket splits);
@@ -222,6 +226,8 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
+- 2026-11-25 (night):
+  - Chat breakdowns: 6 new tools and cards (player stats, a player's game reviewed, a parlay reviewed, team, leaders, track record), offline intents for each; two reviewers found 18 problems (QB anytime TD graded on passing TDs, wrong player in typed parlays, traded players' old games, two players with one name, dates, made-up lines through typed dates, a player who sat, pushes, unplayed parlays called missed, a 430px card at 390, ...), all fixed. tests/ask.test.mjs: 190 checks (fixture recs-askbd-2026-11-23.json).
 - 2026-11-25 (later):
   - Free tier redefined by the owner: odds, the parlay builder (no Generate) and Past Slips (yesterday's settled slips only); Trending / My Parlay Picks, generated parlays and leans moved to Mid. New pastslips.js; recs fixture tests/fixtures/recs-2026-11-25.json; tests/plans.test.mjs covers the new rules.
   - Reviewed by 3 independent agents with a skeptic per angle: fixed the slip's recommended swaps and soccer same-game pairs reaching free, free saves to a locked My Parlays, a lock on every Games card (now only where a lean exists), Past Slips headings / ungradable legs / a raw "pairs" title / screen-reader results, and the Plans table hiding its plan columns on phones (old bug). Kept: Games' key props (odds per line, like the builder deck). Published as version 181 (without ask.js: the Chat breakdowns are still being built).

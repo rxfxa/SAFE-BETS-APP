@@ -257,7 +257,11 @@
   const SFRX = [[/\bminutes?\b|\bmins\b/, () => 'min'], [/\bpass(ing)? (tds?|touchdowns?)\b|\btd pass(es)?\b/, () => 'ptd'], [/\brush(ing)? (tds?|touchdowns?)\b/, () => 'rtd'], [/\b(receiving|rec) (tds?|touchdowns?)\b/, () => 'ctd'],
     [/\bpass(ing)? attempts?\b|\bthrows\b/, () => 'pa'], [/\b(carries|rush(ing)? attempts?|rushes)\b/, () => 'ra'], [/\btargets?\b|\btargeted\b/, () => 'tgt'],
     [/\bshots? on target\b|\bsot\b/, () => 'sot'], [/\bshots? on goal\b|\bsog\b/, sp => (sp === 'soccer' ? 'sot' : 'sog')], [/\bshots?\b/, sp => (sp === 'soccer' ? 'sh' : 'sog')], [/\bgoals?\b/, () => 'g'],
-    [/\b(touchdowns?|tds?|scor(e|es|ed|ing|ers?))\b/, (sp, P) => (sp === 'nba' ? 'pts' : sp === 'nhl' ? 'hpts' : sp === 'soccer' ? 'g' : P === 'QB' ? 'ptd' : 'td')],
+    // a TD a QB throws is a passing TD only when the words say so ("passing TDs", "threw 2 TDs"); "anytime", "score" and plain
+    // "touchdowns" are the ones a player scores himself (rushing + receiving), at every position
+    [/\b(threw|throws?|thrown|throwing)\b.{0,24}\b(tds?|touchdowns?)\b|\b(tds?|touchdowns?) (thrown|passes)\b/, () => 'ptd'],
+    [/\b(anytime|any time)\b/, sp => (sp === 'nba' ? 'pts' : sp === 'nhl' || sp === 'soccer' ? 'g' : 'td')],
+    [/\b(touchdowns?|tds?|scor(e|es|ed|ing|ers?))\b/, sp => (sp === 'nba' ? 'pts' : sp === 'nhl' ? 'hpts' : sp === 'soccer' ? 'g' : 'td')],
     [/\brush(ing)?( yards| yds)?\b|\bran for\b/, () => 'ryd'], [/\b(receiving( yards| yds)?|rec ?yds|rec yards)\b/, () => 'recyd'], [/\bpassing( yards| yds)?\b|\bpass ?(yards|yds)\b|\bthrew for\b/, () => 'pyd'],
     [/\b(receptions?|catch(es)?|caught|rec)\b/, () => 'rec'], [/\b(rebounds?|boards?|rebs?)\b/, () => 'reb'], [/\b(assists?|asts?|dimes)\b/, sp => (sp === 'nhl' ? 'a' : 'ast')],
     [/\b(points?|pts)\b/, sp => (sp === 'nhl' ? 'hpts' : 'pts')], [/\b(yards?|yds)\b/, (sp, P) => (P === 'QB' ? 'pyd' : P === 'RB' ? 'ryd' : 'recyd')]];
@@ -274,6 +278,8 @@
     if (SF[t] && hasF(sp, t)) return t;
     return sfFrom(t, sp, pos);
   }
+  // a leaderboard of QBs by "touchdowns" means the ones they throw (the title says passing TDs); "anytime" / "scored" don't
+  const leadF = (f, pos, words) => (f === 'td' && pos === 'QB' && !/\b(anytime|any time|scor|rush|receiv|rec)/i.test(String(words || '')) ? 'ptd' : f);
 
   // ---- any player this season
   const ALLX = {};
@@ -293,14 +299,29 @@
     const T = String(team || '').toUpperCase(), slate = pIndex().by;
     const rank = c => (T && c.p.t === T ? 100 : 0) + c.q * 10 + (slate.has(E.nameKey(c.p.n)) && slate.get(E.nameKey(c.p.n)).sport === c.sp ? 5 : 0) - SP_ORDER.indexOf(c.sp) * .5 + Math.min(4, (+c.p.gp || 0) / 5);
     C.sort((a, b) => rank(b) - rank(a));
-    const top = C[0], seen = new Set([top.sp + '|' + E.nameKey(top.p.n)]), others = [];
-    for (const c of C.slice(1)) { const key = c.sp + '|' + E.nameKey(c.p.n); if (seen.has(key)) continue; seen.add(key); others.push(c); }
+    const man = c => menOf(c.sp, E.nameKey(c.p.n)).find(g => g.includes(c.p)) || c.p;  // one entry per man (a traded pro's teams are one)
+    const top = C[0], seen = new Set([man(top)]), others = [];
+    for (const c of C.slice(1)) { const key = man(c); if (seen.has(key)) continue; seen.add(key); others.push(c); }
     return { sp: top.sp, p: top.p, others: others.slice(0, 3), exact: top.q === 3 };
   }
-  // one player's season: logged games up to today (UTC) across his teams (a traded pro is one player; college names repeat)
+  // the box-score entries of one name, grouped into men: a traded pro's entries never overlap in time (his old team's games end
+  // before his new team's start), two players with one name play the same weeks (PSG's Vitinha and Genoa's), and college names
+  // repeat (one entry each)
+  function menOf(sp, k) {
+    const X = xOf(sp); if (!X) return [];
+    if (!X.men) X.men = new Map(); if (X.men.has(k)) return X.men.get(k);
+    const span = e => { const L = (Array.isArray(e.log) ? e.log : []).filter(Array.isArray).map(r => String(r[0] || '').slice(0, 10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort(); return L.length ? [L[0], L[L.length - 1]] : null; };
+    const S = (X.m.get(k) || []).map(e => ({ e, s: span(e) })).sort((a, b) => (a.s ? a.s[0] : '9').localeCompare(b.s ? b.s[0] : '9')), G = [];
+    for (const x of S) {
+      const g = sp !== 'ncaaf' && x.s ? G.find(g => g.spans.every(s => s && (s[1] < x.s[0] || x.s[1] < s[0]))) : null;
+      if (g) { g.ents.push(x.e); g.spans.push(x.s); } else G.push({ ents: [x.e], spans: [x.s] });
+    }
+    const out = G.map(g => g.ents); X.men.set(k, out); return out;
+  }
+  // one player's season: logged games up to today (UTC) across his teams (a traded pro is one player; two men with one name are not)
   function seasonPlayer(sp, p) {
     const X = xOf(sp), today = todayU();
-    const ents = sp === 'ncaaf' || !X ? [p] : (X.m.get(E.nameKey(p.n)) || [p]);
+    const ents = !X ? [p] : (menOf(sp, E.nameKey(p.n)).find(g => g.includes(p)) || [p]);
     const rows = [], tot = new Array(X ? X.fields.length : 0).fill(0); let gp = 0;
     for (const e of ents) {
       gp += +e.gp || (Array.isArray(e.log) ? e.log.length : 0);
@@ -312,17 +333,48 @@
     return { sp, name: p.n, pos: String(p.pos || ''), team, teams: [...new Set(ents.map(e => String(e.t || '')))], rows, gp, tot, trunc: rows.length < gp };
   }
   const pgOf = (P, f) => (P.gp ? tv(P.sp, P.tot, f) / P.gp : null);
-  // the game a question means: a date (a US date the viewer named, or the UTC date a tool listed: exact), an opponent, else the latest
+  // the Los Angeles day of a feed game between ESPN teams t and opp that started on UTC date d (null when the feed doesn't have it)
+  function feedDay(sp, t, opp, d) {
+    for (const g of SB.DATA.games || []) {
+      if (g.sport !== sp) continue; const ms = SB.startMs(g); if (!num(ms) || new Date(ms).toISOString().slice(0, 10) !== d) continue;
+      const h = espnOf(sp, g.home.abbr, g.home.name), a = espnOf(sp, g.away.abbr, g.away.name);
+      if ((h === t && a === opp) || (h === opp && a === t)) return E.dayOf(ms);
+    }
+    return null;
+  }
+  // the game a question means: a date (the UTC date a tool listed: exact; or a US date the viewer named, matched by the feed's
+  // start time when the feed still has that game, else UTC d+1 first for the NBA / NHL's evening games), an opponent, else the latest
   function rowFor(P, o) {
     const R = P.rows; o = o || {}; if (!R.length) return -1;
     let idx = R.map((_, i) => i);
     if (o.opp) idx = idx.filter(i => R[i].opp === o.opp);
     if (o.d) {
+      if (!o.exact) {
+        const C = idx.filter(i => R[i].d === o.d || R[i].d === dAdd(o.d, 1)).map(i => ({ i, us: feedDay(P.sp, R[i].t, R[i].opp, R[i].d) }));
+        const on = C.filter(x => x.us === o.d); if (on.length) return on[on.length - 1].i;
+        idx = C.filter(x => x.us == null).map(x => x.i);
+      }
       const pref = o.exact || !(P.sp === 'nba' || P.sp === 'nhl') ? [o.d, dAdd(o.d, 1)] : [dAdd(o.d, 1), o.d];
       for (const d of pref) { const j = idx.filter(i => R[i].d === d); if (j.length) return j[j.length - 1]; }
       return -1;
     }
     return idx.length ? idx[idx.length - 1] : -1;
+  }
+  // when the player has no box-score line on a day: what the line's absence means, by sport
+  const DNP = { nba: 'he did not play (or had 0 minutes)', nhl: 'he did not play', nfl: 'he did not play or had no stats in the box score', ncaaf: 'he did not play or had no stats in the box score', soccer: 'he did not play or had no line in the box score' };
+  // his latest logged game, when his team has played since: the games he has no line in
+  function missedSince(P, i) {
+    if (i < 0 || i !== P.rows.length - 1) return null;
+    const row = P.rows[i], later = resRows(P.sp, row.t).filter(x => x.d > row.d), n = later.length;
+    if (!n) return null;
+    const ds = later.map(x => fmtD(x.d)), list = n <= 4 ? ds.join(', ') : `${ds.slice(0, 2).join(', ')}, …, ${ds[n - 1]}`;
+    return { t: row.t, n, txt: `No box-score line for him in ${row.t}'s ${n} game${n === 1 ? '' : 's'} since (${list}): ${DNP[P.sp] || 'he did not play'}.` };
+  }
+  // his team's game on a day he has no line (any team he played for)
+  function teamGameOn(P, d, exact) {
+    const ds = exact || !(P.sp === 'nba' || P.sp === 'nhl') ? [d, dAdd(d, 1)] : [dAdd(d, 1), d];
+    for (const x of ds) for (const t of P.teams) { const r = resOn(P.sp, t, x); if (r) return { t, r }; }
+    return null;
   }
 
   // ---- teams and results
@@ -432,6 +484,7 @@
       for (const [fab, f] of M.feed) L.push(mk('soccer', fab, f.name, M.f2e.get(fab), fab));
       for (const ab of Object.keys(X.soccer.results)) if (!M.e2f.has(ab)) L.push(mk('soccer', ab, ab, ab));
     }
+    L.places = new Set(L.map(t => t.place).filter(Boolean));  // "FC Dallas": a last word that is other teams' place is a place
     TIDX = { X, D: SB.DATA, N: SIDE.news, L }; return L;
   }
   const TALIAS = [[/ man (united|utd) /, ' manchester united '], [/ man city /, ' manchester city '], [/ barca /, ' barcelona '], [/ psg /, ' paris saint germain '], [/ (atleti|atletico) /, ' atletico madrid ']];
@@ -445,7 +498,7 @@
       if (t.nm !== norm(t.ab) && has(t.nm)) { s = 10; len = t.nm.length; }
       else {
         if (t.place.length >= 4 && !TEAMSTOP.has(t.place) && has(t.place)) { s = 7; len = t.place.length; }
-        if (t.nick.length >= 4 && !TEAMSTOP.has(t.nick) && !COMMON.has(t.nick) && has(t.nick)) { const v = t.sp === 'ncaaf' ? 5 : 8; if (v > s || (v === s && t.nick.length > len)) { s = v; len = t.nick.length; } }
+        if (t.nick.length >= 4 && !TEAMSTOP.has(t.nick) && !COMMON.has(t.nick) && has(t.nick)) { const v = t.sp === 'ncaaf' ? 5 : L.places && L.places.has(t.nick) ? 7 : 8; if (v > s || (v === s && t.nick.length > len)) { s = v; len = t.nick.length; } }
         const ab = String(t.ab || '');
         if (!s && ab.length >= (t.sp === 'ncaaf' ? 3 : 2) && ab === ab.toUpperCase() && !ABSTOP.has(ab) && new RegExp('(^|[^A-Za-z0-9])' + ab.replace(/[^A-Z0-9]/g, '') + '([^A-Za-z0-9]|$)').test(raw)) { s = 6; len = ab.length; }
       }
@@ -524,18 +577,33 @@
   const recInfo = L => { const st = String(L.player.stat || ''), thr = +L.player.thr, under = !!L.player.under; return { f: st, line: num(thr) ? (under ? thr : thr - .5) : null, under, p: num(+L.p) && +L.p > 0 ? +L.p : null }; };
   // a date named in words -> {d: 'YYYY-MM-DD'} (a US calendar date) or {rel: 'last'} ("last night", "yesterday")
   const MONX = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+  const MON_W = '(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:uary|ruary|ch|il|e|y|ust|t|tember|ober|ember)?\\.?';
   const WDAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  // future: today (Los Angeles) or later, so a question about a game still to come ("on 11/24", "on Wednesday" with "will")
+  // is never read as a breakdown of an old one; night: "last night" / "yesterday" (not just his latest game)
+  // ("can you / will you ..." asks the assistant, it says nothing about when the games are)
+  const FUT_RX = /\b(will|would|can|could|should|gonna|going to)\b/, PAST_RX = /\b(went|did|happened|cashed|missed|lost|busted)\b/;
+  const isFuture = s => { const t = String(s || '').replace(/\b(can|could|would|will) (you|u)\b/g, ' '); return FUT_RX.test(t) && !PAST_RX.test(t); };
   function dateIn(s) {
     s = String(s || '').toLowerCase();
-    let m = /\b(20\d\d)-(\d\d)-(\d\d)\b/.exec(s); if (m) return { d: `${m[1]}-${m[2]}-${m[3]}` };
-    const today = E.dayOf(Date.now()), y0 = +today.slice(0, 4);
-    const mk = (mo, da) => { if (!(mo >= 1 && mo <= 12 && da >= 1 && da <= 31)) return null; const d = `${y0}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`; return d > today ? `${y0 - 1}-${d.slice(5)}` : d; };
-    m = /\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/.exec(s); if (m) { const d = mk(MONX[m[1]], +m[2]); if (d) return { d }; }
-    m = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\b/.exec(s); if (m) { const d = mk(MONX[m[2]], +m[1]); if (d) return { d }; }
-    m = /\b(?:on\s+)?(\d{1,2})\/(\d{1,2})\b/.exec(s); if (m) { const d = mk(+m[1], +m[2]); if (d) return { d }; }
-    if (/\b(last night|yesterday|last game|most recent|latest|last time out)\b/.test(s)) return { rel: 'last' };
-    m = /\b(?:on|last)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(s);
-    if (m) { const dow = new Date(today + 'T12:00:00Z').getUTCDay(); return { d: dAdd(today, -((dow - WDAY.indexOf(m[1]) + 7) % 7)) }; }
+    const today = E.dayOf(Date.now()), y0 = +today.slice(0, 4), out = d => ({ d, future: d >= today });
+    let m = /\b(20\d\d)-(\d\d)-(\d\d)\b/.exec(s); if (m) return out(`${m[1]}-${m[2]}-${m[3]}`);
+    // a month and day this year; one more than 45 days ahead is last year's (asked in January about "Dec 28")
+    const mk = (mo, da) => { if (!(mo >= 1 && mo <= 12 && da >= 1 && da <= 31)) return null; const d = `${y0}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`; return d > today && Date.parse(d) - Date.parse(today) > 45 * 864e5 ? `${y0 - 1}-${d.slice(5)}` : d; };
+    // month names only ("Nov", "November", "Sept."), never a name that starts like one ("Marcus 25")
+    m = new RegExp('\\b' + MON_W + '\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b').exec(s); if (m) { const d = mk(MONX[m[1]], +m[2]); if (d) return out(d); }
+    m = new RegExp('\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?' + MON_W + '(?![a-z])').exec(s); if (m) { const d = mk(MONX[m[2]], +m[1]); if (d) return out(d); }
+    m = /\b(?:on\s+)?(\d{1,2})\/(\d{1,2})\b/.exec(s); if (m) { const d = mk(+m[1], +m[2]); if (d) return out(d); }
+    if (/\b(last night|yesterday)\b/.test(s)) return { rel: 'last', night: true };
+    if (/\b(last game|most recent|latest|last time out)\b/.test(s)) return { rel: 'last' };
+    m = /\b(on|last|next|this)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(s);
+    if (m) {
+      const dow = new Date(today + 'T12:00:00Z').getUTCDay(), w = WDAY.indexOf(m[2]);
+      // "next Wednesday", "this Sunday" and "will ... on Wednesday" mean the coming one; otherwise the last one
+      if (m[1] === 'next' || (m[1] === 'this' && !PAST_RX.test(s)) || (m[1] === 'on' && isFuture(s))) return out(dAdd(today, (w - dow + 7) % 7));
+      let k = (dow - w + 7) % 7; if (m[1] === 'last' && !k) k = 7;
+      return out(dAdd(today, -k));
+    }
     return {};
   }
 
@@ -624,32 +692,45 @@
     return out.sort((a, b) => b.s - a.s || SB.startMs(a.g) - SB.startMs(b.g)).map(x => x.g);
   }
   // the words that mark a breakdown question
-  const REVIEW_RX = /\b(went wrong|go wrong|went right|what happened|why did|why .{0,40}\b(miss|lose|lost|fail|bust)|break ?down|review|grade|how did|how'?d|did (it|they|my|this|that|he|she) (hit|cash|win|lose|miss)|miss(ed)?|lost|bust(ed)?|cash(ed)?)\b/;
+  // (a bare "cash" / "miss" is not one: "will my parlay cash?" is about games still to come)
+  const REVIEW_RX = /\b(went wrong|go wrong|went right|what happened|why did|why .{0,40}\b(miss|lose|lost|fail|bust)|break ?down|review|grade|how did|how'?d|did\b.{0,40}\b(hit|cash|win|lose|miss|cover)|missed|lost|busted|cashed)\b/;
   const PICKS_RX = /\b(your|the app'?s|apps|safe bets'?|our|yesterday'?s|todays?|recommended)\b[^?]{0,30}\b(picks?|parlays?|recommendations?|mix|sgp|same game|exact scores?|underdogs?|nba props)\b|\bmy parlay picks\b/;
   const TRACK_RX = /\btrack record\b|\bhit rate\b|\bhow (good|accurate) (are|is|have been) (your|the app'?s|the) (picks|parlays|model)\b|\bhow (did|do|have|are|were) (your|the app'?s|safe bets'?|our|the) (picks|parlays|recommendations)\b/;
   const MINE_RX = /\bmy (last |latest |most recent |saved |recent )?(parlay|slip|ticket|bet|parlays|bets|sgp)\b/;
   const TITLE_STOP = /\b(what|went|go|wrong|right|with|why|did|do|does|how|happened|break|down|breakdown|review|yesterdays?|todays?|picks?|recommended|recommendations?|miss(ed)?|lost|lose|hit|your|the|apps?|safe|bets|our|parlays?|on|for|from|of|last|night)\b/g;
   const LEAD_RX = /\bwho (leads|has the most|is leading|has led|tops)\b|\bleaders?\b|\bleads the\b|\bleading (rusher|passer|receiver|scorer|rebounder|goal ?scorer|tackler)s?\b|\bmost (\w+ ){0,2}(points|rebounds|assists|yards|touchdowns|tds|goals|receptions|catches|shots|carries|targets)\b/;
-  const RVP_RX = /\bhow did\b|\bhow'?d\b|\bwhy did\b|\bwhat happened\b|\bbreak ?down\b|\blast night\b|\byesterday\b|\bdid (he|she)\b|\b(hit|miss|cover)(ed)? (his|her|the)\b|\bhow (was|were) (he|she|his)\b/;
+  const RVP_RX = /\bhow did\b|\bhow'?d\b|\bwhy did\b|\bwhat happened\b|\bbreak ?down\b|\blast night\b|\byesterday\b|\bdid (he|she)\b|\b(hit|miss|cover)(ed)? (his|her|the)\b|\bhow (was|were) (he|she|his)\b|\bwent (wrong|right)\b|\bgo(ne)? (wrong|right)\b|\bdid\b.{1,40}\b(go over|go under|hit|cash|cover|miss)\b/;
   const STP_RX = /\b(stats?|statistics|this season|season (stats|averages?|totals?|numbers|so far)|averag(e|es|ing)|game ?logs?|last (\d{1,2}|five|ten|few|three)( games)?|numbers|splits?|per game)\b|\bhow (is|has) .{2,40} (doing|done|played|been playing)\b/;
   const TEAM_RX = /\b(record|doing|form|standings?|streak|results|last \d+ games|season so far|how (are|is|have|did|were) the)\b/;
   const QSTOP = new Set('how did does doing last night yesterday stats season games points rebounds assists yards touchdowns goals shots record leaders against what happened miss missed play played looks tonight today their this that with from over under break breakdown review average averages split splits numbers why lately recently'.split(' '));
   // a player named in the text who has no game on the slate: a full name, else a surname of 5+ letters that isn't an everyday or
   // team word (the stat words named pick the sport; then the bigger season)
   // the longest full name (two words or more) of any player in this season's box scores that the text contains
+  // every such full name in the text, longest first where two overlap, with where it sits in lc (a name in two sports: the one
+  // with more games)
+  function seasonFullsIn(lc, sport) {
+    const X = sIndex(); if (!X) return [];
+    const qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ', sps = sport ? [sport] : SP_ORDER, C = new Map();
+    for (const sp of sps) for (const x of allOf(sp)) if (x.nm.length >= 6 && x.nm.includes(' ') && qn.includes(' ' + x.nm + ' ')) { const o = C.get(x.nm); if (!o || (+x.p.gp || 0) > (+o.p.gp || 0)) C.set(x.nm, { sp, p: x.p, nm: x.nm }); }
+    const out = [];
+    for (const c of [...C.values()].sort((a, b) => b.nm.length - a.nm.length || (+b.p.gp || 0) - (+a.p.gp || 0))) {
+      const rx = new RegExp('(^|[^a-z0-9])(' + c.nm.split(' ').map(w => w.split('').join('\\.?')).join('[^a-z0-9]+') + ')(?![a-z0-9])', 'g');
+      let m; while ((m = rx.exec(lc))) { const at = m.index + m[1].length, len = m[2].length; if (!len) break; if (!out.some(o => at < o.at + o.len && o.at < at + len)) out.push({ name: c.p.n, sp: c.sp, team: c.p.t, nm: c.nm, at, len }); }
+    }
+    return out.sort((a, b) => a.at - b.at);
+  }
   function seasonFullIn(lc, sport) {
-    const X = sIndex(); if (!X) return null;
-    const qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ', sps = sport ? [sport] : SP_ORDER;
-    let best = null;
-    for (const sp of sps) for (const x of allOf(sp)) if (x.nm.length >= 6 && x.nm.includes(' ') && qn.includes(' ' + x.nm + ' ') && (!best || x.nm.length > best.nm.length || (x.nm.length === best.nm.length && (+x.p.gp || 0) > (+best.p.gp || 0)))) best = { sp, p: x.p, nm: x.nm };
-    return best ? { name: best.p.n, sp: best.sp, team: best.p.t, nm: best.nm, at: qn.indexOf(' ' + best.nm + ' ') } : null;
+    const L = seasonFullsIn(lc, sport); let best = null;
+    for (const x of L) if (!best || x.nm.length > best.nm.length) best = x;
+    return best;
   }
   function seasonNamesIn(lc, sport) {
     const X = sIndex(); if (!X) return null;
     const qn = ' ' + lc.replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim() + ' ', sps = sport ? [sport] : SP_ORDER;
     const full = seasonFullIn(lc, sport); if (full) return full;
-    const nicks = new Set(teamIdx().map(t => t.nick));
-    const words = qn.trim().split(' ').filter(w => w.length >= 5 && !COMMON.has(w) && !TEAMSTOP.has(w) && !QSTOP.has(w) && !nicks.has(w) && !nicks.has(w.replace(/s$/, '')));
+    // a team's nickname or place ("Washington", "Dallas") names the team, not a player with that surname
+    const TI = teamIdx(), nicks = new Set(TI.map(t => t.nick)), places = new Set(TI.map(t => t.place).filter(w => w && w.length >= 4 && !w.includes(' ')));
+    const words = qn.trim().split(' ').filter(w => w.length >= 5 && !COMMON.has(w) && !TEAMSTOP.has(w) && !QSTOP.has(w) && !nicks.has(w) && !nicks.has(w.replace(/s$/, '')) && !places.has(w));
     if (!words.length) return null;
     const ws = new Set(words), hint = hintOf(lc), C = [];
     for (const sp of sps) for (const x of allOf(sp)) { const t = x.nm.split(' '); if (t.length >= 2 && ws.has(t[t.length - 1])) C.push({ sp, p: x.p, w: t[t.length - 1] }); }
@@ -658,14 +739,26 @@
     const M = {}; for (const sp of SP_ORDER) M[sp] = med(sp);
     C.sort((a, b) => (hint ? (hint.includes(b.sp) ? 1 : 0) - (hint.includes(a.sp) ? 1 : 0) : 0) || (+b.p.gp || 0) / M[b.sp] - (+a.p.gp || 0) / M[a.sp] || SP_ORDER.indexOf(a.sp) - SP_ORDER.indexOf(b.sp));
     const top = C[0], also = C.slice(1).filter(c => E.nameKey(c.p.n) !== E.nameKey(top.p.n)).slice(0, 3);
-    return { name: top.p.n, sp: top.sp, team: top.p.t, at: Math.max(0, qn.indexOf(' ' + top.w + ' ')), amb: also.length ? `Reading "${top.w}" as ${top.p.n} (${top.p.t}, ${SPN[top.sp]}). Also in the box scores: ${also.map(c => `${c.p.n} (${c.p.t}, ${SPN[c.sp]})`).join(', ')}. Use the full name for another player.` : '' };
+    const wm = new RegExp('(^|[^a-z0-9])' + top.w.split('').join('\\.?') + '(?![a-z0-9])').exec(lc);
+    return { name: top.p.n, sp: top.sp, team: top.p.t, at: wm ? wm.index + wm[1].length : 0, amb: also.length ? `Reading "${top.w}" as ${top.p.n} (${top.p.t}, ${SPN[top.sp]}). Also in the box scores: ${also.map(c => `${c.p.n} (${c.p.t}, ${SPN[c.sp]})`).join(', ')}. Use the full name for another player.` : '' };
   }
   // players with their stat and line in a typed parlay ("my parlay: Maxey over 24.5 points and Siakam over 20.5 points")
-  function typedLegsIn(lc, clean, players) {
+  // Players from past games have usually left the slate, so every full name in the box scores counts too, and the text is cut
+  // into one segment per name ("Derrick Henry over 80.5 rushing yards and Jacoby Brissett anytime TD": two legs, never the
+  // slate's Henry Hasselbeck). An anytime TD / goal leg needs no number (it is 1 or more). d: a past US date the viewer named.
+  function typedLegsIn(lc, clean, players, fulls, d) {
+    const S = players.map(p => ({ at: p.at, len: p.len || 0, name: p.e.name, sp: p.e.sport }));
+    for (const f of fulls || []) if (!S.some(s => s.at < f.at + f.len && f.at < s.at + s.len)) S.push({ at: f.at, len: f.len, name: f.name, sp: f.sp });
+    if (!S.length) { const s = seasonNamesIn(lc, null); if (s) S.push({ at: s.at || 0, len: 0, name: s.name, sp: s.sp }); }
+    S.sort((a, b) => a.at - b.at);
     const out = [];
-    if (players.length) players.slice(0, 10).forEach((p, i) => { const seg = clean.slice(p.at, i + 1 < players.length ? players[i + 1].at : clean.length), line = lineOf(seg); out.push({ player: p.e.name, stat: (statFrom(seg) && statFrom(seg) !== 'yds' ? ST_NAME[statFrom(seg)] : null) || seg.slice(0, 60), line: line == null ? undefined : line, side: isUnder(seg) ? 'under' : undefined }); });
-    else { const s = seasonNamesIn(lc, null); if (s && lineOf(clean.slice(s.at || 0)) != null) { const seg = clean.slice(s.at || 0); out.push({ player: s.name, stat: seg.slice(0, 60), line: lineOf(seg), side: isUnder(seg) ? 'under' : undefined }); } }
-    return out.filter(x => x.line != null);
+    S.slice(0, 12).forEach((s, i) => {
+      const seg = clean.slice(s.at + s.len, i + 1 < S.length ? S[i + 1].at : clean.length), st = statFrom(seg);
+      let line = lineOf(seg), stat = (st && st !== 'yds' ? ST_NAME[st] : null) || seg.slice(0, 60);
+      if (line == null && s.sp !== 'nba' && /\b(anytime|any time|to score|scores?|tds?|touchdowns?|goals?)\b/.test(seg)) { line = 0.5; stat = s.sp === 'nfl' || s.sp === 'ncaaf' ? 'anytime TD' : 'goals'; }
+      if (line != null) out.push({ player: s.name, sport: s.sp, stat, line, side: isUnder(seg) ? 'under' : undefined, date: d || undefined });
+    });
+    return out;
   }
   function leadIntent(lc, sport) {
     const pos = /\b(qbs?|quarterbacks?|passers?)\b/.test(lc) ? 'QB' : /\b(rbs?|running backs?)\b/.test(lc) ? 'RB' : /\b(tes?|tight ends?)\b/.test(lc) ? 'TE' : /\b(wrs?|wide receivers?)\b/.test(lc) ? 'WR'
@@ -674,7 +767,7 @@
     let sp = sport;
     if (!sp) { const h = hintOf(t.replace(/\bscor(ing|ers?)\b/, ' points ')); sp = /\bgoals?\b|\bshots? on goal\b/.test(t) ? 'nhl' : /\bshots? on target\b/.test(t) ? 'soccer' : h ? h[0] : /\bscor(ing|ers?)\b/.test(t) ? 'nba' : null; }
     if (!sp) return null;
-    const f = sfFrom(t.replace(/\bscor(ing|ers?)\b/, sp === 'nfl' || sp === 'ncaaf' ? ' touchdowns ' : sp === 'soccer' ? ' goals ' : ' points '), sp, pos);
+    const f = leadF(sfFrom(t.replace(/\bscor(ing|ers?)\b/, sp === 'nfl' || sp === 'ncaaf' ? ' touchdowns ' : sp === 'soccer' ? ' goals ' : ' points '), sp, pos), pos, lc);
     if (!f) return null;
     return { kind: 'leaders', sp, f, pos, pg: /\bper game\b|\ba game\b|\baverag/.test(lc) };
   }
@@ -690,7 +783,8 @@
     clean = clean.replace(/\b\d{1,2}:\d{2}\b/g, m => ' '.repeat(m.length));
     // a slate player matched by one word ("Cunningham") gives way to a longer full name of someone else in the box scores
     // ("Cade Cunningham", who has no game on the slate)
-    const sport = sportOf(lc), full = seasonFullIn(lc, null), players = matchPlayers(lc).filter(p => !(full && p.word && p.e.k !== E.nameKey(full.name) && full.nm.length > p.len && (' ' + full.nm + ' ').includes(' ' + nmOf(p.word) + ' ')));
+    const sport = sportOf(lc), fulls = seasonFullsIn(lc, null);
+    const players = matchPlayers(lc).filter(p => !(p.word && fulls.some(f => f.at <= p.at && p.at + p.len <= f.at + f.len && f.len > p.len && E.nameKey(f.name) !== p.e.k)));
     const risk = /\b(safe|safest|safer|low risk|conservative)\b/.test(lc) ? 'safe' : /\b(risky|long ?shots?|lotto|big payout|plus money|high risk|aggressive)\b/.test(lc) ? 'risky' : 'balanced';
     const when = /\b(tonight|today|this evening)\b/.test(lc) ? 'tonight' : /\b(this week|week|weekend)\b/.test(lc) ? 'week' : null;
     const legOf = (i, solo) => {
@@ -706,29 +800,42 @@
     };
     const isParlay = /\b(parlay|parley|sgp|same game|ticket|accumulator|acca)\b/.test(lc);
     // ---- breakdowns: the app's picks and track record, a saved or typed parlay, league leaders, one player's game or season
-    const dt = dateIn(lc), reviewW = REVIEW_RX.test(lc), trackW = TRACK_RX.test(lc);
+    // a question about games still to come ("will my parlay cash?", "can Maxey score 25 on Wednesday?") is never a breakdown
+    const dt = dateIn(lc), reviewW = REVIEW_RX.test(lc), trackW = TRACK_RX.test(lc), future = isFuture(lc), pastD = dt.d && !dt.future ? dt.d : null;
     if (PICKS_RX.test(lc) || trackW) {
-      const dayW = dt.d || (/\b(yesterday|last night)\b/.test(lc) ? 'yesterday' : /\btoday'?s?\b/.test(lc) ? 'today' : null);
-      if (trackW && !dayW && !/\b(went wrong|go wrong|what happened|break ?down|why)\b/.test(lc)) { const m = /\blast (\d{1,2}) days\b/.exec(lc); return { kind: 'track', days: m ? clamp(+m[1], 1, 30) : 7 }; }
-      if (reviewW || trackW || (dayW && dayW !== 'today' && !/\b(build|make|give|create|generate)\b/.test(lc))) return { kind: 'rparlay', src: 'picks', day: dayW, title: lc.replace(TITLE_STOP, ' ') };
+      const dayW = pastD || (/\b(yesterday|last night)\b/.test(lc) ? 'yesterday' : /\btoday'?s?\b/.test(lc) ? 'today' : null);
+      if (trackW && !dayW && !future && !/\b(went wrong|go wrong|what happened|break ?down|why)\b/.test(lc)) { const m = /\blast (\d{1,2}) days\b/.exec(lc); return { kind: 'track', days: m ? clamp(+m[1], 1, 30) : 7 }; }
+      if (!future && (reviewW || trackW || (dayW && dayW !== 'today' && !/\b(build|make|give|create|generate)\b/.test(lc)))) return { kind: 'rparlay', src: 'picks', day: dayW, title: lc.replace(TITLE_STOP, ' ') };
     }
-    if (MINE_RX.test(lc) && (reviewW || /\bhow (did|is|was)\b/.test(lc))) {
-      const legs = typedLegsIn(lc, clean, players);
-      return legs.length ? { kind: 'rparlay', src: 'legs', legs } : { kind: 'rparlay', src: 'saved' };
+    if (MINE_RX.test(lc) && !future && (reviewW || /\bhow (did|is|was)\b/.test(lc))) {
+      const legs = typedLegsIn(lc, clean, players, fulls, pastD);
+      return legs.length ? { kind: 'rparlay', src: 'legs', legs, us: true } : { kind: 'rparlay', src: 'saved' };
     }
     if (LEAD_RX.test(lc) && !players.length && !/\b(props?|bets?|parlays?|tonight|this week)\b/.test(lc)) { const L = leadIntent(lc, sport); if (L) return L; }
-    if (!isParlay && !price) {
-      const rvP = RVP_RX.test(lc) || !!dt.d || !!dt.rel, stP = STP_RX.test(lc), oppM = /\b(?:vs\.?|versus|against)\s+(?:the\s+)?([a-z0-9 .&'-]{3,40})/.exec(lc);
+    // a line with bet words and no breakdown words ("Is Maxey over 24.5 points vs Portland a good bet?") is a bet on his next game
+    const betQ = lineOf(clean) != null && /\b(over|under|bets?|take|worth|value|good|line|odds|props?|clear|or more|plus)\b|\d\s*\+|\b[ou]\s?\d/.test(lc) && !RVP_RX.test(lc);
+    if (!isParlay && !price && !betQ) {
+      const rvP = !future && (RVP_RX.test(lc) || !!pastD || !!dt.rel), stP = STP_RX.test(lc), oppM = /\b(?:vs\.?|versus|against)\s+(?:the\s+)?([a-z0-9 .&'-]{3,40})/.exec(lc);
       let who = players.length ? { name: players[0].e.name, sp: players[0].e.sport, team: null, amb: ambNote(players[0]), at: players[0].at } : null;
       if (!who && (rvP || stP)) who = seasonNamesIn(lc, sport);
       if (who && (rvP || stP || (oppM && findTeam(oppM[1], who.sp)))) {
         const seg = clean.slice(who.at || 0), oppText = oppM ? oppM[1] : null;
-        if (stP && !dt.d && !dt.rel && !/\b(why|miss(ed)?|hit)\b/.test(lc) || (!rvP && oppM)) {
+        if (stP && !pastD && !dt.rel && !/\b(why|miss(ed)?|hit)\b/.test(lc) || (!rvP && oppM)) {
           const lm2 = /\blast (\d{1,2}|three|five|ten|few)\b/.exec(lc), n = lm2 ? WORDN[lm2[1]] || (lm2[1] === 'few' ? 5 : +lm2[1]) : null;
           const venue = /\b(at home|home games)\b/.test(lc) ? 'home' : /\b(on the road|away games|road games)\b/.test(lc) ? 'away' : null;
           return { kind: 'pstats', name: who.name, sp: who.sp, team: who.team, n, oppText, venue, statText: seg, amb: who.amb || '' };
         }
-        return { kind: 'rplayer', name: who.name, sp: who.sp, team: who.team, statText: seg, line: lineOf(seg), under: isUnder(seg) ? true : lineOf(seg) != null ? false : undefined, d: dt.d, oppText, amb: who.amb || '' };
+        return { kind: 'rplayer', name: who.name, sp: who.sp, team: who.team, statText: seg, line: lineOf(seg), under: isUnder(seg) ? true : lineOf(seg) != null ? false : undefined, d: pastD || undefined, rel: dt.rel, night: !!dt.night, oppText, amb: who.amb || '' };
+      }
+    }
+    // "How did Washington do last night?", "What happened in the Chiefs game yesterday?": the team's latest results (of two teams
+    // a place or nickname names, the one that played most recently)
+    if (!players.length && !isParlay && !future && (RVP_RX.test(lc) || (/\bgame\b/.test(lc) && (dt.rel || pastD)))) {
+      const T = findTeam(raw, sport);
+      if (T) {
+        const lastD = t => { const R = t.eab ? resRows(t.sp, t.eab) : []; return R.length ? R[R.length - 1].d : ''; }, all = [T, ...(T.amb || [])];
+        const pick = dt.rel || pastD ? all.slice().sort((a, b) => lastD(b).localeCompare(lastD(a)))[0] : T;
+        return { kind: 'team', sp: pick.sp, ab: pick.ab, eab: pick.eab, fab: pick.fab, name: pick.name, amb: all.filter(t => t !== pick), recent: true, night: !!dt.night };
       }
     }
     if (/\b(this|my) (parlay|slip|ticket|bet)\b/.test(lc) && !players.length) return { kind: 'slipq' };
@@ -977,7 +1084,7 @@
     const L = P.rows, home = L.filter(r => r.home), away = L.filter(r => !r.home), l5 = L.slice(-5);
     const per = F.map(f => [f, pgOf(P, f)]);
     const nx = nextGameOf(sp, P.team), AL = appLinesOf(P.name, sp);
-    return { P, sp, F, mf, n, filt, rows, last, per, avg,
+    return { P, sp, F, mf, n, filt, rows, last, per, avg, ms: missedSince(P, P.rows.length - 1),
       split: { home: { n: home.length, v: avg(home, mf) }, away: { n: away.length, v: avg(away, mf) }, l5: { n: l5.length, v: avg(l5, mf) }, sel: filt.length ? { n: rows.length, v: avg(rows, mf), lbl: filt.join(', ') } : null },
       nx, lines: AL.lines, slate: AL.e, inj: injuryOf(P.name, sp), news: newsOfPlayer(P.name) };
   }
@@ -1003,6 +1110,8 @@
     else if (num(ao)) closeTxt = `${sg(v - ao)} vs his average of ${f1(ao)} in his other ${others} games`;
     const res = resOn(sp, row.t, row.d, row.opp), scr = res ? scriptOf(sp, res) : null;
     const facts = [], maybe = [];
+    // his latest logged game while his team has played since: say so first (a player who sat is not reviewed as if this were last night)
+    const ms = missedSince(P, i); if (ms) facts.push(ms.txt);
     // workload
     const U0 = useOf(sp, P.pos, f); let use = null;
     if (U0) {
@@ -1021,7 +1130,7 @@
     // the game's result and margin
     if (res) {
       const won = res.pf > res.pa;
-      facts.push(`${P.team} ${res.pf === res.pa ? 'drew' : won ? 'won' : 'lost'} ${res.pf}-${res.pa} ${row.home ? 'at home vs' : 'at'} ${row.opp}${scr && scr.k !== 'draw' ? `, ${scr.txt}` : ''}.`);
+      facts.push(`${row.t} ${res.pf === res.pa ? 'drew' : won ? 'won' : 'lost'} ${res.pf}-${res.pa} ${row.home ? 'at home vs' : 'at'} ${row.opp}${scr && scr.k !== 'draw' ? `, ${scr.txt}` : ''}.`);
       if (scr && scr.k === 'blowout' && (sp === 'nba' || sp === 'nhl') && use && use.dn) maybe.push(`Starters often sit late in blowouts; his minutes being down fits that, but the box score doesn't say why he sat.`);
       else if (scr && scr.k === 'blowout' && (sp === 'nba' || sp === 'nhl') && (verdict === 'miss' || verdict === 'none')) maybe.push(`A blowout can change how a team plays late; his minutes were close to normal, so it may not explain much here.`);
       if (scr && scr.k === 'blowout' && !won && (f === 'ryd' || f === 'ra') && (sp === 'nfl' || sp === 'ncaaf')) maybe.push(`Teams that trail by a lot usually throw more, which can cut a back's carries (a possibility, not shown by the box score).`);
@@ -1045,7 +1154,7 @@
     if (/^(pts|pyd|ryd|recyd|rec|td|g|hpts|sog|sot)$/.test(f)) { const al = allowedOf(sp, row.opp); if (al) facts.push(`${row.opp} allow ${f1(al.pa)} ${PTW[sp]} a game this season (${ord(al.rank)} fewest of ${al.of}).`); }
     const inj = injuryOf(P.name, sp);
     if (inj) maybe.push(`He is listed ${inj.status}${inj.injury ? ` (${inj.injury})` : ''} on the app's current injury report${inj.updated ? ` (updated ${fmtD(inj.updated)})` : ''}; whether that affected this game isn't in the data.`);
-    return { P, i, row, f, v, line: num(line) ? line : null, under: !!under, verdict, short, spare, needed, cap, near, barely, closeTxt, ao, others, res, scr, use, facts: facts.slice(0, 6), maybe: maybe.slice(0, 3) };
+    return { P, i, row, f, v, line: num(line) ? line : null, under: !!under, verdict, short, spare, needed, cap, near, barely, closeTxt, ao, others, res, scr, use, ms, facts: facts.slice(0, 6), maybe: maybe.slice(0, 3) };
   }
   // the player, the game and the line one review is about (shared by the tool, the offline answer and the card)
   function reviewSpec(P, o) {  // o: {st, line, under, d, exact, opp, lineSrc}
@@ -1116,10 +1225,11 @@
         if (rec) return fromRec(base);
         const st = Date.parse(L.start || '');
         if ((isFinite(st) && st > Date.now()) || (d && d > todayU())) return { ...base, status: 'pending', detail: 'not played yet' };
-        return { ...base, status: 'unknown', detail: d && resOn(P.sp, P.team, d) ? `no box-score line for him on ${fmtD(d)}: he didn't play (or had 0 minutes)` : 'no box score for this game in the app\'s data yet' };
+        const tg = d ? P.teams.map(t => resOn(P.sp, t, d) && t).find(Boolean) : null;
+        return { ...base, status: 'unknown', detail: tg ? `no box-score line for him on ${fmtD(d)}, though ${tg} played: ${DNP[P.sp] || 'he did not play'}` : 'no box score for this game in the app\'s data yet' };
       }
       const V = reviewOf(P, i, info.f, info.line, info.under);
-      return { ...base, i, V, status: V.verdict === 'none' ? 'unknown' : V.verdict, actual: `${fN(V.v)} ${SFS[info.f]}`, near: V.near, barely: V.barely, detail: V.closeTxt, gk: G.gid || `${P.sp}|${V.row.d}|${[P.team, V.row.opp].sort().join('-')}` };
+      return { ...base, team: V.row.t, i, V, status: V.verdict === 'none' ? 'unknown' : V.verdict, actual: `${fN(V.v)} ${SFS[info.f]}`, near: V.near, barely: V.barely, detail: V.closeTxt, gk: G.gid || `${P.sp}|${V.row.d}|${[V.row.t, V.row.opp].sort().join('-')}` };
     }
     if (isUndecidable(G.key)) return rec ? fromRec({ ...G, kind: 'other' }) : { ...G, kind: 'other', status: 'unknown', detail: /^TD:F/.test(G.key) ? 'a first-TD leg: the box scores don\'t say who scored first' : 'the app can\'t grade this kind of leg from box scores' };
     const g = G.gid ? SB.gameById(G.gid) : null, hab = String(L.home || (g && g.home.abbr) || ''), aab = String(L.away || (g && g.away.abbr) || '');
@@ -1145,16 +1255,21 @@
   function gradeTyped(x) {
     const dt = x.date ? dateIn(String(x.date)) : {}, exact = !!x.exact;
     if (x.player) {
-      const R = seasonFind(String(x.player)); if (!R) return { label: String(x.player).slice(0, 60), kind: 'player', status: 'unknown', detail: `no player named "${String(x.player).slice(0, 40)}" in this season's box scores` };
+      const sp0 = spNorm(x.sport), R = seasonFind(String(x.player), sp0);
+      if (!R) return { label: String(x.player).slice(0, 60), kind: 'player', status: 'unknown', detail: `no ${sp0 ? SPN[sp0] + ' ' : ''}player named "${String(x.player).slice(0, 40)}" in this season's box scores` };
       const P = seasonPlayer(R.sp, R.p), f = sfNorm(x.stat, P.sp, P.pos) || mainF(P), under = /under/i.test(String(x.side || ''));
       const line = x.line != null && x.line !== '' && isFinite(+x.line) && +x.line >= 0 ? +x.line : null;
       const label = `${P.name} ${line != null ? `${under ? 'under' : 'over'} ${fmtLine(line)} ` : ''}${SF[f]}`;
       const base = { label, kind: 'player', sp: P.sp, name: P.name, team: P.team, pos: P.pos, f, line, under, P, p: null };
       const i = rowFor(P, { d: dt.d, exact });
-      if (i < 0) return { ...base, status: dt.d && dt.d >= E.dayOf(Date.now()) ? 'pending' : 'unknown', detail: dt.d ? `no game for him on ${fmtD(dt.d)} in the box scores` : 'no games in the box scores' };
+      if (i < 0) {
+        if (dt.d && dt.d >= E.dayOf(Date.now())) return { ...base, status: 'pending', detail: `no game for him on ${fmtD(dt.d)} yet` };
+        const tg = dt.d ? teamGameOn(P, dt.d, exact) : null;  // his team played that day, he has no line
+        return { ...base, status: 'unknown', detail: tg ? `no box-score line for him on ${fmtD(dt.d)}, though ${resTxt(tg.r, tg.t)} (${fmtD(tg.r.d)}): ${DNP[P.sp] || 'he did not play'}` : dt.d ? `no game for him on ${fmtD(dt.d)} in the box scores` : 'no games in the box scores' };
+      }
       const V = reviewOf(P, i, f, line, under), rl = recLegsFor(P.name, V.row.d).map(y => recInfo(y.L)).find(I => I.f === f && line != null && Math.abs(I.line - line) < .01 && I.under === under);
-      return { ...base, d: V.row.d, i, V, p: rl ? rl.p : null, status: V.verdict === 'none' ? 'unknown' : V.verdict, actual: `${fN(V.v)} ${SFS[f]}`, near: V.near, barely: V.barely,
-        detail: V.verdict === 'none' ? `${oppLbl(V.row)} ${fmtD(V.row.d)}: ${V.closeTxt || 'no line given'}` : `${oppLbl(V.row)} ${fmtD(V.row.d)}: ${V.closeTxt}`, gk: `${P.sp}|${V.row.d}|${[P.team, V.row.opp].sort().join('-')}` };
+      return { ...base, team: V.row.t, d: V.row.d, i, V, p: rl ? rl.p : null, status: V.verdict === 'none' ? 'unknown' : V.verdict, actual: `${fN(V.v)} ${SFS[f]}`, near: V.near, barely: V.barely,
+        detail: V.verdict === 'none' ? `${oppLbl(V.row)} ${fmtD(V.row.d)}: ${V.closeTxt || 'no line given'}` : `${oppLbl(V.row)} ${fmtD(V.row.d)}: ${V.closeTxt}`, gk: `${P.sp}|${V.row.d}|${[V.row.t, V.row.opp].sort().join('-')}` };
     }
     const T = findTeam(String(x.team || ''), spNorm(x.sport)); const mk = String(x.market || 'win').toLowerCase();
     if (!T) return { label: String(x.team || 'Team').slice(0, 60), kind: 'game', status: 'unknown', detail: 'no team by that name in the app\'s results' };
@@ -1198,7 +1313,8 @@
     } else { typed = true; title = `Your ${(spec.legs || []).length}-leg parlay`; legsIn = (spec.legs || []).slice(0, 12); }
     const G = typed ? legsIn.map(gradeTyped) : legsIn.slice(0, 25).map(L => gradeLeg(L || {}, saved));
     const by = s => G.filter(x => x.status === s), hit = by('hit'), miss = by('miss'), push = by('push'), pend = G.filter(x => x.status === 'pending' || x.status === 'unknown');
-    const status = miss.length ? 'miss' : pend.length ? 'pending' : 'hit';
+    // a pushed leg drops out at most books: the parlay cashes on the rest (or, every leg pushed, the stake comes back)
+    const status = miss.length ? 'miss' : pend.length ? 'pending' : push.length ? 'push' : 'hit';
     let pInd = null; if (p == null && G.length && G.every(x => num(x.p))) pInd = G.reduce((s, x) => s * x.p, 1);
     // legs that worked for or against each other (same game only)
     const links = [];
@@ -1217,9 +1333,10 @@
     const surprise = miss.filter(x => num(x.p)).sort((a, b) => b.p - a.p)[0] || null;
     const pp = p != null ? p : pInd;
     const says = [];
-    if (pp != null) says.push(`Before the games it had a ${pc(pp)} chance${p != null ? ` (${pSrc}, model estimate)` : ' if the legs were unrelated (each leg\'s model chance multiplied)'}: a parlay like this ${status === 'miss' ? 'misses' : status === 'hit' ? 'hits' : 'lands'} ${freqW(status === 'miss' ? 1 - pp : pp)} even when every leg is priced right.`);
+    if (pp != null) says.push(`Before the games it had a ${pc(pp)} chance${p != null ? ` (${pSrc}, model estimate)` : ' if the legs were unrelated (each leg\'s model chance multiplied)'}: a parlay like this ${status === 'miss' ? 'misses' : status === 'hit' || status === 'push' ? 'hits' : 'lands'} ${freqW(status === 'miss' ? 1 - pp : pp)} even when every leg is priced right.`);
     if (surprise) says.push(`The biggest surprise: ${surprise.label} (${pc(surprise.p)} before the game); a ${pc(surprise.p)} leg misses ${freqW(1 - surprise.p)}.`);
     if (typed && !legsIn.some(x => x && x.date) && new Set(G.map(x => x.d).filter(Boolean)).size > 1) says.push('No date was given, so each leg is graded on that player\'s or team\'s most recent game, and those are on different days here. Add the date for one night.');
+    if (push.length) says.push(push.length === G.length ? 'Every leg pushed: the stake comes back at most books.' : `${push.length} leg${push.length > 1 ? 's' : ''} pushed (landed exactly on the line): at most books a pushed leg drops out and the parlay pays on the other ${G.length - push.length}, so the payout is smaller.`);
     if (G.length >= 4) says.push(`One parlay is a tiny sample: judge the picks by many days (track record), not by this one.`);
     return { ok: true, title, day, src: spec.src, legs: G, status, hit, miss, push, pend, p, pInd, pSrc, links: links.slice(0, 4), lessons: lessons.slice(0, 4), says, near: miss.filter(x => x.near), barely: hit.filter(x => x.barely), surprise };
   }
@@ -1282,16 +1399,17 @@
     if (F.absences) out.push(`Absences: ${String(F.absences).slice(0, 220)}`);
     return out.slice(0, 5);
   }
-  // league leaders from season totals (a traded pro counted once; college names repeat, so by team there)
+  // league leaders from season totals (a traded pro counted once; two men with one name, and college names, kept apart)
   function leadersOf(sp, f, o) {
     const X = xOf(sp); if (!X || !hasF(sp, f)) return null; o = o || {};
     const by = new Map();
-    for (const ps of X.m.values()) for (const p of ps) {
-      const k = sp === 'ncaaf' ? E.nameKey(p.n) + '|' + p.t : E.nameKey(p.n); let e = by.get(k);
-      if (!e) { e = { name: p.n, team: String(p.t || ''), pos: String(p.pos || ''), gp: 0, v: 0, last: '' }; by.set(k, e); }
-      e.gp += +p.gp || 0; e.v += tv(sp, p.tot, f);
-      const ld = Array.isArray(p.log) && p.log.length ? String(p.log[p.log.length - 1][0]) : ''; if (ld > e.last) { e.last = ld; e.team = String(p.t || ''); }
-    }
+    for (const k of X.m.keys()) menOf(sp, k).forEach((grp, gi) => {
+      const e = { name: grp[0].n, team: String(grp[0].t || ''), pos: String(grp[0].pos || ''), gp: 0, v: 0, last: '' }; by.set(k + '|' + gi, e);
+      for (const p of grp) {
+        e.gp += +p.gp || 0; e.v += tv(sp, p.tot, f);
+        const ld = Array.isArray(p.log) && p.log.length ? String(p.log[p.log.length - 1][0]) : ''; if (ld > e.last) { e.last = ld; e.team = String(p.t || ''); }
+      }
+    });
     const tg = Object.values(X.results).map(r => (Array.isArray(r) ? r.length : 0)).filter(Boolean).sort((a, b) => a - b), med = tg.length ? tg[Math.floor(tg.length / 2)] : 10;
     const mg = num(+o.mg) && +o.mg >= 1 ? Math.round(+o.mg) : o.pg ? Math.max(2, Math.ceil(med / 2)) : 1, pos = o.pos ? POS(o.pos) : null;
     const pm = e => !pos || POS(e.pos) === pos || POS(e.pos).startsWith(pos + '-') || (sp === 'nhl' && pos === 'F' && ['C', 'LW', 'RW'].includes(POS(e.pos)));
@@ -1335,9 +1453,20 @@
   const pricesIn = t => { const r = []; for (const m of String(t || '').toLowerCase().matchAll(PRICE_RX)) { const v = +m[1].replace(/[−–]/, '-').replace(/\s/g, ''); if (Math.abs(v) >= 100) r.push(v); } if (/\b(even money|evens)\b/i.test(t)) r.push(100); return r; };
   const amNum = s => { const v = +String(s).replace(/[−–]/, '-').replace(/\s/g, ''); return isFinite(v) ? v : NaN; };
   function priceSaid(ctx, price) { return !ctx || !ctx.said || ctx.said.some(t => pricesIn(t).includes(amNum(price))); }
+  // the numbers the viewer typed that could be a line, with the sign when they wrote one: dates ("Nov 22", "11/22", "22nd"),
+  // times, "last 5", "3 legs" and years are left out, so a date never lets Claude's 22.5 through
+  const NUM_DROP = [/\b20\d\d-\d\d-\d\d\b/g, /\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, new RegExp('\\b' + MON_W + '\\s+\\d{1,2}(st|nd|rd|th)?\\b', 'g'), new RegExp('\\b\\d{1,2}(st|nd|rd|th)?\\s+(of\\s+)?' + MON_W + '(?![a-z])', 'g'),
+    /\b\d{1,2}(st|nd|rd|th)\b/g, /\b\d{1,2}:\d{2}\s*(am|pm)?\b/g, /\b\d{1,2}\s*(am|pm)\b/g, /\b(last|past|next|first|top)\s+\d{1,2}\b/g, /\b\d{1,2}[\s-]*(legs?|legger|games?|days?|weeks?|picks?|teams?)\b/g, /\b20\d\d\b/g];
+  function numsSaid(t) {
+    let s = ' ' + String(t || '').toLowerCase().replace(/[−–]/g, '-') + ' ';
+    for (const rx of NUM_DROP) s = s.replace(rx, m => ' '.repeat(m.length));
+    const out = [];
+    for (const m of s.matchAll(/[+-]?\d+(?:\.\d+)?/g)) { const sg0 = /^[+-]/.test(m[0]) && /[\s(,:=@\/]/.test(s[m.index - 1] || ' ') ? (m[0][0] === '-' ? -1 : 1) : 0; out.push({ v: Math.abs(+m[0]), s: sg0 }); }
+    return out;
+  }
   function lineSaid(ctx, line, stat) {
     if (!ctx || !ctx.said) return true;
-    if (ctx.said.some(t => (String(t).match(/\d+(?:\.\d+)?/g) || []).some(n => Math.abs(+n - line) <= .5))) return true;
+    if (ctx.said.some(t => numsSaid(t).some(n => Math.abs(n.v - Math.abs(line)) <= .5 && (!n.s || !line || n.s === Math.sign(line))))) return true;
     if ((E.LADDER[stat] || []).some(t => Math.abs(t - .5 - line) < 1e-9)) return true;  // one of the app's own lines
     return ST.msgs.some(m => (m.cards || []).some(c => c.line === line || (c.items || []).some(x => x.line === line)));
   }
@@ -1512,7 +1641,8 @@
     const P = D.P, sp = P.sp, F = D.F, r = { player: P.name, team: pTeam(P), sport: SPN[sp], position: P.pos || undefined, games_this_season: P.gp };
     r.per_game = Object.fromEntries(D.per.map(([f, v]) => [SF[f], num(v) ? +v.toFixed(1) : null]));
     r.season_totals = Object.fromEntries(F.map(f => [SF[f], tv(sp, P.tot, f)]));
-    r[`last_${D.last.length}_games${D.filt.length ? ' (' + D.filt.join(', ') + ')' : ''}`] = D.last.map(x => `${fmtD(x.r.d)} ${oppLbl(x.r)}: ${statLine(P, x.r, F)}${x.res ? ` · ${P.team} ${wlOf(x.res)} ${x.res.pf}-${x.res.pa}` : ''}`).reverse();
+    r[`last_${D.last.length}_games${D.filt.length ? ' (' + D.filt.join(', ') + ')' : ''}`] = D.last.map(x => `${fmtD(x.r.d)} ${oppLbl(x.r)}: ${statLine(P, x.r, F)}${x.res ? ` · ${x.r.t} ${wlOf(x.res)} ${x.res.pf}-${x.res.pa}` : ''}`).reverse();
+    if (D.ms) r.games_missed_since = D.ms.txt;
     const s = D.split, m = SF[D.mf], sv = o => (num(o.v) ? `${f1(o.v)} ${m} a game in ${o.n} logged games` : 'no games');
     r.splits = { home: sv(s.home), away: sv(s.away), last_5_vs_season: num(s.l5.v) ? `${f1(s.l5.v)} vs ${f1(pgOf(P, D.mf))} ${m} a game (5 games is a small sample)` : undefined };
     if (s.sel) r.splits[s.sel.lbl] = sv(s.sel);
@@ -1545,7 +1675,9 @@
   }
   function rvResult(V, S, extra) {
     const P = V.P, sp = P.sp, row = V.row, F = showF(sp, P.pos), r = { player: P.name, team: pTeam(P), game: `${fmtD(row.d)} ${oppLbl(row)} (UTC date)` };
-    if (V.res) { r.final_score = resTxt(V.res, P.team); if (V.scr && V.scr.k !== 'draw') r.margin = V.scr.txt; }
+    if (row.t && row.t !== P.team) r.played_for = `${teamName(sp, row.t)} (${row.t}) in this game`;
+    if (V.ms) r.games_missed_since = V.ms.txt;
+    if (V.res) { r.final_score = resTxt(V.res, row.t); if (V.scr && V.scr.k !== 'draw') r.margin = V.scr.txt; }
     r.what_happened = `${fN(V.v)} ${unitOf(V.f, V.v)} (${statLine(P, row, F)})${V.line != null ? ` vs ${S.src === 'app' ? 'the app\'s' : 'a'} line of ${V.under ? 'under ' : ''}${fmtLine(V.line)}` : num(V.ao) ? ` vs his average of ${f1(V.ao)} in his other ${V.others} games` : ''}`;
     r.result = V.verdict === 'none' ? 'no line given: compared with his average' : V.verdict;
     r.how_close = V.closeTxt || undefined;
@@ -1573,6 +1705,7 @@
     const side = String(a.side || '').toLowerCase(), under = side === 'under' ? true : side === 'over' ? false : undefined;
     const S = reviewSpec(P, { st, line, under, d: dt.d, exact: !a._us, opp, lineSrc: 'you' });  // _us: a US date the viewer typed (offline parser)
     if (S.i < 0) return { error: `${P.name} has no game ${dt.d ? `on ${fmtD(dt.d)} ` : ''}${opp ? `vs ${opp} ` : ''}in this season's logged box scores${P.trunc ? ` (the file keeps his last ${P.rows.length} games)` : ''}.` };
+    if (S.f === 'td' && POS(P.pos) === 'QB') extra.note_stat = 'Touchdowns here are the ones he scored himself (rushing + receiving); the ones he threw are passing TDs.';
     if (ctx) ctx.step(`Reviewing ${P.name}, ${fmtD(P.rows[S.i].d)}`);
     const V = reviewOf(P, S.i, S.f, S.line, S.under);
     if (ctx) ctx.card({ t: 'prev', sp: P.sp, n: P.name, tm: P.team, d: V.row.d, st: S.f, line: S.line == null ? undefined : S.line, under: S.under || undefined, src: S.src || undefined });
@@ -1580,8 +1713,9 @@
     return rvResult(V, S, extra);
   }
   const ICO = { hit: '✓', miss: '✗', push: '=', pending: '•', unknown: '?' };
+  const pushTxt = V => (V.hit.length ? `won with ${V.push.length} push${V.push.length > 1 ? 'es' : ''}: ${V.hit.length} of ${V.legs.length} legs hit, ${V.push.length} pushed (a pushed leg drops out at most books, so it pays less)` : `a push: all ${V.legs.length} legs landed exactly on the line (stake back at most books)`);
   function prResult(V, extra) {
-    const r = { parlay: V.title, day: V.day ? fmtD(V.day) : undefined, result: V.status === 'miss' ? `missed: ${V.miss.length} of ${V.legs.length} legs` : V.status === 'hit' ? `hit: all ${V.legs.length} legs` : `not finished: ${V.hit.length} of ${V.legs.length} legs hit so far, ${V.pend.length} to grade` };
+    const r = { parlay: V.title, day: V.day ? fmtD(V.day) : undefined, result: V.status === 'miss' ? `missed: ${V.miss.length} of ${V.legs.length} legs` : V.status === 'hit' ? `hit: all ${V.legs.length} legs` : V.status === 'push' ? pushTxt(V) : `not finished: ${V.hit.length} of ${V.legs.length} legs hit so far, ${V.pend.length} to grade` };
     r.legs = V.legs.map(G => `${ICO[G.status] || '?'} ${G.label}: ${G.actual || '—'}${G.detail ? ` (${G.detail})` : ''}${num(G.p) ? `; ${pc(G.p)} before the game` : ''}`);
     if (V.miss.length) r.broke_it = V.miss.map(G => G.label);
     const why = V.miss.filter(G => G.V).slice(0, 3).map(G => `${G.label}: ${[...G.V.facts.slice(0, 2), ...G.V.maybe.slice(0, 1).map(x => 'Possibility: ' + x)].join(' ')}`);
@@ -1592,14 +1726,17 @@
     if (V.lessons.length) r.track_record_for_these_kinds_of_legs = V.lessons.map(x => x.txt);
     r.what_it_says = V.says;
     r.notes = [`Player legs from ESPN box scores, game legs from final scores. ${UTCNOTE}`];
+    if (V.legs.some(G => G.kind === 'player' && G.f === 'td')) r.notes.push('Touchdown legs count the ones the player scored (rushing + receiving); a QB\'s passing TDs are their own stat.');
     return Object.assign(r, extra || {});
   }
-  const cleanLegs = (legs, ctx, ign) => (Array.isArray(legs) ? legs : []).slice(0, 12).map(x => {
+  // dates: the UTC date as player_stats lists it (exact), or, from the offline parser (us), a US date the viewer typed; a line
+  // keeps its sign (the viewer's +3.5 never lets a -3.5 through)
+  const cleanLegs = (legs, ctx, ign, us) => (Array.isArray(legs) ? legs : []).slice(0, 12).map(x => {
     x = x && typeof x === 'object' ? x : {}; const s = v => (v == null || v === '' ? undefined : String(v).slice(0, 60));
     const o = x.player ? { player: s(x.player), stat: s(x.stat), side: /under/i.test(String(x.side || '')) ? 'under' : undefined } : x.team ? { team: s(x.team), market: ['win', 'cover', 'over', 'under'].includes(String(x.market)) ? String(x.market) : 'win' } : null;
     if (!o) return null;
-    if (x.date) o.date = s(x.date); if (x.sport) o.sport = s(x.sport);
-    if (x.line != null && x.line !== '' && isFinite(+x.line)) { const ln = +x.line; if (lineSaid(ctx, Math.abs(ln), FAPP[String(x.stat || '')] || '')) o.line = ln; else ign.push(`line ${ln} for ${o.player || o.team} ignored: the viewer did not give it`); }
+    if (x.date) { o.date = s(x.date); o.exact = !us; } if (x.sport) o.sport = s(x.sport);
+    if (x.line != null && x.line !== '' && isFinite(+x.line)) { const ln = +x.line; if (lineSaid(ctx, ln, FAPP[String(x.stat || '')] || '')) o.line = ln; else ign.push(`line ${ln} for ${o.player || o.team} ignored: the viewer did not give it`); }
     return o;
   }).filter(Boolean);
   async function tReviewParlay(a, ctx) {
@@ -1619,7 +1756,7 @@
       spec = { t: 'prv', src, at: +s.at };
       if (S.length > 1) extra.saved_parlays = `${S.length} saved; this is ${s === S[0] ? 'the most recent' : `number ${S.indexOf(s) + 1} (most recent first)`}`;
     } else {
-      const legs = cleanLegs(a.legs, ctx, ign); if (!legs.length) return { error: 'Give the legs: each a player with a stat and line, or a team with win / cover / over / under.' };
+      const legs = cleanLegs(a.legs, ctx, ign, !!a._us); if (!legs.length) return { error: 'Give the legs: each a player with a stat and line, or a team with win / cover / over / under.' };
       spec = { t: 'prv', src, legs };
     }
     if (ctx) ctx.step('Grading the parlay leg by leg');
@@ -1660,13 +1797,13 @@
   async function tLeaders(a, ctx) {
     await loadSeason(); if (!SEASON) return NOSEASON;
     const sp = spNorm(a.sport); if (!sp) return { error: 'Say which sport: nfl, ncaaf, nba, nhl or soccer.' };
-    const pos = a.position ? posNorm(a.position) : null, f = sfNorm(a.stat, sp, pos);
+    const pos = a.position ? posNorm(a.position) : null, f = leadF(sfNorm(a.stat, sp, pos), pos, a.stat);
     if (!f) return { error: `The box scores have no "${String(a.stat || '').slice(0, 30)}" for ${SPN[sp]}. They have: ${Object.keys(SF).filter(k => hasF(sp, k)).map(k => SF[k]).join(', ')}.` };
     const L = leadersOf(sp, f, { pos, pg: a.per_game === true || a.per_game === 'true', n: a.n, mg: a.min_games });
     if (!L || !L.rows.length) return { error: `No ${SPN[sp]} players qualify${pos ? ` at ${pos}` : ''}.` };
     if (ctx) ctx.card({ t: 'lead', sp, st: f, pos: pos || undefined, pg: L.pg ? 1 : undefined, n: L.rows.length, mg: L.mg });
     return { title: leadTitle(L), rule: leadRule(L), leaders: L.rows.map((e, i) => `${i + 1}. ${e.name} (${e.team}${e.pos ? ' ' + e.pos : ''}): ${L.pg ? f1(e.x) : bigN(e.x)}${L.pg ? ' a game' : ''} in ${e.gp} games`),
-      notes: [`From this season's ESPN box scores (${L.total} players qualify). A traded player is counted once with his latest team${sp === 'ncaaf' ? '; college players with the same name are kept apart by team' : ''}.`, ...(f === 'td' ? ['Touchdowns are rushing + receiving.'] : [])] };
+      notes: [`From this season's ESPN box scores (${L.total} players qualify). A traded player is counted once with his latest team; players who share a name are kept apart.`, ...(f === 'td' ? ['Touchdowns are rushing + receiving.'] : [])] };
   }
   async function tTrackRecord(a, ctx) {
     const T = trackOf(a.days, a.kind); if (!T) return { error: 'The app\'s graded picks (recs.json) aren\'t loaded on this page.' };
@@ -1680,6 +1817,10 @@
   const TOOL_FN = { find_players: tFindPlayers, prop_report: tPropReport, game_report: tGameReport, build_parlay: tBuildParlay, price_parlay: tPriceParlay, top_props: tTopProps, start_sit: tStartSit,
     player_stats: tPlayerStats, review_player: tReviewPlayer, review_parlay: tReviewParlay, team_report: tTeamReport, leaders: tLeaders, track_record: tTrackRecord };
   const S_STAT = { type: 'string', description: 'points, rebounds, assists, receptions, rushing yards, receiving yards, passing yards, or anytime TD' };
+  // the breakdown tools read any box-score stat; one date rule for review_player and review_parlay's legs, so one date string
+  // always means the same game
+  const S_BSTAT = { type: 'string', description: 'e.g. points, rebounds, rushing yards, receptions, shots on goal. Football: "anytime TD" / "touchdowns" = the TDs he scored (rushing + receiving); "passing TDs" = the ones a QB throws' };
+  const S_DATE = { type: 'string', description: 'YYYY-MM-DD: the game\'s UTC date as player_stats lists it (a US evening game is the next day). Omit for his most recent game' };
   const TOOL_DEF = [
     ['find_players', 'Search the app\'s slate for players by name. Returns each match\'s team, next game and the markets the app models. Use it when a name is unclear.',
       { type: 'object', properties: { query: { type: 'string' }, sport: { type: 'string', enum: SPORTS } }, required: ['query'] }],
@@ -1698,10 +1839,10 @@
     ['player_stats', 'Any player in this season\'s ESPN box scores (NFL, college football, NBA, NHL, 5 soccer leagues), on the slate or not: team, position, games, season totals and per-game averages, his last N games (stat line + his team\'s result), splits (home / away, vs an opponent, last 5 vs season), his next game and the app\'s lines for it, injury report and recent headlines. Use it for any question about a player\'s season or recent games. Adds a player card.',
       { type: 'object', properties: { player: { type: 'string' }, sport: { type: 'string', enum: SPORTS }, last: { type: 'integer', minimum: 1, maximum: 15, description: 'how many recent games to list (default 5)' }, opponent: { type: 'string', description: 'only games vs this team' }, venue: { type: 'string', enum: ['home', 'away'] }, stat: { type: 'string', description: 'the stat to chart, e.g. rebounds, carries, shots on goal' } }, required: ['player'] }],
     ['review_player', 'What happened in one game for one player (default: his most recent): the stat vs the line (or vs his average when there is no line), hit or miss and by how much, minutes / targets / carries / shots vs his average, the final score and margin, and the app\'s pre-game chance when it priced that leg. Returns facts and possibilities separately. Adds a review card. Pass line only if the viewer typed it.',
-      { type: 'object', properties: { player: { type: 'string' }, sport: { type: 'string', enum: SPORTS }, stat: { type: 'string', description: 'e.g. points, rebounds, rushing yards, receptions, shots on goal' }, line: { type: 'number' }, side: { type: 'string', enum: ['over', 'under'] }, date: { type: 'string', description: 'YYYY-MM-DD: the date as player_stats lists it (UTC), or the US date the viewer named' }, opponent: { type: 'string' } }, required: ['player'] }],
+      { type: 'object', properties: { player: { type: 'string' }, sport: { type: 'string', enum: SPORTS }, stat: S_BSTAT, line: { type: 'number' }, side: { type: 'string', enum: ['over', 'under'] }, date: S_DATE, opponent: { type: 'string' } }, required: ['player'] }],
     ['review_parlay', 'Breaks a parlay down leg by leg: each leg\'s result from box scores and final scores, actual vs line and how close, the pre-game chances, which legs broke it, near misses, legs that worked for or against each other, and the app\'s track record for those kinds of legs. source: "picks" = the app\'s recommended parlays (graded each morning; give day and words of the title, e.g. "same game"), "saved" = the viewer\'s My Parlays (title "1" = most recent), "legs" = legs the viewer typed. Adds a parlay review card.',
       { type: 'object', properties: { source: { type: 'string', enum: ['picks', 'saved', 'legs'] }, day: { type: 'string', description: 'YYYY-MM-DD, "yesterday" or "today" (picks)' }, title: { type: 'string' },
-        legs: { type: 'array', maxItems: 12, items: { type: 'object', properties: { player: { type: 'string' }, stat: { type: 'string' }, line: { type: 'number' }, side: { type: 'string', enum: ['over', 'under'] }, team: { type: 'string' }, market: { type: 'string', enum: ['win', 'cover', 'over', 'under'] }, date: { type: 'string' }, sport: { type: 'string', enum: SPORTS } } } } } }],
+        legs: { type: 'array', maxItems: 12, items: { type: 'object', properties: { player: { type: 'string' }, stat: S_BSTAT, line: { type: 'number', description: 'the viewer\'s line; a spread keeps its sign (+3.5, -3.5)' }, side: { type: 'string', enum: ['over', 'under'] }, team: { type: 'string' }, market: { type: 'string', enum: ['win', 'cover', 'over', 'under'] }, date: S_DATE, sport: { type: 'string', enum: SPORTS } } } } } }],
     ['team_report', 'A team this season: record, home / away, points (goals) for and against a game, the last 10 results with scores, researched form (last 5, streaks, table position, absences), trends vs the prices, injuries, the next game with the app\'s win chance, and recent headlines. Adds a team card.',
       { type: 'object', properties: { team: { type: 'string' }, sport: { type: 'string', enum: SPORTS } }, required: ['team'] }],
     ['leaders', 'League leaders for one stat from this season\'s box scores (season totals, or per game with a minimum-games rule that the result states), optionally by position (QB, RB, WR, TE; G, F, C; D). Adds a list card.',
@@ -1711,9 +1852,12 @@
   ];
   // most useful first, so a view that allows fewer tools (limits().tools.maxCount) keeps the ones that draw cards
   const TOOL_RANK = ['prop_report', 'player_stats', 'review_parlay', 'review_player', 'build_parlay', 'game_report', 'team_report', 'top_props', 'price_parlay', 'leaders', 'track_record', 'find_players', 'start_sit'];
+  const TOOL_RANK_F = ['prop_report', 'start_sit', 'player_stats', 'top_props', 'review_parlay', 'review_player', 'build_parlay', 'game_report', 'team_report', 'price_parlay', 'leaders', 'track_record', 'find_players'];
+  // the tools this view gets (a view may allow fewer: limits().tools.maxCount); the instructions name only these
+  function toolNames() { const R = SB.mode === 'fantasy' ? TOOL_RANK_F : TOOL_RANK; return TOOL_DEF.map(d => d[0]).sort((x, y) => R.indexOf(x) - R.indexOf(y)).slice(0, ST.maxTools || TOOL_DEF.length); }
   function toolsFor(a, q, signal) {
-    const said = [q, ...ST.msgs.filter(m => m.role === 'user').map(m => m.text)];
-    const defs = TOOL_DEF.slice().sort((x, y) => TOOL_RANK.indexOf(x[0]) - TOOL_RANK.indexOf(y[0])).slice(0, ST.maxTools || TOOL_DEF.length);
+    const said = [q, ...ST.msgs.filter(m => m.role === 'user').map(m => m.text)], names = toolNames();
+    const defs = names.map(n => TOOL_DEF.find(d => d[0] === n));
     return defs.map(([name, description, inputSchema]) => ({ name, description, inputSchema, async execute(input, c) {
       const sig = (c && c.signal) || signal;
       if ((sig && sig.aborted) || (signal && signal.aborted)) throw new Error('Stopped by the viewer.');
@@ -1791,7 +1935,8 @@
       const b = [];
       if (D.split.sel) b.push(`${D.split.sel.lbl}: ${num(D.split.sel.v) ? `${f1(D.split.sel.v)} ${SF[D.mf]} a game in ${D.split.sel.n} logged game${D.split.sel.n === 1 ? '' : 's'}` : 'no logged games'}${D.split.sel.n < 5 ? ' (a small sample)' : ''}.`);
       if (num(D.split.l5.v)) b.push(`Last ${D.split.l5.n}: ${f1(D.split.l5.v)} ${SF[D.mf]} a game (a small sample).`);
-      const lg = D.last[D.last.length - 1]; if (lg) b.push(`Last game: ${fmtD(lg.r.d)} ${oppLbl(lg.r)}: ${statLine(P, lg.r, D.F)}${lg.res ? ` · ${P.team} ${wlOf(lg.res)} ${lg.res.pf}-${lg.res.pa}` : ''}.`);
+      const lg = D.last[D.last.length - 1]; if (lg) b.push(`Last game: ${fmtD(lg.r.d)} ${oppLbl(lg.r)}: ${statLine(P, lg.r, D.F)}${lg.res ? ` · ${lg.r.t} ${wlOf(lg.res)} ${lg.res.pf}-${lg.res.pa}` : ''}.`);
+      if (D.ms && !D.filt.length) b.push(D.ms.txt);
       if (D.nx) b.push(`Next: ${D.nx.g.away.abbr} @ ${D.nx.g.home.abbr}, ${SB.when(D.nx.g)}${D.lines.length ? `; the app's line: ${lineTxt(D.lines[0])}` : ''}.`);
       if (D.inj) b.push(`Injury report: ${D.inj.status}${D.inj.injury ? ` (${D.inj.injury})` : ''}.`);
       t += '\n\n' + b.map(x => '- ' + x).join('\n');
@@ -1801,22 +1946,33 @@
     if (I.kind === 'rplayer') {
       const R0 = seasonFind(I.name, I.sp, I.team); if (!R0) return fail(notFound(I.name));
       const P0 = seasonPlayer(R0.sp, R0.p), T = I.oppText ? findTeam(I.oppText, P0.sp) : null;
-      const r = await tReviewPlayer({ player: P0.name, sport: P0.sp, stat: sfFrom(I.statText, P0.sp, P0.pos) || undefined, line: I.line == null ? undefined : I.line, side: I.under === true ? 'under' : I.under === false ? 'over' : undefined, date: I.d || undefined, opponent: T && T.eab ? T.eab : undefined, _us: true }, ctx); if (r.error) return fail(r);
+      const args = { player: P0.name, sport: P0.sp, stat: sfFrom(I.statText, P0.sp, P0.pos) || undefined, line: I.line == null ? undefined : I.line, side: I.under === true ? 'under' : I.under === false ? 'over' : undefined, date: I.d || undefined, opponent: T && T.eab ? T.eab : undefined, _us: true };
+      // "last night": the game on yesterday's US date; when he has none, say so, then review his most recent game
+      let lead = '';
+      if (I.night && !I.d && !args.opponent) {
+        const y = dAdd(E.dayOf(Date.now()), -1), j = rowFor(P0, { d: y });
+        if (j >= 0) args.date = y;
+        else if (P0.rows.length) {
+          const last = P0.rows[P0.rows.length - 1], ms = missedSince(P0, P0.rows.length - 1), tr = resRows(P0.sp, last.t), tl = tr[tr.length - 1];
+          lead = `No box-score line for ${P0.name} last night (${fmtD(y)}). ${ms ? ms.txt.replace(/^No box-score line for him in /, `He has no line in `) : `The app's latest ${last.t} result is from ${fmtD(tl ? tl.d : last.d)}: no ${last.t} game last night in its data.`} His most recent game:\n\n`;
+        }
+      }
+      const r = await tReviewPlayer(args, ctx); if (r.error) return fail(r);
       const c = a.cards[a.cards.length - 1], P = seasonPlayer(R0.sp, R0.p), i = P.rows.findIndex(x => x.d === c.d), V = reviewOf(P, i, c.st, c.line == null ? null : c.line, !!c.under);
       const vt = V.verdict === 'hit' ? `**hit** (${V.closeTxt})` : V.verdict === 'miss' ? `**missed**, ${V.closeTxt}` : V.verdict === 'push' ? '**a push**' : num(V.ao) ? `${sg(V.v - V.ao)} vs his average of ${f1(V.ao)}` : '';
-      let t = `**${P.name}** ${oppLbl(V.row)} (${fmtD(V.row.d)}, UTC date): **${fN(V.v)} ${unitOf(V.f, V.v)}**${V.line != null ? ` vs ${c.src === 'app' ? 'the app\'s' : 'a'} line of ${V.under ? 'under ' : ''}${fmtLine(V.line)}` : ''}: ${vt}.`;
-      const b = [...V.facts.slice(0, 4).map(x => 'Fact: ' + x), ...V.maybe.slice(0, 2).map(x => 'Possible: ' + x)];
+      let t = `${lead}**${P.name}** ${oppLbl(V.row)} (${fmtD(V.row.d)}, UTC date): **${fN(V.v)} ${unitOf(V.f, V.v)}**${V.line != null ? ` vs ${c.src === 'app' ? 'the app\'s' : 'a'} line of ${V.under ? 'under ' : ''}${fmtLine(V.line)}` : ''}: ${vt}.`;
+      const b = [...V.facts.filter(x => !lead || !V.ms || x !== V.ms.txt).slice(0, 4).map(x => 'Fact: ' + x), ...V.maybe.slice(0, 2).map(x => 'Possible: ' + x)];
       if (r.pre_game && /gave this leg/.test(r.pre_game)) b.push(r.pre_game + (r.what_it_says[0] && !/small sample/.test(r.what_it_says[0]) ? ' ' + r.what_it_says[0] : ''));
       t += '\n\n' + b.map(x => '- ' + x).join('\n') + '\n\nOne game is a small sample: the card has his game log.';
       if (I.amb) t += `\n\n${I.amb}`;
       return { data: r, text: t };
     }
     if (I.kind === 'rparlay') {
-      const r = await tReviewParlay(I.src === 'picks' ? { source: 'picks', day: I.day || undefined, title: I.title && I.title.trim() ? I.title : undefined } : I.src === 'saved' ? { source: 'saved' } : { source: 'legs', legs: I.legs }, ctx);
+      const r = await tReviewParlay(I.src === 'picks' ? { source: 'picks', day: I.day || undefined, title: I.title && I.title.trim() ? I.title : undefined } : I.src === 'saved' ? { source: 'saved' } : { source: 'legs', legs: I.legs, _us: true }, ctx);
       if (r.error && I.src === 'saved') return { data: r, text: 'You have no saved parlays in **My Parlays** on this device. Type the legs (for example "what went wrong with my parlay: Maxey over 24.5 points and Siakam over 20.5 points") and I\'ll grade each one from the box scores.' };
       if (r.error) return fail(r);
       const V = parlayReview(a.cards[a.cards.length - 1]);
-      const head = V.status === 'miss' ? `**missed on ${V.miss.length} of ${V.legs.length} leg${V.legs.length === 1 ? '' : 's'}**` : V.status === 'hit' ? `**hit: all ${V.legs.length} legs**` : `**not finished**: ${V.hit.length} of ${V.legs.length} legs hit so far`;
+      const head = V.status === 'miss' ? `**missed on ${V.miss.length} of ${V.legs.length} leg${V.legs.length === 1 ? '' : 's'}**` : V.status === 'hit' ? `**hit: all ${V.legs.length} legs**` : V.status === 'push' ? `**${pushTxt(V)}**` : `**not finished**: ${V.hit.length} of ${V.legs.length} legs hit so far`;
       let t = `**${V.title}**${V.src === 'picks' ? ` (the app's pick for ${fmtD(V.day)})` : ''}: ${head}.`;
       const b = [];
       if (V.miss.length) b.push(`Broke it: ${V.miss.map(G => `${G.label} (${G.actual || '—'}${G.detail ? ', ' + G.detail : ''}${num(G.p) ? `; ${pc(G.p)} before` : ''})`).join('; ')}.`);
@@ -1844,7 +2000,10 @@
     if (I.kind === 'team') {
       const r = await tTeamReport({ team: I.name, sport: I.sp }, ctx); if (r.error) return fail(r);
       const c = a.cards[a.cards.length - 1], D = teamData(c.sp, c.ab, c.name, c.sp === 'soccer' ? c.eab || null : c.ab, c.fab || null), w = PTW[c.sp];
-      let t = D.R.length ? `**${D.name}** (${SPN[I.sp]}): **${D.rec}** this season (${recNote(I.sp)}), ${D.home} at home and ${D.away} away, scoring ${f1(D.pf)} and allowing ${f1(D.pa)} ${w} a game. Streak: ${D.streak}.` : `**${D.name}** (${SPN[I.sp]}): no results in the app's season data.`;
+      // "how did X do last night": the latest result first, and whether it was last night
+      const y = dAdd(E.dayOf(Date.now()), -1), lx = D.R[D.R.length - 1];
+      const recent = I.recent && lx ? `**${D.name}**, most recent result: **${resTxt(lx, D.ab)}** (${fmtD(lx.d)}, UTC date)${lx.pf !== lx.pa ? `, ${scriptOf(c.sp, lx).txt}` : ''}.${I.night && lx.d < y ? ` No ${D.name} game last night (${fmtD(y)}) in the app's results.` : ''}\n\n` : '';
+      let t = D.R.length ? `${recent}**${D.name}** (${SPN[I.sp]}): **${D.rec}** this season (${recNote(I.sp)}), ${D.home} at home and ${D.away} away, scoring ${f1(D.pf)} and allowing ${f1(D.pa)} ${w} a game. Streak: ${D.streak}.` : `**${D.name}** (${SPN[I.sp]}): no results in the app's season data.`;
       const b = [];
       if (D.last10.length) { const L = D.last10, w10 = L.filter(x => x.pf > x.pa).length, l10 = L.filter(x => x.pf < x.pa).length, x = L[L.length - 1]; b.push(`Last ${L.length}: ${w10}-${l10}${L.length - w10 - l10 ? '-' + (L.length - w10 - l10) : ''}; most recent ${fmtD(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${wlOf(x)} ${x.pf}-${x.pa}.`); }
       const fl = formLines(D.form); if (fl[1]) b.push(`Researched form: ${fl[1]}.`);
@@ -1892,18 +2051,29 @@
     for (const g of SB.DATA.games || []) { if (!SB.openG(g) || SB.isVoid(g)) continue; const h = (SB.startMs(g) - now) / 36e5; if (h > (g.sport === 'nfl' || g.sport === 'ncaaf' ? 192 : 36)) continue; cnt[g.sport] = (cnt[g.sport] || 0) + 1; }
     return Object.entries(cnt).map(([s, n]) => `${SPN[s]} ${n} game${n > 1 ? 's' : ''}`).join(', ');
   }
-  function rules() {
+  const PICK_W = [['player_stats', 'player_stats for any player question (season, recent games, splits, next game)'], ['review_player', 'review_player for why one player hit or missed in a game'],
+    ['review_parlay', 'review_parlay for a parlay breakdown (the app\'s picks, the viewer\'s saved parlays, or legs the viewer types)'], ['team_report', 'team_report for a team'], ['leaders', 'leaders for "who leads the league in ..."'],
+    ['track_record', 'track_record for how the app\'s picks have done'], ['find_players', 'find_players when a name is unclear']];
+  const BET_T = ['prop_report', 'top_props', 'build_parlay', 'price_parlay', 'game_report', 'start_sit'];
+  function pickLine(names) {
+    if (!names) return '- This view can\'t run the app\'s tools: the app\'s numbers for this question come with it. Use only those numbers, and say when they don\'t cover the question.';
+    const bet = BET_T.filter(n => names.includes(n)), parts = [...PICK_W.filter(([n]) => names.includes(n)).map(x => x[1]), ...(bet.length ? [`${bet.join(' / ')} for bets on the slate`] : [])];
+    return `- Pick the tool: ${parts.join('; ')}.${names.length < TOOL_DEF.length ? ` This view allows only these ${names.length} tools: for a question none of them answers, say the app can't look that up here instead of guessing.` : ''}`;
+  }
+  function rules(names) {
+    if (names === undefined) names = toolNames();
     const day = new Date().toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     return [
       'You are the Safe Bets research assistant inside the Safe Bets app (sports betting and fantasy research on NFL, college football, NBA, NHL and soccer).',
       `Today is ${day} (Los Angeles time). The viewer is in ${SB.mode === 'fantasy' ? 'fantasy football' : 'betting'} mode. On the app's slate (NBA / NHL / soccer next 36 hours, football next 8 days): ${slateLine() || 'no open games'}.`,
       `What the app knows (through the tools): this season's ESPN box scores for every player in ${COVER}; every team's results with scores; the slate with the app's model chances; researched team form, team trends vs the prices, the injury report and ESPN headlines; the app's own recommended parlays, graded each morning (its track record); and the viewer's saved parlays (My Parlays). ${UTCNOTE}`,
       'How to answer:',
-      '- Use the tools for every current-season number: stats, averages, game logs, scores, records, chances, odds, lines, projections, injuries. Never state a current-season stat, score, injury, line or price that a tool did not return.',
-      '- Pick the tool: player_stats for any player question (season, recent games, splits, next game); review_player for why one player hit or missed in a game; review_parlay for a parlay breakdown (the app\'s picks, the viewer\'s saved parlays, or legs the viewer types); team_report for a team; leaders for "who leads the league in ..."; track_record for how the app\'s picks have done; prop_report / top_props / build_parlay / price_parlay / game_report / start_sit for bets on the slate.',
+      `- Use ${names ? 'the tools' : 'the app\'s numbers'} for every current-season number: stats, averages, game logs, scores, records, chances, odds, lines, projections, injuries. Never state a current-season stat, score, injury, line or price that ${names ? 'a tool did not return' : 'the app did not send'}.`,
+      pickLine(names),
       '- General knowledge is allowed only for background: the rules of a sport, how a stat or bet works, history, a player\'s career before this season. Label it "general knowledge (may be out of date)", keep it in its own sentence, and never mix it into this season\'s numbers or use it for a current stat, roster, injury or result.',
       '- If a player, team or game isn\'t in the app\'s data, say so plainly and say what the app covers (NFL, college football, the NBA, the NHL and 5 soccer leagues, from this season\'s ESPN box scores). Don\'t fill the gap from memory.',
       '- Breakdowns (what went right or wrong for a player or a parlay) go in this order: 1) what happened: the facts from the box score; 2) why it likely happened: only the reasons a tool returned as facts, and anything else called a possibility, never a cause; 3) how close it was; 4) what that says: variance (a 70% leg misses about 3 times in 10) and sample size (one game, or a few, is a small sample).',
+      '- "Last night" / "yesterday": check the game date a tool returns (UTC, so a US evening game shows the next day). If his latest game was earlier, or a tool says he has no line in his team\'s games since, say that first, then review his latest game.',
       '- No hindsight: never say a result was obvious, predictable or a sure thing, and never say a player, team or bet is due.',
       '- Chances are model estimates from the app\'s own simulations. Say so. Never call a bet guaranteed, a lock or due; a 90% chance can still miss.',
       '- The app has no sportsbook prices for player props; it shows fair odds from the model chance. If the viewer gives their book\'s price, pass it to prop_report as price to get the edge.',
@@ -1924,7 +2094,7 @@
   }
   // one sample call per answer, with the AbortController made for this answer (answer() creates it); tools mean no cache option
   async function aiAnswer(a, q, ctl) {
-    const input = [{ role: 'user', content: rules() }, ...historyTurns(a), { role: 'user', content: q }];
+    const input = [{ role: 'user', content: rules(ST.toolsOk ? toolNames() : null) }, ...historyTurns(a), { role: 'user', content: q }];
     const onText = ({ text }) => { if (ctl.signal.aborted) return; a.text = text; paintMsg(a); };
     let opts;
     if (ST.toolsOk) opts = { signal: ctl.signal, tools: toolsFor(a, q, ctl.signal), onText };
@@ -1996,7 +2166,7 @@
   // ---------------------------------------------------------------- history (localStorage 'fm2.chat')
   const CARD_T = new Set(['prop', 'list', 'game', 'parlay', 'ss', 'pstat', 'prev', 'prv', 'team', 'lead', 'track']);
   const strOk = x => typeof x === 'string' && x.length > 0 && x.length <= 120;
-  const legOk = x => x && typeof x === 'object' && (strOk(x.player) || strOk(x.team)) && Object.values(x).every(v => v == null || typeof v === 'string' || (typeof v === 'number' && isFinite(v)));
+  const legOk = x => x && typeof x === 'object' && (strOk(x.player) || strOk(x.team)) && Object.values(x).every(v => v == null || typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v)));
   // a breakdown card saved in this browser: the fields it is drawn from, with the right types (anything else is dropped)
   function bdOk(c) {
     const sp = SPORTS.includes(c.sp);
@@ -2171,22 +2341,27 @@
   const bigN = x => (Number.isInteger(x) ? x.toLocaleString('en-US') : f1(x));
   const newsHTML = L => (L.length ? `<div class="ask-sec"><div class="ui-lbl">Headlines · ESPN</div><ul class="ask-news">${L.map(x => `<li>${x.link ? `<a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${esc(x.h)}</a>` : `<span>${esc(x.h)}</span>`}<small>${esc(fmtD(x.d))}</small></li>`).join('')}</ul></div>` : '');
   const whyHTML = (facts, maybe) => (facts.length || maybe.length ? `<ul class="ask-why">${facts.map(x => `<li><span class="ask-tag fact">Fact</span><span>${esc(x)}</span></li>`).join('')}${maybe.map(x => `<li><span class="ask-tag maybe">Possible</span><span>${esc(x)}</span></li>`).join('')}</ul>` : '');
+  // a card redrawn after a file failed to load says so (not that the player or the picks are gone)
+  const NOSEA_C = 'This season\'s box scores (season.json) didn\'t load, so this card can\'t be drawn right now. Try reloading the page.';
+  const NORECS_C = 'The app\'s graded picks (recs.json) didn\'t load, so this card can\'t be drawn right now. Try reloading the page.';
   const seasonPx = (n, sp, tm) => { const R = SEASON ? seasonFind(n, sp, tm) : null; return R && R.exact ? seasonPlayer(R.sp, R.p) : null; };
   // the log chart with one game picked out (the reviewed game)
   function selLog(html, k) { let i = -1; return html.replace(/class="b (hit|miss|)"/g, (m, c) => (++i === k ? `class="b ${c} sel"` : m)); }
   function pstatCardHTML(spec) {
     if (!SEASON_DONE) return waitHTML(spec.n);
+    if (!SEASON) return goneHTML(spec.n || 'Player', NOSEA_C);
     const P = seasonPx(spec.n, spec.sp, spec.tm); if (!P) return goneHTML(spec.n || 'Player', 'This player is no longer in the app\'s season box scores.');
     const sp = P.sp, D = playerData(P, { n: spec.last, opp: spec.opp, venue: spec.venue, st: spec.st }), avg = pgOf(P, D.mf);
     const tiles = [['Games', String(P.gp)], ...D.per.filter(([, v]) => num(v)).map(([f, v]) => [`${SFS[f]} a game`, f1(v), f === D.mf])];
     const ch = D.rows.slice(-Math.min(10, Math.max(D.n, 5)));
     const chart = ch.length ? U.gameLog({ title: `${cap(SF[D.mf])} · last ${ch.length}${D.filt.length ? ' ' + D.filt.join(', ') : ''}`, summary: `line = season average ${f1(avg)}`, vals: ch.map(r => rv(sp, r.r, D.mf)), labels: ch.map(r => r.opp), line: num(avg) ? Math.round(avg * 10) / 10 : null }) : '';
-    const cols = [{ k: 'd', label: 'Date', sort: false }, { k: 'o', label: 'Opp', sort: false }, ...D.F.map(f => ({ k: f, label: SFS[f], sort: false })), { k: 'res', label: P.team || 'Result', sort: false }];
-    const rows = D.last.slice().reverse().map(x => { const o = { d: fmtD(x.r.d), o: oppLbl(x.r), res: x.res ? `${wlOf(x.res)} ${x.res.pf}-${x.res.pa}` : '—' }; for (const f of D.F) o[f] = fN(rv(sp, x.r.r, f)); return o; });
+    // a traded player: each game's result is his team's that day (named when it isn't his current team)
+    const cols = [{ k: 'd', label: 'Date', sort: false }, { k: 'o', label: 'Opp', sort: false }, ...D.F.map(f => ({ k: f, label: SFS[f], sort: false })), { k: 'res', label: P.teams.length > 1 ? 'Result' : P.team || 'Result', sort: false }];
+    const rows = D.last.slice().reverse().map(x => { const o = { d: fmtD(x.r.d), o: oppLbl(x.r), res: x.res ? `${P.teams.length > 1 && x.r.t !== P.team ? x.r.t + ' ' : ''}${wlOf(x.res)} ${x.res.pf}-${x.res.pa}` : '—' }; for (const f of D.F) o[f] = fN(rv(sp, x.r.r, f)); return o; });
     const s = D.split, sv = o => (num(o.v) ? f1(o.v) : '—'), gl = (l, o) => `${l} · ${o.n} g`, splits = [[gl('Home', s.home), sv(s.home)], [gl('Away', s.away), sv(s.away)], [gl('Last', s.l5), sv(s.l5)]];
     if (s.sel) splits.push([gl(s.sel.lbl, s.sel), sv(s.sel)]);
     const nx = D.nx ? `<div class="ask-sec"><div class="ui-lbl">Next game</div><p class="ask-p">${esc(`${D.nx.g.away.abbr} @ ${D.nx.g.home.abbr} · ${SB.when(D.nx.g)}`)}</p>${D.lines.length ? `<ul class="ask-kv">${D.lines.map(x => { const mk = marketOf(x.st, x.line, false); return `<li><button type="button" class="ask-lname" data-ask-q="${esc(x.st === 'td' ? `Should I take ${P.name} to score a TD?` : `Is ${P.name} ${mk.toLowerCase()} a good bet?`)}">${esc(mk)}</button><span><b>${esc(pc(x.p))}</b> · fair ${esc(U.fair(x.p))} · model estimate</span></li>`; }).join('')}</ul>` : ''}</div>` : '';
-    const notes = [UTCNOTE]; if (P.trunc) notes.unshift(`Splits and the log use his last ${P.rows.length} logged games; season numbers cover all ${P.gp}.`); if (P.gp < 10) notes.unshift(`${P.gp} games is a small sample.`); if ((sp === 'nfl' || sp === 'ncaaf') && D.F.includes('td')) notes.push('TD = rushing + receiving.');
+    const notes = [UTCNOTE]; if (D.ms) notes.unshift(D.ms.txt); if (P.trunc) notes.unshift(`Splits and the log use his last ${P.rows.length} logged games; season numbers cover all ${P.gp}.`); if (P.gp < 10) notes.unshift(`${P.gp} games is a small sample.`); if ((sp === 'nfl' || sp === 'ncaaf') && D.F.includes('td')) notes.push('TD = rushing + receiving.');
     const an = D.slate ? JSON.stringify({ name: P.name, stat: D.mf === 'td' ? 'td' : FAPP[D.mf] || 'pts' }) : null;
     return `<article class="ask-card ask-ps" aria-label="${esc(P.name + ', season stats')}">
   <header class="ask-hd">${U.team(P.team, true)}<div class="id"><div class="nm"><b>${esc(P.name)}</b>${P.pos ? `<span class="ask-pos">${esc(P.pos)}</span>` : ''}</div><div class="ask-hsub">${esc(`${teamName(sp, P.team)} · ${SPN[sp]} · this season`)}</div></div></header>
@@ -2203,13 +2378,14 @@
   }
   function prevCardHTML(spec) {
     if (!SEASON_DONE) return waitHTML(spec.n);
+    if (!SEASON) return goneHTML(spec.n || 'Player', NOSEA_C);
     const P = seasonPx(spec.n, spec.sp, spec.tm); if (!P) return goneHTML(spec.n || 'Player', 'This player is no longer in the app\'s season box scores.');
     const S = reviewSpec(P, { st: spec.st, line: num(spec.line) ? spec.line : null, under: spec.line != null ? !!spec.under : undefined, d: spec.d, exact: true, lineSrc: spec.src });
     if (S.i < 0 || P.rows[S.i].d !== spec.d) return goneHTML(`${P.name} · ${fmtD(spec.d)}`, 'That game is no longer in his logged box scores.');
     const V = reviewOf(P, S.i, S.f, S.line, S.under), sp = P.sp, row = V.row, u = unitOf(V.f, V.v), ln = V.line != null ? `${V.under ? 'under ' : ''}${fmtLine(V.line)}` : '';
     const tone = V.verdict === 'hit' ? 'take' : V.verdict === 'miss' ? 'pass' : V.verdict === 'push' ? 'coin' : num(V.ao) && V.v >= V.ao ? 'lean' : 'coin';
     const title = V.verdict === 'hit' ? `Hit: ${fN(V.v)} ${u} vs ${ln}` : V.verdict === 'miss' ? `Missed: ${fN(V.v)} ${u} vs ${ln}` : V.verdict === 'push' ? `Push: ${fN(V.v)} ${u}` : `${fN(V.v)} ${u}${num(V.ao) ? `, ${sg(V.v - V.ao)} vs his average` : ''}`;
-    const kick = `What happened · ${P.team} ${oppLbl(row)} · ${fmtD(row.d)}${V.line == null ? ' · no line given' : S.src === 'app' ? ' · the app\'s line' : ''}`;
+    const kick = `What happened · ${row.t} ${oppLbl(row)} · ${fmtD(row.d)}${V.line == null ? ' · no line given' : S.src === 'app' ? ' · the app\'s line' : ''}`;
     const F = showF(sp, P.pos), avgO = g => (V.others > 0 ? (tv(sp, P.tot, g) - rv(sp, row.r, g)) / V.others : null);
     const tiles = F.map(g => [`${SFS[g]}${num(avgO(g)) ? ` · avg ${f1(avgO(g))}` : ''}`, fN(rv(sp, row.r, g)), g === V.f]);
     const k0 = Math.max(0, S.i - 7), win = P.rows.slice(k0, S.i + 1), lineV = V.line != null ? V.line : num(V.ao) ? Math.round(V.ao * 10) / 10 : null;
@@ -2218,7 +2394,7 @@
     const pre = S.p ? `The app gave this leg ${pc(S.p)} before the game (model estimate) in ${S.recT}. A ${pc(S.p)} leg ${V.verdict === 'miss' ? 'misses' : 'hits'} ${freqW(V.verdict === 'miss' ? 1 - S.p : S.p)}.` : '';
     return `<article class="ask-card ask-rv" aria-label="${esc(`${P.name}, ${fmtD(row.d)} review`)}">
   ${U.verdict({ tone, kicker: kick, title, tag: 'Box score' })}
-  <header class="ask-hd">${U.team(P.team)}<div class="id"><div class="nm"><b>${esc(P.name)}</b>${P.pos ? `<span class="ask-pos">${esc(P.pos)}</span>` : ''}</div><div class="ask-hsub">${esc(V.res ? `${resTxt(V.res, P.team)}${V.scr && V.scr.k !== 'draw' ? ' · ' + V.scr.txt : ''}` : `${oppLbl(row)} · no final score in the results`)}</div></div></header>
+  <header class="ask-hd">${U.team(row.t || P.team)}<div class="id"><div class="nm"><b>${esc(P.name)}</b>${P.pos ? `<span class="ask-pos">${esc(P.pos)}</span>` : ''}</div><div class="ask-hsub">${esc(V.res ? `${resTxt(V.res, row.t)}${V.scr && V.scr.k !== 'draw' ? ' · ' + V.scr.txt : ''}` : `${oppLbl(row)} · no final score in the results`)}</div></div></header>
   ${V.closeTxt ? `<p class="ask-p"><b>How close:</b> ${esc(V.closeTxt)}.</p>` : ''}
   ${U.tiles(tiles)}
   ${V.facts.length || V.maybe.length ? `<div class="ask-sec"><div class="ui-lbl">Why · facts from the data, possibilities named as such</div>${whyHTML(V.facts, V.maybe)}</div>` : ''}
@@ -2230,12 +2406,15 @@
   }
   function prvCardHTML(spec) {
     if (!SEASON_DONE) return waitHTML('');
+    if (!SEASON && spec.src !== 'picks') return goneHTML('Parlay review', NOSEA_C);
     const V = parlayReview(spec); if (!V.ok) return goneHTML('Parlay review', V.why);
-    const tone = V.status === 'miss' ? 'pass' : V.status === 'hit' ? 'take' : 'coin', n = V.legs.length;
-    const title = V.status === 'miss' ? `Missed: ${V.miss.length} of ${n} leg${n === 1 ? '' : 's'}` : V.status === 'hit' ? `Hit: all ${n} legs` : `${V.hit.length} of ${n} hit so far`;
-    const cls = { hit: 'hit', miss: 'miss brk', push: 'push', pending: 'pend', unknown: 'pend' };
+    const tone = V.status === 'miss' ? 'pass' : V.status === 'hit' ? 'take' : V.status === 'push' ? 'lean' : 'coin', n = V.legs.length;
+    const title = V.status === 'miss' ? `Missed: ${V.miss.length} of ${n} leg${n === 1 ? '' : 's'}` : V.status === 'hit' ? `Hit: all ${n} legs` : V.status === 'push' ? (V.hit.length ? `Won: ${V.hit.length} of ${n} hit, ${V.push.length} pushed` : `Push: all ${n} legs on the line`) : `${V.hit.length} of ${n} hit so far`;
+    // lg-*: the page has a global .hit class (pill, nowrap) that must not reach these rows
+    const cls = { hit: 'lg-hit', miss: 'lg-miss brk', push: 'lg-push', pending: 'lg-pend', unknown: 'lg-pend' };
     const legs = V.legs.map(G => `<li class="${cls[G.status] || 'pend'}"><span class="ic" aria-hidden="true">${ICO[G.status] || '?'}</span><div class="t"><b>${esc(G.label)}</b>${G.near ? '<span class="ask-badge">Near miss</span>' : G.barely ? '<span class="ask-badge ok">Close call</span>' : ''}<span>${esc(`${G.actual || (G.status === 'pending' ? 'Pending' : '—')}${G.detail ? ' · ' + G.detail : ''}`)}</span></div>${num(G.p) ? `<span class="pp">${esc(pc(G.p))}<small>before</small></span>` : ''}<span class="ask-vh">${esc({ hit: 'hit', miss: 'missed', push: 'push', pending: 'not graded yet', unknown: 'not graded' }[G.status] || '')}</span></li>`).join('');
     const pp = V.p != null ? V.p : V.pInd, tiles = [['Chance before', pp != null ? pc(pp) : '—'], ['Legs hit', `${V.hit.length} of ${n}`], ['Missed', String(V.miss.length)], ['Near misses', String(V.near.length)]];
+    if (V.push.length) tiles.push(['Pushed', String(V.push.length)]);
     const whyM = V.miss.filter(G => G.V).slice(0, 3).map(G => `<li><b>${esc(G.label)}</b>${whyHTML(G.V.facts.slice(0, 2), G.V.maybe.slice(0, 1))}</li>`).join('');
     const sec = (lbl, items) => (items.length ? `<div class="ask-sec"><div class="ui-lbl">${esc(lbl)}</div><ul class="ask-kv">${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
     return `<article class="ask-card ask-pr" aria-label="${esc(`Parlay review: ${V.title}`)}">
@@ -2252,6 +2431,7 @@
   }
   function teamCardHTML(spec) {
     if (!SEASON_DONE) return waitHTML(spec.name || spec.ab);
+    if (!SEASON) return goneHTML(String(spec.name || spec.ab || 'Team'), NOSEA_C);
     const eab = spec.sp === 'soccer' ? (typeof spec.eab === 'string' ? spec.eab : null) : spec.ab;
     const D = teamData(spec.sp, spec.ab, String(spec.name || teamName(spec.sp, spec.ab)), eab, typeof spec.fab === 'string' ? spec.fab : null), w = PTW[spec.sp];
     if (!D.R.length && !D.form && !D.nx) return goneHTML(D.name, 'The app has no results for this team this season.');
@@ -2276,11 +2456,13 @@
   }
   function leadCardHTML(spec) {
     if (!SEASON_DONE) return waitHTML('');
+    if (!SEASON) return goneHTML('Leaders', NOSEA_C);
     const L = leadersOf(spec.sp, spec.st, { pos: spec.pos, pg: !!spec.pg, n: spec.n, mg: spec.mg }); if (!L || !L.rows.length) return goneHTML('Leaders', 'No players qualify.');
     const rows = L.rows.map((e, i) => `<li class="ask-lr"><span class="rk">${i + 1}</span>${U.team(e.team)}<div class="t"><button type="button" class="ask-lname" data-ask-q="${esc(`${e.name} stats this season`)}">${esc(e.name)}</button><span>${esc(`${e.team}${e.pos ? ' · ' + e.pos : ''} · ${e.gp} games`)}</span></div><div class="p"><b>${esc(L.pg ? f1(e.x) : bigN(e.x))}</b><small>${L.pg ? 'a game' : 'total'}</small></div></li>`).join('');
     return `<article class="ask-card ask-list ask-ld"><div class="ask-lh"><b>${esc(leadTitle(L))}</b><span class="ui-note">${esc(`${cap(leadRule(L))}. ESPN box scores; ${L.total} players qualify. Tap a name for his season.`)}</span></div><ol>${rows}</ol></article>`;
   }
   function trackCardHTML(spec) {
+    if (!recsD()) return goneHTML('Track record', NORECS_C);
     const T = trackOf(spec.days, spec.kind); if (!T || !T.n) return goneHTML('Track record', 'No graded parlays yet.');
     const row = (l, s, v, tone) => `<li class="ask-lr"><div class="t"><b>${esc(l)}</b><span>${esc(s)}</span></div><div class="p"><b class="${tone || ''}">${esc(v)}</b></div></li>`;
     return `<article class="ask-card ask-list ask-tr"><div class="ask-lh"><b>How the app's parlays did${T.kind ? ' · ' + esc(T.kind) : ''}</b><span class="ui-note">${esc(`${T.days.length} graded day${T.days.length === 1 ? '' : 's'}, ${fmtD(T.days[0])} to ${fmtD(T.days[T.days.length - 1])}; graded each morning from final scores and box scores.`)}</span></div>
@@ -2568,7 +2750,8 @@ body:has(#slipbar.on) .ask-dock{bottom:76px}
 .ask-legs>li.brk{background:rgba(241,30,132,.08);border:1px solid rgba(241,30,132,.28);border-radius:14px;padding:10px;margin:2px 0}
 .ask-legs>li.brk+li{border-top:0}
 .ask-legs .ic{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:800 13px var(--fui);background:rgba(255,255,255,.08);color:#ffffffa6}
-.ask-legs .hit .ic{background:rgba(0,212,146,.18);color:#3defb6}.ask-legs .miss .ic{background:rgba(241,30,132,.2);color:#ff7ab8}
+.ask-legs>li{white-space:normal;border-radius:0}.ask-legs>li.brk{border-radius:14px}
+.ask-legs .lg-hit .ic{background:rgba(0,212,146,.18);color:#3defb6}.ask-legs .lg-miss .ic{background:rgba(241,30,132,.2);color:#ff7ab8}
 .ask-legs .t{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
 .ask-legs .t b{font:700 14px/1.3 var(--fui);color:#fff;overflow-wrap:anywhere}
 .ask-legs .t>span:not(.ask-badge){font:500 12.5px/1.4 var(--fui);color:#ffffffa6;overflow-wrap:anywhere}

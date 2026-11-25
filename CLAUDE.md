@@ -152,7 +152,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 | firsttd.json | tools/leg_pairs.py refreshes every NFL team's season TDs from box scores (game-day "status" notes kept) |
 | trends.json | tools/team_trends.py (7:32 AM run) |
 | recs.json | tools/recs.mjs: each day's recommended parlays, graded the next morning (30 days kept) |
-| season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports (NBA 0-minute games skipped) |
+| season.json | tools/season_tables.py (7:32 AM run, after leg_pairs.py): season tables + game logs, all sports (NBA 0-minute games skipped), and every team's results with scores (`results`) |
 | news.json | tools/news_fetch.py (3:47 AM and 7:32 AM runs; ESPN news API): headlines and videos for Highlights |
 | props.json, scorers.json, firsttd.json, firstbasket.json, playerstats.json | older research files |
 

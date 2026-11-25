@@ -8,7 +8,8 @@ name) and NFL roster positions (one roster call per team). College positions are
 Output, compact on purpose (the app loads it only when one of those screens opens):
   {updated, source, sports: {<sport>: {games, teams: {ESPN abbr: name}, fields: [...], players: [
       {n: name, t: ESPN team abbr, pos, gp, tot: [season totals in `fields` order], log: [[date, opp, home 1/0, stats in `fields` order], ...]}
-  ]}}}
+  ], results: {ESPN abbr: [[date, opp, home 1/0, points for, points against], ...]}}}}
+Dates are each game's UTC start date (a 4 PM Pacific game is dated the next day).
 Logs keep every game for football (17 or fewer) and the last 15 for the NBA, NHL and soccer.
 Run: python3 -I tools/season_tables.py
 """
@@ -142,7 +143,19 @@ def build(sp):
             log.append([g['date'], opp, home] + [num(l.get(f)) for f in F])
         out.append({'n': name, 't': team, 'pos': pos, 'gp': len(lines), 'tot': tot, 'log': log})
     out.sort(key=lambda r: (r['t'], -r['gp'], r['n']))
-    return {'games': len(games), 'teams': team_names(sp), 'fields': F, 'players': out}
+    # every team's results this season: [date, opp, home 1/0, points for, points against] (goals for soccer / NHL), oldest first
+    results = defaultdict(list)
+    for g in games:
+        T = g.get('teams') or {}
+        if len(T) != 2:
+            continue
+        (a, ta), (b, tb) = list(T.items())
+        if ta.get('pts') is None or tb.get('pts') is None:
+            continue
+        for me, tm, op, to in ((a, ta, b, tb), (b, tb, a, ta)):
+            results[me].append([g['date'], op, 1 if tm.get('home') else 0, num(tm.get('pts')), num(to.get('pts'))])
+    return {'games': len(games), 'teams': team_names(sp), 'fields': F, 'players': out,
+            'results': {k: sorted(v) for k, v in sorted(results.items())}}
 
 
 def main():

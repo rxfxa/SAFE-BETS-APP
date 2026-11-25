@@ -198,6 +198,305 @@
     const s = seasonByName(t, sport); return s ? { s } : null;
   }
 
+  // ---------------------------------------------------------------- breakdowns: the data (any player or team this season, the app's graded picks, My Parlays)
+  // season.json keeps every football game and the last 15 for the NBA, NHL and soccer, while `gp` and `tot` cover the whole
+  // season: season averages come from tot / gp, splits and game logs from the logged games (the answer says when that is fewer).
+  // Box-score and result dates are each game's UTC start date (a US evening game is logged the next day).
+  const SF = { min: 'minutes', pts: 'points', reb: 'rebounds', ast: 'assists', pa: 'pass attempts', pyd: 'passing yards', ptd: 'passing TDs', ra: 'carries', ryd: 'rushing yards', rtd: 'rushing TDs',
+    tgt: 'targets', rec: 'receptions', recyd: 'receiving yards', ctd: 'receiving TDs', td: 'touchdowns', g: 'goals', a: 'assists', hpts: 'points', sog: 'shots on goal', sot: 'shots on target', sh: 'shots' };
+  const SF1 = { min: 'minute', pts: 'point', reb: 'rebound', ast: 'assist', pa: 'pass attempt', pyd: 'passing yard', ptd: 'passing TD', ra: 'carry', ryd: 'rushing yard', rtd: 'rushing TD',
+    tgt: 'target', rec: 'reception', recyd: 'receiving yard', ctd: 'receiving TD', td: 'touchdown', g: 'goal', a: 'assist', hpts: 'point', sog: 'shot on goal', sot: 'shot on target', sh: 'shot' };
+  const SFS = { min: 'MIN', pts: 'PTS', reb: 'REB', ast: 'AST', pa: 'ATT', pyd: 'PASS YDS', ptd: 'PASS TD', ra: 'CAR', ryd: 'RUSH YDS', rtd: 'RUSH TD', tgt: 'TGT', rec: 'REC', recyd: 'REC YDS', ctd: 'REC TD', td: 'TD', g: 'G', a: 'A', hpts: 'PTS', sog: 'SOG', sot: 'SOT', sh: 'SH' };
+  const unitOf = (f, n) => (Math.abs(n) === 1 ? SF1[f] : SF[f]) || f;
+  const todayU = () => new Date(Date.now()).toISOString().slice(0, 10);
+  const dAdd = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fmtD = d => (/^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? `${MON[+String(d).slice(5, 7) - 1]} ${+String(d).slice(8, 10)}` : String(d || ''));
+  const gidDate = gid => { const m = /(\d{4}-\d{2}-\d{2})$/.exec(String(gid || '')); return m ? m[1] : ''; };
+  const legDate = L => (typeof L.start === 'string' && isFinite(Date.parse(L.start)) ? new Date(Date.parse(L.start)).toISOString().slice(0, 10) : gidDate(L.gid));
+  const BLOWN = { nba: 15, nfl: 17, ncaaf: 21, nhl: 4, soccer: 3 }, CLOSEN = { nba: 5, nfl: 8, ncaaf: 8, nhl: 1, soccer: 1 };
+  const NEARM = { nba: 3, nfl: 3, ncaaf: 3, nhl: 1, soccer: 1 }, NEART = { nba: 4, nfl: 3, ncaaf: 3, nhl: 1, soccer: 1 };
+  const PTW = { nba: 'points', nfl: 'points', ncaaf: 'points', nhl: 'goals', soccer: 'goals' };
+  const fN = x => (!num(x) ? '—' : Number.isInteger(x) ? String(x) : f1(x));
+  const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  const POS = p => String(p || '').toUpperCase();
+  const SP_ORDER = ['nba', 'nfl', 'nhl', 'soccer', 'ncaaf'];
+  const COVER = 'NFL, college football, the NBA, the NHL and 5 soccer leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1), from this season\'s ESPN box scores';
+  const UTCNOTE = 'Dates are each game\'s UTC start date, so a US evening game shows the next day.';
+  const httpsOnly = u => (typeof u === 'string' && /^https:\/\/[^\s"'<>\\]+$/i.test(u) ? u : null);
+  // "about 3 times in 10" / "about 1 time in 7": how often a chance q comes up
+  const freqW = q => (!num(q) ? '' : q <= .005 ? 'almost never' : q >= .995 ? 'almost every time' : q < .15 ? `about 1 time in ${Math.round(1 / q)}` : `about ${Math.round(q * 10)} times in 10`);
+
+  const xOf = sp => { const X = sIndex(); return X && X[sp] ? X[sp] : null; };
+  function hasF(sp, f) { const X = xOf(sp); if (!X) return false; const F = X.fields; return f === 'td' ? F.includes('rtd') && F.includes('ctd') : f === 'hpts' ? sp === 'nhl' && F.includes('g') : F.includes(f); }
+  function rv(sp, r, f) { const X = xOf(sp); if (!X) return 0; if (f === 'td') return (val(X, r, 'rtd') || 0) + (val(X, r, 'ctd') || 0); if (f === 'hpts') return (val(X, r, 'g') || 0) + (val(X, r, 'a') || 0); return val(X, r, f) || 0; }
+  function tv(sp, tot, f) { const X = xOf(sp); if (!X) return 0; const g = k => { const i = X.fields.indexOf(k); return i < 0 ? 0 : +((tot || [])[i]) || 0; }; return f === 'td' ? g('rtd') + g('ctd') : f === 'hpts' ? g('g') + g('a') : g(f); }
+  function showF(sp, pos) {
+    if (sp === 'nba') return ['pts', 'reb', 'ast', 'min'];
+    if (sp === 'nhl') return ['g', 'a', 'hpts', 'sog'];
+    if (sp === 'soccer') return ['g', 'sot', 'sh'];
+    const P = POS(pos); return P === 'QB' ? ['pyd', 'ptd', 'pa', 'ryd'] : P === 'RB' ? ['ryd', 'ra', 'td', 'rec', 'recyd'] : ['rec', 'recyd', 'tgt', 'td'];
+  }
+  function mainF(P) { const sp = P.sp, p = POS(P.pos); if (sp === 'nba') return 'pts'; if (sp === 'nhl') return 'hpts'; if (sp === 'soccer') return tv(sp, P.tot, 'g') >= 2 ? 'g' : 'sot'; return p === 'QB' ? 'pyd' : p === 'RB' ? 'ryd' : 'recyd'; }
+  // the workload behind a stat: [fields, label] (minutes, pass attempts, carries, targets, shots)
+  function useOf(sp, pos, f) {
+    if (sp === 'nba') return f === 'min' ? null : [['min'], 'minutes'];
+    if (sp === 'nhl') return f === 'sog' ? null : [['sog'], 'shots on goal'];
+    if (sp === 'soccer') return f === 'sh' ? null : [['sh'], 'shots'];
+    if (f === 'pa' || f === 'ra' || f === 'tgt') return null;
+    if (f === 'pyd' || f === 'ptd') return [['pa'], 'pass attempts'];
+    if (f === 'ryd' || f === 'rtd') return [['ra'], 'carries'];
+    if (f === 'td') return POS(pos) === 'WR' || POS(pos) === 'TE' ? [['tgt'], 'targets'] : [['ra', 'tgt'], 'carries + targets'];
+    return [['tgt'], 'targets'];
+  }
+  // a stat named in words -> a season.json field for that sport ("rushing touchdowns" -> rtd, "points" -> hpts in the NHL)
+  const SFRX = [[/\bminutes?\b|\bmins\b/, () => 'min'], [/\bpass(ing)? (tds?|touchdowns?)\b|\btd pass(es)?\b/, () => 'ptd'], [/\brush(ing)? (tds?|touchdowns?)\b/, () => 'rtd'], [/\b(receiving|rec) (tds?|touchdowns?)\b/, () => 'ctd'],
+    [/\bpass(ing)? attempts?\b|\bthrows\b/, () => 'pa'], [/\b(carries|rush(ing)? attempts?|rushes)\b/, () => 'ra'], [/\btargets?\b|\btargeted\b/, () => 'tgt'],
+    [/\bshots? on target\b|\bsot\b/, () => 'sot'], [/\bshots? on goal\b|\bsog\b/, sp => (sp === 'soccer' ? 'sot' : 'sog')], [/\bshots?\b/, sp => (sp === 'soccer' ? 'sh' : 'sog')], [/\bgoals?\b/, () => 'g'],
+    [/\b(touchdowns?|tds?|scor(e|es|ed|ing|ers?))\b/, (sp, P) => (sp === 'nba' ? 'pts' : sp === 'nhl' ? 'hpts' : sp === 'soccer' ? 'g' : P === 'QB' ? 'ptd' : 'td')],
+    [/\brush(ing)?( yards| yds)?\b|\bran for\b/, () => 'ryd'], [/\b(receiving( yards| yds)?|rec ?yds|rec yards)\b/, () => 'recyd'], [/\bpassing( yards| yds)?\b|\bpass ?(yards|yds)\b|\bthrew for\b/, () => 'pyd'],
+    [/\b(receptions?|catch(es)?|caught|rec)\b/, () => 'rec'], [/\b(rebounds?|boards?|rebs?)\b/, () => 'reb'], [/\b(assists?|asts?|dimes)\b/, sp => (sp === 'nhl' ? 'a' : 'ast')],
+    [/\b(points?|pts)\b/, sp => (sp === 'nhl' ? 'hpts' : 'pts')], [/\b(yards?|yds)\b/, (sp, P) => (P === 'QB' ? 'pyd' : P === 'RB' ? 'ryd' : 'recyd')]];
+  function sfFrom(text, sp, pos) {
+    const s = ' ' + String(text || '').toLowerCase() + ' ', P = POS(pos); let best = null;
+    for (const [rx, f] of SFRX) { const m = rx.exec(s); if (m && (!best || m.index < best.i || (m.index === best.i && m[0].length > best.n))) best = { i: m.index, n: m[0].length, f: f(sp, P) }; }
+    return best && hasF(sp, best.f) ? best.f : null;
+  }
+  function sfNorm(s, sp, pos) {
+    if (s == null || s === '') return null; const t = String(s).toLowerCase().trim();
+    if (sp === 'nhl' && (t === 'pts' || t === 'points')) return 'hpts';
+    if (sp === 'nhl' && (t === 'ast' || t === 'assists')) return 'a';
+    if (t === 'goal') return hasF(sp, 'g') ? 'g' : null;
+    if (SF[t] && hasF(sp, t)) return t;
+    return sfFrom(t, sp, pos);
+  }
+
+  // ---- any player this season
+  const ALLX = {};
+  function allOf(sp) { const X = xOf(sp); if (!X) return []; if (ALLX[sp] && ALLX[sp].X === X) return ALLX[sp].L; const L = []; for (const ps of X.m.values()) for (const p of ps) L.push({ p, nm: nmOf(p.n) }); ALLX[sp] = { X, L }; return L; }
+  // a name (full, or words of it) -> {sp, p, others}: an exact name first, then every word, then word starts; a team given or a
+  // player on the slate breaks ties, then the sport order and games played
+  function seasonFind(text, sport, team) {
+    const X = sIndex(); if (!X) return null;
+    const t = String(text || '').trim(); if (!t) return null;
+    const sps = (sport && SPORTS.includes(sport) ? [sport] : SP_ORDER).filter(sp => X[sp]);
+    const k = E.nameKey(t), w = nmOf(t).split(' ').filter(x => x.length >= 2);
+    const C = [];
+    for (const sp of sps) for (const p of X[sp].m.get(k) || []) C.push({ sp, p, q: 3 });
+    if (!C.length && w.length) for (const sp of sps) for (const x of allOf(sp)) { const n = ' ' + x.nm + ' '; if (w.every(y => n.includes(' ' + y + ' '))) C.push({ sp, p: x.p, q: 2 }); }
+    if (!C.length && w.length && w.join('').length >= 4) for (const sp of sps) for (const x of allOf(sp)) { const n = ' ' + x.nm; if (w.every(y => n.includes(' ' + y))) C.push({ sp, p: x.p, q: 1 }); }
+    if (!C.length) return null;
+    const T = String(team || '').toUpperCase(), slate = pIndex().by;
+    const rank = c => (T && c.p.t === T ? 100 : 0) + c.q * 10 + (slate.has(E.nameKey(c.p.n)) && slate.get(E.nameKey(c.p.n)).sport === c.sp ? 5 : 0) - SP_ORDER.indexOf(c.sp) * .5 + Math.min(4, (+c.p.gp || 0) / 5);
+    C.sort((a, b) => rank(b) - rank(a));
+    const top = C[0], seen = new Set([top.sp + '|' + E.nameKey(top.p.n)]), others = [];
+    for (const c of C.slice(1)) { const key = c.sp + '|' + E.nameKey(c.p.n); if (seen.has(key)) continue; seen.add(key); others.push(c); }
+    return { sp: top.sp, p: top.p, others: others.slice(0, 3), exact: top.q === 3 };
+  }
+  // one player's season: logged games up to today (UTC) across his teams (a traded pro is one player; college names repeat)
+  function seasonPlayer(sp, p) {
+    const X = xOf(sp), today = todayU();
+    const ents = sp === 'ncaaf' || !X ? [p] : (X.m.get(E.nameKey(p.n)) || [p]);
+    const rows = [], tot = new Array(X ? X.fields.length : 0).fill(0); let gp = 0;
+    for (const e of ents) {
+      gp += +e.gp || (Array.isArray(e.log) ? e.log.length : 0);
+      (Array.isArray(e.tot) ? e.tot : []).forEach((v, i) => { if (i < tot.length) tot[i] += +v || 0; });
+      for (const r of Array.isArray(e.log) ? e.log : []) { if (!Array.isArray(r)) continue; const d = String(r[0] || '').slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today) rows.push({ d, opp: String(r[1] || ''), home: +r[2] === 1, t: String(e.t || ''), r }); }
+    }
+    rows.sort((a, b) => a.d.localeCompare(b.d));
+    const team = rows.length ? rows[rows.length - 1].t : String(p.t || '');
+    return { sp, name: p.n, pos: String(p.pos || ''), team, teams: [...new Set(ents.map(e => String(e.t || '')))], rows, gp, tot, trunc: rows.length < gp };
+  }
+  const pgOf = (P, f) => (P.gp ? tv(P.sp, P.tot, f) / P.gp : null);
+  // the game a question means: a date (a US date the viewer named, or the UTC date a tool listed: exact), an opponent, else the latest
+  function rowFor(P, o) {
+    const R = P.rows; o = o || {}; if (!R.length) return -1;
+    let idx = R.map((_, i) => i);
+    if (o.opp) idx = idx.filter(i => R[i].opp === o.opp);
+    if (o.d) {
+      const pref = o.exact || !(P.sp === 'nba' || P.sp === 'nhl') ? [o.d, dAdd(o.d, 1)] : [dAdd(o.d, 1), o.d];
+      for (const d of pref) { const j = idx.filter(i => R[i].d === d); if (j.length) return j[j.length - 1]; }
+      return -1;
+    }
+    return idx.length ? idx[idx.length - 1] : -1;
+  }
+
+  // ---- teams and results
+  let ESPNC = new Map(), ESPNK = null;
+  // feed team -> ESPN abbreviation: the same abbreviation when it names the same team, else by name; soccer has no names in
+  // season.json, so there a results abbreviation is all there is
+  function espnOf(sp, ab, name) {
+    const X = xOf(sp); if (!X || !ab) return null;
+    if (ESPNK !== SIDX) { ESPNC = new Map(); ESPNK = SIDX; }
+    const ck = sp + '|' + ab + '|' + (name || ''); if (ESPNC.has(ck)) return ESPNC.get(ck);
+    const T = X.teams, last = s => { const a = E.nameKey(s).split('-'); return a[a.length - 1]; }, nk = name ? E.nameKey(name) : '';
+    let out = null;
+    if (T[ab] && (!name || last(T[ab]) === last(name))) out = ab;
+    else if (nk && X.byTeam.has(nk)) out = X.byTeam.get(nk);
+    else if (nk) { for (const [k, a] of X.byTeam) if (k.length > 4 && (k.startsWith(nk) || nk.startsWith(k))) { out = a; break; } }
+    if (!out && !Object.keys(T).length && X.results[ab]) out = ab;
+    ESPNC.set(ck, out); return out;
+  }
+  const BIG5 = new Set(['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1']);
+  function teamName(sp, ab) {
+    const X = xOf(sp); if (X && X.teams[ab]) return String(X.teams[ab]);
+    if (sp === 'soccer') for (const g of SB.DATA.games || []) if (g.sport === 'soccer' && BIG5.has(g.comp)) { if (g.home.abbr === ab) return g.home.name; if (g.away.abbr === ab) return g.away.name; }
+    return String(ab || '');
+  }
+  function resRows(sp, ab) {
+    const X = xOf(sp); if (!X || !ab) return [];
+    const today = todayU(), ck = ab + '|' + today; if (X.rc.has(ck)) return X.rc.get(ck);
+    const L = Array.isArray(X.results[ab]) ? X.results[ab] : [];
+    const out = L.filter(Array.isArray).map(r => ({ d: String(r[0] || '').slice(0, 10), opp: String(r[1] || ''), home: +r[2] === 1, pf: +r[3], pa: +r[4] }))
+      .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.d <= today && isFinite(x.pf) && isFinite(x.pa)).sort((a, b) => a.d.localeCompare(b.d));
+    X.rc.set(ck, out); return out;
+  }
+  const resOn = (sp, ab, d, opp) => resRows(sp, ab).find(x => x.d === d && (!opp || x.opp === opp)) || null;
+  const wlOf = x => (x.pf > x.pa ? 'W' : x.pf < x.pa ? 'L' : 'D');
+  const resTxt = (x, ab) => `${ab ? ab + ' ' : ''}${{ W: 'won', L: 'lost', D: 'drew' }[wlOf(x)]} ${x.pf}-${x.pa} ${x.home ? 'vs' : 'at'} ${x.opp}`;
+  function scriptOf(sp, x) {  // a final margin in words: blowout / close / neither
+    const m = Math.abs(x.pf - x.pa), u = m === 1 ? PTW[sp].replace(/s$/, '') : PTW[sp];
+    if (m === 0) return { m, k: 'draw', txt: 'a draw' };
+    if (m >= BLOWN[sp]) return { m, k: 'blowout', txt: `by ${m} ${u}, a blowout (${BLOWN[sp]}+)` };
+    if (m <= CLOSEN[sp]) return { m, k: 'close', txt: `by ${m} ${u}, a close game` };
+    return { m, k: '', txt: `by ${m} ${u}` };
+  }
+  // points (goals) a team allowed a game and its rank, 1 = fewest (teams with 3+ results)
+  function allowedOf(sp, ab) {
+    const X = xOf(sp); if (!X) return null;
+    if (!X.al || X.al.d !== todayU()) { const L = []; for (const t of Object.keys(X.results)) { const R = resRows(sp, t); if (R.length >= 3) L.push({ t, pa: mean(R.map(x => x.pa)) }); } X.al = { d: todayU(), L: L.sort((a, b) => a.pa - b.pa) }; }
+    const i = X.al.L.findIndex(x => x.t === ab); return i < 0 ? null : { pa: X.al.L[i].pa, rank: i + 1, of: X.al.L.length };
+  }
+  function nextGameOf(sp, ab) {
+    let best = null;
+    for (const g of SB.DATA.games || []) {
+      if (g.sport !== sp || !SB.openG(g) || SB.isVoid(g)) continue;
+      const h = espnOf(sp, g.home.abbr, g.home.name) === ab, a = !h && espnOf(sp, g.away.abbr, g.away.name) === ab;
+      if ((h || a) && (!best || SB.startMs(g) < SB.startMs(best.g))) best = { g, home: h };
+    }
+    return best;
+  }
+  // a team named in text -> {sp, ab, name, amb}: the full name, the place ("Michigan State"), the nickname ("Lakers"; pro teams
+  // before college), or the abbreviation in capitals
+  const NICK2 = new Set('trail blazers|maple leafs|red wings|blue jackets|golden knights|crimson tide|blue devils|tar heels|golden gophers|fighting irish|yellow jackets|red raiders|horned frogs|sun devils|golden bears|demon deacons|nittany lions|mean green|golden flashes|scarlet knights|red wolves|rainbow warriors|green wave|black knights|golden eagles|blue raiders|ragin cajuns|fighting illini|thundering herd|blue hens|red storm|golden hurricane|black bears|golden lions|red foxes'.split('|'));
+  let TIDX = null;
+  function teamIdx() {
+    const X = sIndex(); if (!X) return [];
+    if (TIDX && TIDX.X === X && TIDX.D === SB.DATA) return TIDX.L;
+    const mk = (sp, ab, name, feed) => { const nm = norm(name), w = nm.split(' '), two = w.length >= 3 && NICK2.has(w.slice(-2).join(' ')); return { sp, ab, name, nm, nick: two ? w.slice(-2).join(' ') : w[w.length - 1], place: w.slice(0, w.length - (two ? 2 : 1)).join(' '), feed: !!feed }; };
+    const L = [];
+    for (const sp of ['nba', 'nfl', 'nhl', 'ncaaf']) { const S = X[sp]; if (!S) continue; for (const [ab, name] of Object.entries(S.teams)) if (sp !== 'ncaaf' || S.results[ab]) L.push(mk(sp, ab, String(name))); }
+    const S = X.soccer;
+    if (S) {
+      const seen = new Set();
+      for (const g of SB.DATA.games || []) if (g.sport === 'soccer') for (const t of [g.home, g.away]) if (!seen.has(t.abbr)) { seen.add(t.abbr); L.push(mk('soccer', t.abbr, t.name, !S.results[t.abbr] || !BIG5.has(g.comp))); }
+      for (const ab of Object.keys(S.results)) if (!seen.has(ab)) L.push(mk('soccer', ab, ab));
+    }
+    TIDX = { X, D: SB.DATA, L }; return L;
+  }
+  function findTeam(text, sport) {
+    const raw = String(text || ''), qn = ' ' + norm(raw) + ' ', L = teamIdx(), C = [];
+    for (const t of L) {
+      if (sport && t.sp !== sport) continue;
+      let s = 0, len = 0;
+      const has = ph => ph && qn.includes(' ' + ph + ' ');
+      if (t.nm !== norm(t.ab) && has(t.nm)) { s = 10; len = t.nm.length; }
+      else {
+        if (t.place.length >= 4 && !TEAMSTOP.has(t.place) && has(t.place)) { s = 7; len = t.place.length; }
+        if (t.nick.length >= 4 && !TEAMSTOP.has(t.nick) && !COMMON.has(t.nick) && has(t.nick)) { const v = t.sp === 'ncaaf' ? 5 : 8; if (v > s || (v === s && t.nick.length > len)) { s = v; len = t.nick.length; } }
+        const ab = String(t.ab || '');
+        if (!s && ab.length >= (t.sp === 'ncaaf' ? 3 : 2) && ab === ab.toUpperCase() && !ABSTOP.has(ab) && new RegExp('(^|[^A-Za-z0-9])' + ab.replace(/[^A-Z0-9]/g, '') + '([^A-Za-z0-9]|$)').test(raw)) { s = 6; len = ab.length; }
+      }
+      if (s) C.push({ t, s: s + len / 100 - (t.feed ? .5 : 0) });
+    }
+    if (!C.length) return null;
+    const games = t => resRows(t.sp, t.ab).length;
+    C.sort((a, b) => b.s - a.s || SP_ORDER.indexOf(a.t.sp) - SP_ORDER.indexOf(b.t.sp) || games(b.t) - games(a.t));
+    const top = C[0], amb = C.slice(1).filter(c => Math.abs(c.s - top.s) < .3 && c.t.ab !== top.t.ab).slice(0, 3).map(c => c.t);
+    return { sp: top.t.sp, ab: top.t.ab, name: top.t.name, feed: top.t.feed, amb };
+  }
+
+  // ---- the side files the breakdowns read (the app's own JSON, fetched once when a breakdown needs them)
+  const SIDE = { form: null, trends: null, news: null }; let sideP = null, SIDE_DONE = false;
+  function loadSides() {
+    if (!sideP) sideP = Promise.all(['form', 'trends', 'news'].map(n => fetch(n + '.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null)))
+      .then(([f, t, n]) => { SIDE.form = f && Array.isArray(f.teams) ? f : null; SIDE.trends = t && Array.isArray(t.teams) ? t : null; SIDE.news = n && Array.isArray(n.items) ? n : null; SIDE_DONE = true; });
+    return sideP;
+  }
+  function newsFor(test, n) {
+    const N = SIDE.news; if (!N) return [];
+    return N.items.filter(x => x && typeof x.headline === 'string' && x.headline && test(x)).sort((a, b) => String(b.published || '').localeCompare(String(a.published || ''))).slice(0, n || 3)
+      .map(x => ({ h: x.headline.slice(0, 200), d: String(x.published || '').slice(0, 10), link: httpsOnly(x.link) }));
+  }
+  const newsOfPlayer = name => { const k = E.nameKey(name); return newsFor(x => Array.isArray(x.athletes) && x.athletes.some(a => E.nameKey(a) === k)); };
+  const newsOfTeam = (sp, ab, name) => { const k = E.nameKey(name); return newsFor(x => x.sport === sp && Array.isArray(x.teams) && x.teams.some(t => t && (E.nameKey(t.name) === k || (sp !== 'ncaaf' && sp !== 'soccer' && t.abbr === ab)))); };
+  const FORM_COMP = { nba: ['NBA'], nfl: ['NFL'], nhl: ['NHL'], ncaaf: ['College Football'] };
+  function formOf(sp, name) {
+    const F = SIDE.form; if (!F || !name) return null;
+    const tk = nmOf(name), tl = tk.split(' ').pop(); let best = null;
+    for (const t of F.teams) {
+      if (!t || typeof t.name !== 'string') continue;
+      if (FORM_COMP[sp] ? !FORM_COMP[sp].includes(t.comp) : Object.values(FORM_COMP).some(c => c.includes(t.comp))) continue;
+      const fk = nmOf(t.name), s = fk === tk ? 3 : tk.endsWith(' ' + fk) || fk.endsWith(' ' + tk) ? 2 : sp !== 'ncaaf' && sp !== 'soccer' && fk.split(' ').pop() === tl ? 1 : 0;
+      if (s && (!best || s > best.s || (s === best.s && String(t.asOf || '') > String(best.t.asOf || '')))) best = { t, s };
+    }
+    return best ? best.t : null;
+  }
+  function trendsOf(sp, ab, name) {
+    const T = SIDE.trends; if (!T) return null; const tk = nmOf(name || '');
+    return T.teams.find(t => t && t.sport === sp && ((sp === 'nba' && (t.espn === ab || t.abbr === ab)) || (tk && typeof t.name === 'string' && nmOf(t.name) === tk))) || null;
+  }
+  function injuryOf(name, sp) {
+    try { const I = E.injuries, L = I && Array.isArray(I.injuries) ? I.injuries : [], k = E.nameKey(name); const x = L.find(r => r && E.nameKey(r.player) === k && (!r.sport || r.sport === sp));
+      return x ? { status: String(x.status || 'listed'), injury: String(x.injury || '').slice(0, 60), updated: String(x.updated || '').slice(0, 10) } : null; } catch (e) { return null; }
+  }
+  function injuriesOfTeam(sp, ab, name) {
+    try { const I = E.injuries, L = I && Array.isArray(I.injuries) ? I.injuries : [], k = E.nameKey(name);
+      return L.filter(r => r && r.sport === sp && r.player && (E.nameKey(r.teamName) === k || espnOf(sp, String(r.team || ''), r.teamName) === ab)).slice(0, 8)
+        .map(r => ({ player: String(r.player), pos: String(r.pos || ''), status: String(r.status || 'listed'), injury: String(r.injury || '').slice(0, 60), updated: String(r.updated || '').slice(0, 10) })); } catch (e) { return []; }
+  }
+
+  // ---- the app's graded picks (recs.json, loaded by the app as DATA.recs) and the viewer's My Parlays
+  const recsD = () => { const R = SB.DATA && SB.DATA.recs; return R && Array.isArray(R.days) ? R : null; };
+  // the same groups as the app's "How our parlays did" (index.html REC_TYPE), so the numbers match that page
+  const REC_TYPE = id => (/^mp-exact/.test(id) ? 'Exact score' : /^mp-sgp|^sgp/.test(id) ? 'Same game' : /^mp-mixed/.test(id) ? '10-leg mix' : /^mp-nba/.test(id) ? 'NBA props (picks)' : /^mp-dog|^up/.test(id) ? 'Underdogs / upsets'
+    : /^stk/.test(id) ? 'Duo / trio stacks' : /^mega/.test(id) ? '20-leg combo' : /^pt-/.test(id) ? 'Weekend patterns' : /^fantasy$/.test(id) ? 'Fantasy' : /^hy/.test(id) ? 'High yield' : /^p[sh]\d|^fs/.test(id) ? 'NBA props tickets' : 'Other');
+  const REC_NAME = [[/^fsday/, 'Safest games combined'], [/^fs\d/, 'Highest-floor legs (one game)'], [/^ps\d/, 'Safer prop ticket'], [/^ph\d/, 'High-yield prop ticket'], [/^hy\d/, 'High-yield fantasy ticket'], [/^mega/, '20-leg safest combo'],
+    [/^stk/, 'Duo / trio stack'], [/^rec4/, '4-leg reception parlay'], [/^sgp$/, 'Fantasy same game parlay'], [/^fantasy$/, 'Fantasy ticket'], [/^pairs/, 'Paired parlay (legs that help each other)'], [/^trend/, 'Team trends parlay'],
+    [/^pt-crazy3/, 'Weekend patterns: 3-upset lotto'], [/^pt-crazy5/, 'Weekend patterns: full chaos 5'], [/^pt-runs/, 'Weekend patterns: unbeaten runs end'], [/^pt-steady/, 'Weekend patterns: the steady weekend']];
+  function recTitle(P) {
+    const id = String(P.id || ''), t = String(P.title || '');
+    if (t && t !== id) return t.slice(0, 80);
+    const x = REC_NAME.find(([rx]) => rx.test(id)); return `${x ? x[1] : REC_TYPE(id)} · ${(P.legs || []).length} legs`;
+  }
+  // the app's own legs for a player on one UTC date (its pre-game line and chance)
+  function recLegsFor(name, d) {
+    const R = recsD(); if (!R || !d) return [];
+    const k = E.nameKey(name), out = [], seen = new Set();
+    for (const day of R.days) for (const P of Array.isArray(day.parlays) ? day.parlays : []) for (const L of Array.isArray(P.legs) ? P.legs : []) {
+      if (!L || !L.player || typeof L.player.name !== 'string' || E.nameKey(L.player.name) !== k || legDate(L) !== d || seen.has(L.key)) continue;
+      seen.add(L.key); out.push({ L, P, day: day.day });
+    }
+    return out;
+  }
+  const recInfo = L => { const st = String(L.player.stat || ''), thr = +L.player.thr, under = !!L.player.under; return { f: st, line: num(thr) ? (under ? thr : thr - .5) : null, under, p: num(+L.p) && +L.p > 0 ? +L.p : null }; };
+  // a date named in words -> {d: 'YYYY-MM-DD'} (a US calendar date) or {rel: 'last'} ("last night", "yesterday")
+  const MONX = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+  const WDAY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  function dateIn(s) {
+    s = String(s || '').toLowerCase();
+    let m = /\b(20\d\d)-(\d\d)-(\d\d)\b/.exec(s); if (m) return { d: `${m[1]}-${m[2]}-${m[3]}` };
+    const today = E.dayOf(Date.now()), y0 = +today.slice(0, 4);
+    const mk = (mo, da) => { if (!(mo >= 1 && mo <= 12 && da >= 1 && da <= 31)) return null; const d = `${y0}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`; return d > today ? `${y0 - 1}-${d.slice(5)}` : d; };
+    m = /\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/.exec(s); if (m) { const d = mk(MONX[m[1]], +m[2]); if (d) return { d }; }
+    m = /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\b/.exec(s); if (m) { const d = mk(MONX[m[2]], +m[1]); if (d) return { d }; }
+    m = /\b(?:on\s+)?(\d{1,2})\/(\d{1,2})\b/.exec(s); if (m) { const d = mk(+m[1], +m[2]); if (d) return { d }; }
+    if (/\b(last night|yesterday|last game|most recent|latest|last time out)\b/.test(s)) return { rel: 'last' };
+    m = /\b(?:on|last)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.exec(s);
+    if (m) { const dow = new Date(today + 'T12:00:00Z').getUTCDay(); return { d: dAdd(today, -((dow - WDAY.indexOf(m[1]) + 7) % 7)) }; }
+    return {};
+  }
+
   // ---------------------------------------------------------------- reading a question
   // the stat named first in the text ("Maxey over 20.5 points and Brunson over 5.5 assists" -> points for Maxey's part)
   const STAT_RX = [[/\b(touchdowns?|tds?|anytime|end ?zone)\b/, 'td'], [/\brush(ing)?( yards| yds)?\b/, 'ryd'], [/\b(receiving( yards| yds)?|rec ?yds|rec yards)\b/, 'recyd'],

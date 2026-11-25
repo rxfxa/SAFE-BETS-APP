@@ -224,7 +224,7 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
 - 2026-11-25 (later):
   - Free tier redefined by the owner: odds, the parlay builder (no Generate) and Past Slips (yesterday's settled slips only); Trending / My Parlay Picks, generated parlays and leans moved to Mid. New pastslips.js; recs fixture tests/fixtures/recs-2026-11-25.json; tests/plans.test.mjs covers the new rules.
-  - Reviewed by 3 independent agents with a skeptic per angle: fixed the slip's recommended swaps and soccer same-game pairs reaching free, free saves to a locked My Parlays, a lock on every Games card (now only where a lean exists), Past Slips headings / ungradable legs / a raw "pairs" title / screen-reader results, and the Plans table hiding its plan columns on phones (old bug). Kept: Games' key props (odds per line, like the builder deck).
+  - Reviewed by 3 independent agents with a skeptic per angle: fixed the slip's recommended swaps and soccer same-game pairs reaching free, free saves to a locked My Parlays, a lock on every Games card (now only where a lean exists), Past Slips headings / ungradable legs / a raw "pairs" title / screen-reader results, and the Plans table hiding its plan columns on phones (old bug). Kept: Games' key props (odds per line, like the builder deck). Published as version 181 (without ask.js: the Chat breakdowns are still being built).
 - 2026-11-25:
   - Plans and access tiers: Free / Fantasy $9.99 / Betting + Fantasy $24.99 / Everything $39.99.
   - Signed unlock codes, Stripe links, blurred previews, the Plans page, owner tools and tools/license.mjs.

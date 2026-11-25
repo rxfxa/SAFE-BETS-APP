@@ -1167,7 +1167,7 @@ let tab=store.get('tab','ask'),subf='All',q='',win=store.get('win','3d');
 // Betting / Fantasy mode: the sidebar's switch. Fantasy mode shows the fantasy football screens (and Chat, Players, Stat
 // Explorer, Fantasy Parlay); betting mode shows everything else. Opening a screen of the other mode switches to it.
 let mode=store.get('mode','betting')==='fantasy'?'fantasy':'betting';
-const FF_KEYS=new Set(['ff-startsit','ff-trade','ff-rate','ff-rank']),BOTH_KEYS=new Set(['ask','players','statx','fantasy','plans']);
+const FF_KEYS=new Set(['ff-startsit','ff-trade','ff-rate','ff-rank']),BOTH_KEYS=new Set(['ask','players','statx','fantasy','pastslips','plans']);
 const modeOf=k=>FF_KEYS.has(k)?'fantasy':BOTH_KEYS.has(k)?'both':'betting';
 const inMode=k=>{const m=modeOf(k);return m==='both'||m===mode;};
 {const m0=modeOf(tab);if(m0!=='both'&&m0!==mode)mode=m0;}  // a stored screen of the other mode opens in its own mode
@@ -1176,7 +1176,7 @@ let slip=store.get('slip',[]),baseKey=store.get('base',null),saved=store.get('sa
 const saveSlip=()=>{store.set('slip',slip);store.set('base',baseKey);};
 // Tabs sit in a fixed order so related ones stay together: find a bet → your bets → games by sport → tools.
 // Known keys (including module tabs: soccerparlays, odds, sim) always take their place here; other keys use registerTab's `after`.
-const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','slipcheck','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','odds','sim','lab','plans'];
+const TAB_ORDER=['ask','ff-startsit','ff-trade','ff-rate','ff-rank','insights','propan','explorer','slate','sharp','news','builder','players','statx','trending','soccerparlays','lottos','polymarket','plan','parlays','props','firsttd','fantasy','mine','pastslips','slipcheck','soccer','nba','nfl','nhl','ncaaf','injuries','ufc','upsets','pattern','trends','odds','sim','lab','plans'];
 const TABS=[['trending','🔥 Trending'],['parlays','🎯 Best Parlays'],['props','🏀 NBA Props'],['fantasy','🧩 Fantasy Parlay'],['mine','⭐ My Parlays'],['soccer','⚽ Soccer Games'],['nba','🏀 NBA'],['nfl','🏈 NFL'],['nhl','🏒 NHL'],['ncaaf','🎓 College FB'],['lab','⚡ Sharp Lab']];
 const CUSTOM={},tabParams={};
 function registerTab(t){
@@ -1193,7 +1193,7 @@ function goTab(key,params){if(!inMode(key)){mode=modeOf(key)==='fantasy'?'fantas
 function applyTheme(){document.documentElement.classList.add('dark');document.body.classList.add('dark');}
 $('q').oninput=e=>{q=e.target.value.toLowerCase().trim();render();};
 const TAB_GROUP={ask:'research',insights:'research',propan:'research',explorer:'research',slate:'research',sharp:'research',news:'research',builder:'research',players:'research',statx:'research',
-  'ff-startsit':'ff','ff-trade':'ff','ff-rate':'ff','ff-rank':'ff',plans:'tools',trending:'bets',ufc:'bets',upsets:'bets',pattern:'bets',trends:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',plan:'bets',parlays:'bets',props:'bets',firsttd:'bets',fantasy:'bets',mine:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
+  'ff-startsit':'ff','ff-trade':'ff','ff-rate':'ff','ff-rank':'ff',plans:'tools',trending:'bets',ufc:'bets',upsets:'bets',pattern:'bets',trends:'bets',soccerparlays:'bets',lottos:'bets',polymarket:'bets',plan:'bets',parlays:'bets',props:'bets',firsttd:'bets',fantasy:'bets',mine:'mine',pastslips:'mine',slipcheck:'mine',soccer:'games',nba:'games',nfl:'games',nhl:'games',ncaaf:'games',injuries:'games',odds:'tools',sim:'tools',lab:'tools'};
 const TAB_GROUPNAME={research:'Research',ff:'Fantasy football',bets:'Safe Bets picks',mine:'Your bets',games:'Games',tools:'Tools'};
 // in fantasy mode the shared screens sit with the fantasy ones
 const groupOf=k=>mode==='fantasy'?(k==='ask'?'research':'ff'):(TAB_GROUP[k]||'bets');
@@ -1250,7 +1250,7 @@ function renderTabs(){const T=$('tabs');let g0=null,h='';
 const wideNav=()=>window.matchMedia('(min-width:900px)').matches;
 function applyMode(){document.body.classList.toggle('mode-fantasy',mode==='fantasy');const b=$('modeSw');if(b){b.setAttribute('aria-checked',String(mode==='fantasy'));const v=mode==='fantasy'?'Fantasy':'Betting';b.querySelector('.ml').textContent=v;b.setAttribute('aria-label',v+' mode: fantasy switch');}}
 function setMode(m,go){m=m==='fantasy'?'fantasy':'betting';if(m===mode&&!go)return;mode=m;store.set('mode',mode);applyMode();
-  if(!inMode(tab))goTab(mode==='fantasy'?(TABS.some(x=>x[0]==='ff-startsit')?'ff-startsit':'fantasy'):(SB.paywall&&!SB.paywall.can('ask')?'trending':'ask'),{});else renderTabs();}  // (plans: a free visitor lands on a free screen)
+  if(!inMode(tab))goTab(mode==='fantasy'?(TABS.some(x=>x[0]==='ff-startsit')?'ff-startsit':'fantasy'):(SB.paywall&&!SB.paywall.can('ask')?'slate':'ask'),{});else renderTabs();}  // (plans: a free visitor lands on a free screen)
 function navOpen(){const S=$('side');if(wideNav()||S.classList.contains('open'))return;S.classList.add('open');$('navScrim').hidden=false;$('navBtn').setAttribute('aria-expanded','true');
   for(const id of ['main','sub','hero','slipbar'])if($(id))$(id).inert=true;const on=S.querySelector('.tab.on')||S.querySelector('.tab');renderTabs();setTimeout(()=>{(S.querySelector('.tab.on')||on||$('navClose')).focus();},30);}
 function navClose(refocus){const S=$('side');if(!S.classList.contains('open'))return;S.classList.remove('open');$('navScrim').hidden=true;$('navBtn').setAttribute('aria-expanded','false');
@@ -1429,7 +1429,7 @@ function renderView(){
   const sp=view;let list=gamesFor(g=>g.sport===sp);
   if(sp==='soccer'&&subf!=='All')list=list.filter(g=>g.comp===subf);
   if(sp!=='soccer'&&subf!=='All')list=list.filter(g=>dayBucket(g)===subf);
-  const P=buildParlay(g=>g.sport===sp,.55,3,.72);
+  const P=SB.paywall&&!SB.paywall.can('picks')?null:buildParlay(g=>g.sport===sp,.55,3,.72);  // free: odds only, no generated parlay
   M.innerHTML=updatedLine()+(P?`<h2>Easiest ${SPORTNAME[sp]} parlay <small>base → connect → keep it small</small></h2>${parlayCard('sp-'+sp,`${SPORTNAME[sp]} · Easy hit`,P)}`:'')+
     `<h2>${SPORTNAME[sp]} markets <small>${list.length} games</small></h2>`+(list.length?`<div class="grid">${list.map(card).join('')}</div>`:`<div class="empty">No games match.</div>`);
 }
@@ -2831,6 +2831,7 @@ window.__fm2={legMeta,legRho,jointP,bvnP,gameJoint,helpPairs,helpGroups,sgpTicke
 <script src="players.js"></script>
 <script src="statx.js"></script>
 <script src="ffb.js"></script>
+<script src="pastslips.js"></script>
 </body>
 </html>
 

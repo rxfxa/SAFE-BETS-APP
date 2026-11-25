@@ -28,16 +28,20 @@
   const RANK = { free: 0, low: 1, mid: 2, high: 3 }, TIER_OF = ['free', 'low', 'mid', 'high'];
   const DEF_PLANS = [
     { id: 'low', tag: 'Low', name: 'Fantasy', month: 9.99, year: 99.99, blurb: 'Fantasy football: start / sit, trades, your team, rankings, Fantasy Parlay and player pages.' },
-    { id: 'mid', tag: 'Mid', name: 'Betting + Fantasy', month: 24.99, year: 249.99, popular: true, blurb: 'Everything in Fantasy plus the betting screens: AI Chat, props, parlays, the parlay builder, Sharp Board, Polymarket, highlights.' },
+    { id: 'mid', tag: 'Mid', name: 'Betting + Fantasy', month: 24.99, year: 249.99, popular: true, blurb: 'Everything in Fantasy plus the betting screens: My Parlay Picks and generated parlays, AI Chat, props, Sharp Board, Polymarket, highlights.' },
     { id: 'high', tag: 'High', name: 'Everything', month: 39.99, year: 399.99, blurb: 'Everything in Betting + Fantasy plus Slip Check, the game Simulator and 500,000-run sims, and the research tabs.' },
   ];
-  // what each screen needs (0 free … 3 high); a screen not listed needs Mid (every other betting screen)
-  const NEED = { trending: 0, slate: 0, plans: 0, 'ff-startsit': 1, 'ff-trade': 1, 'ff-rate': 1, 'ff-rank': 1, fantasy: 1, players: 1, mine: 1,
+  // what each screen needs (0 free … 3 high); a screen not listed needs Mid (every other betting screen).
+  // Free (owner, 2026-11-25): odds only (Games, the sport tabs, game pages, Odds tools), the parlay builder without
+  // Generate, and yesterday's settled slips (Past Slips). No generated parlays, picks or leans: `picks` is that pseudo-screen.
+  const NEED = { slate: 0, soccer: 0, nba: 0, nfl: 0, nhl: 0, ncaaf: 0, odds: 0, builder: 0, pastslips: 0, plans: 0, trending: 2, picks: 2, 'ff-startsit': 1, 'ff-trade': 1, 'ff-rate': 1, 'ff-rank': 1, fantasy: 1, players: 1, mine: 1,
     slipcheck: 3, sim: 3, pattern: 3, trends: 3, upsets: 3, statx: 3 };
   const needOf = k => (k in NEED ? NEED[k] : 2);
+  const FREE_LINE = "Free: odds (Games, the sport tabs, game pages), the parlay builder and yesterday's settled slips.";
   // buttons that run the simulations: 500,000 runs and Watch live on every card, the soccer tab's simulate button
   const SIM_SEL = '[data-sim5],[data-simp],[data-sp-sim],[data-pl-sim],[data-pl-week]';
-  const BUILD_SEL = '#slipbar,[data-addp]', SAVE_SEL = '[data-savep]';
+  // generated parlays and picks outside the locked screens: the builder's Generate
+  const GEN_SEL = '[data-ui-seg="bld-mode|gen"],[data-bld-build]', SAVE_SEL = '[data-savep]';
   const isLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
   let CFG = null, CFGST = 'loading', ST = { tier: 'free', exp: 0, id: null, why: '', checked: false }, OWNER = false, KEY = null, KEYJ = '';
@@ -112,7 +116,7 @@
       else { CFG = { plans: DEF_PLANS }; CFGST = 'missing'; }
       await refreshState();
       // a first visit opens on a screen the visitor can use (the default screen, Chat, is part of Betting + Fantasy)
-      if (enforced() && firstVisit && !OWNER && !can(SB.tab)) SB.goTab('trending', {}); else SB.render();
+      if (enforced() && firstVisit && !OWNER && !can(SB.tab)) SB.goTab('slate', {}); else SB.render();
       paintChrome();
     });
   }
@@ -163,7 +167,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
       <p>${esc(what)} ${ST.why ? esc(ST.why) : ''}</p>
       <div class="pw-price"><b>${money(P.month)}</b>/month · or ${money(P.year)}/year</div>
       <div class="ui-row"><button type="button" class="ui-cta" data-gotab="plans">Upgrade</button><button type="button" class="ui-ghost" data-pw-code>Have a code?</button></div>
-      <p style="font-size:12.5px;color:#ffffff80">Free: Trending (with My Parlay Picks) and Games. Everything else shows a preview.</p></div>`;
+      <p style="font-size:12.5px;color:#ffffff80">${esc(FREE_LINE)} Everything else shows a preview.</p></div>`;
   }
   const LOCKED_IDS = ['main', 'sub', 'labHost'];
   const blank = root => { if (!root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (/[A-Za-z0-9]/.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(/[A-Za-z0-9]/g, '•'); };
@@ -217,7 +221,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     // the phone Ask button and the logos open Chat; while Chat is locked they offer Upgrade / the free screen instead
     const chatLocked = enforced() && !pending() && !can('ask');
     const A = document.querySelector('.askpill'); if (A) { A.textContent = chatLocked ? 'Upgrade' : 'Ask'; A.dataset.gotab = chatLocked ? 'plans' : 'ask'; }
-    for (const B of document.querySelectorAll('.brand')) B.dataset.gotab = chatLocked ? 'trending' : 'ask';
+    for (const B of document.querySelectorAll('.brand')) B.dataset.gotab = chatLocked ? 'slate' : 'ask';
     badges($('tabs'));
   }
   SB.on('rendered', v => { gate(v); paintChrome(); });
@@ -233,7 +237,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     if (!enforced() || pending() || !e.target.closest) return;
     const r = rank(); let hit = null;
     if (r < 3 && e.target.closest(SIM_SEL)) hit = [3, 'Simulations', 'The 500,000-run sims, Watch live and the game Simulator'];
-    else if (r < 2 && e.target.closest(BUILD_SEL)) hit = [2, 'The parlay builder and your slip', 'The parlay builder, your slip and its price checks'];
+    else if (r < 2 && e.target.closest(GEN_SEL)) hit = [2, 'Generated parlays', 'Parlays the model builds for you, My Parlay Picks and the leans'];
     else if (r < 1 && e.target.closest(SAVE_SEL)) hit = [1, 'Saved parlays', 'Saving parlays to My Parlays'];
     if (!hit) return;
     e.preventDefault(); e.stopImmediatePropagation(); upsell(...hit);
@@ -243,8 +247,9 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
   // ---------- the Plans screen ----------
   const UI = { period: LS.get('period', 'month'), msg: '', msgOk: false, own: { out: null, msg: '' } };
   const featureRows = [
-    ['Trending with My Parlay Picks, Games and game pages', 0], ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players, My Parlays (saved parlays)', 1],
-    ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Parlay builder and slip, Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, the sport tabs, UFC, Odds tools, Sharp Lab', 2],
+    ['Odds: Games, the sport tabs, game pages, Odds tools', 0], ['The parlay builder (build your own) and your slip', 0], ["Past Slips: yesterday's settled slips", 0],
+    ['Fantasy: Start / Sit, Trade Analyzer, Rate My Team, Rankings', 1], ['Fantasy Parlay, Players, My Parlays (saved parlays)', 1],
+    ['Trending with My Parlay Picks, generated parlays, leans and live slips', 2], ['AI Chat, Insights, Prop Explorer, Prop Analyzer', 2], ['Best Parlays, NBA Props, First TD, soccer and point lottos', 2], ['Sharp Board, Polymarket, Weekly Plan, Highlights, UFC, Sharp Lab', 2],
     ['Slip Check, Simulator, 500,000-run sims, Watch live', 3], ['Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer', 3],
   ];
   function linkOf(id, per) { const L = CFG && CFG.links && CFG.links[id] && CFG.links[id][per]; return typeof L === 'string' && /^https:\/\/[^\s"'<>]+$/.test(L) ? L : null; }
@@ -252,7 +257,7 @@ textarea.pw-in{min-height:96px;padding:10px 14px;resize:vertical;font-size:12.5p
     const r = rank(), on = enforced(), per = UI.period === 'year' ? 'year' : 'month';
     const st = !on ? (CFGST === 'loading' ? 'Checking your plan…' : 'Plans are not switched on yet: every screen is open.')
       : OWNER ? 'Owner: full access on this browser.'
-      : r === 0 ? 'Free: Trending (with My Parlay Picks) and Games, with previews of the rest.'
+      : r === 0 ? FREE_LINE + ' Previews of the rest.'
       : `${planOf(r).name}${ST.exp ? ` · until ${new Date(ST.exp * 1000).toLocaleDateString()}` : ''}`;
     const cards = plans().map((P, i) => {
       const tierR = i + 1, cur = on && !OWNER && r === tierR, L = linkOf(P.id, per), price = per === 'year' ? P.year : P.month;

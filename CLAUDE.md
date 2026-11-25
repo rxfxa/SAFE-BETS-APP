@@ -7,7 +7,7 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - Live: https://claude.ai/artifact/QbHWjenPNPvnc7D16qa1ZW (artifact slug bf0ba756-3c90-4ae3-9ea1-d8d26fe6d3a5), published from this repo.
 - Repo: rxfxa/safe-bets-app, branch `claude/sports-parlay-enhancements-o4td79`. Never push elsewhere without the owner's OK.
 - A vanilla JS single page (`index.html`) plus modules that use the `window.SB` v2 API (registerTab, goTab, saveParlay, ticketCard,
-  p1, parlayProb, simGame, ...): soccer.js, sim.js, lottos.js, ufc.js, slipcheck.js, polymarket.js, upsets.js, pattern.js, plan.js, firsttd.js.
+  p1, parlayProb, simGame, ...): soccer.js, sim.js, lottos.js, ufc.js, slipcheck.js, polymarket.js, upsets.js, pattern.js, plan.js, firsttd.js, pastslips.js.
 - Engine (index.html): soccer and NHL priced from exact score grids; NBA, NFL and college football from 100,000 seeded simulations per game.
   Same-game legs are priced jointly.
 
@@ -41,9 +41,13 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
 - The owner asked for "a subscription based payment system ... fantasy only, betting and fantasy ... and everything the app offers (Low-Mid-High Tier). More money more access".
 - **Owner's choices:** unlock codes on this link (no server), Stripe payment links, these prices and tiers, and a free preview.
 - **Tiers:**
-  - **Free:** Trending (with My Parlay Picks), Games and game pages. Every other screen shows a blurred, inert preview whose words and numbers are replaced by dots, with an Upgrade card.
+  - **Free (owner, 2026-11-25: "only be able to see odds ... parlay builder is accessible but thats it. No generated parlays or your parlay picks"):**
+    - odds only: Games (leans locked), the sport tabs (no "Easiest parlay"), game pages, Odds tools;
+    - the parlay builder: Swipe and the slip (Generate locked, `GEN_SEL` upsell);
+    - Past Slips (pastslips.js): the day before's settled slips from recs.json, never today's or upcoming ones. A slip shows only once every one of its games is over and it has a result, so a slip with a leg still to play stays hidden. Paid plans can pick any past day.
+    - Every other screen shows a blurred, inert preview whose words and numbers are replaced by dots, with an Upgrade card. A first visit lands on Games.
   - **Low, Fantasy ($9.99/mo, $99.99/yr):** the fantasy screens, Fantasy Parlay, Players, My Parlays.
-  - **Mid, Betting + Fantasy ($24.99/mo, $249.99/yr):** every other screen, including AI Chat, Sharp Board, Polymarket, the parlay builder and slip.
+  - **Mid, Betting + Fantasy ($24.99/mo, $249.99/yr):** every other screen, including Trending with My Parlay Picks, generated parlays and leans (the pseudo-screen `picks`: builder Generate, the sport tabs' parlay, Games leans), AI Chat, Sharp Board, Polymarket.
   - **High, Everything ($39.99/mo, $399.99/yr):** adds Slip Check, the Simulator, every 500,000-run / Watch live button (cards, soccer, Weekly Plan) and the research tabs (Weekend Patterns, Team Trends, Upset Parlays, Stat Explorer).
   - The map is `NEED` in tiers.js; an unlisted screen needs Mid.
 - **Codes:**
@@ -216,6 +220,8 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
+- 2026-11-25 (later):
+  - Free tier redefined by the owner: odds, the parlay builder (no Generate) and Past Slips (yesterday's settled slips only); Trending / My Parlay Picks, generated parlays and leans moved to Mid. New pastslips.js; recs fixture tests/fixtures/recs-2026-11-25.json; tests/plans.test.mjs covers the new rules.
 - 2026-11-25:
   - Plans and access tiers: Free / Fantasy $9.99 / Betting + Fantasy $24.99 / Everything $39.99.
   - Signed unlock codes, Stripe links, blurred previews, the Plans page, owner tools and tools/license.mjs.

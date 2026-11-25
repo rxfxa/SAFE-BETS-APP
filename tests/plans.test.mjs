@@ -21,7 +21,8 @@ const code = (t, days = 30, id = b64u(crypto.randomBytes(6)), key = privateKey) 
 const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'plans.json'), 'utf8'));
 const cfg = (over = {}) => JSON.stringify({ ...base, publicKey: PUB, enforceLocal: true, revoked: ['REVOKED1'], links: { low: { month: 'https://buy.stripe.com/test_low', year: '' }, mid: { month: 'https://buy.stripe.com/test_mid', year: 'https://buy.stripe.com/test_midy' }, high: { month: 'javascript:alert(1)', year: '' } }, ...over });
 const withPlans = body => async page => { await page.route(/\/plans\.json(\?.*)?$/, r => r.fulfill({ status: 200, contentType: 'application/json', body })); };
-const openAs = async (c, opts = {}) => open({ width: opts.width || 390, tab: opts.tab || 'trending', init: c ? { 'fm2.pw.code': c } : null, before: withPlans(opts.body || cfg()) });
+// recs.json is pinned (the graded slips of 22-24 Nov) for Past Slips; the clock (23 Nov, 4 AM Pacific) makes 22 Nov "yesterday"
+const openAs = async (c, opts = {}) => open({ width: opts.width || 390, tab: opts.tab || 'slate', init: c ? { 'fm2.pw.code': c } : null, before: withPlans(opts.body || cfg()), notFound: ['mypicks.json'], pins: { 'recs.json': 'recs-2026-11-25.json' } });
 const ready = page => page.waitForFunction(() => window.__tiers && __tiers.state.cfg !== 'loading' && __tiers.state.checked, null, { timeout: 15000 });
 const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); await page.waitForTimeout(150);
   return page.evaluate(() => ({ locked: document.getElementById('main').classList.contains('pw-lock'), inert: document.getElementById('main').inert, gate: !document.getElementById('pwGate').hidden, text: document.getElementById('pwGate').innerText })); };
@@ -42,8 +43,34 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
 {
   const { page, errors, browser } = await openAs(null);
   await ready(page);
-  const free = { trending: await view(page, 'trending'), slate: await view(page, 'slate') };
-  check('free: My Parlay Picks and Games stay open', !free.trending.locked && !free.slate.locked && !free.trending.gate, JSON.stringify(free));
+  // free (owner, 2026-11-25): odds, the parlay builder and yesterday's settled slips; no generated parlays or picks
+  const free = {}; for (const k of ['slate', 'nba', 'soccer', 'odds', 'builder', 'pastslips']) free[k] = await view(page, k);
+  check('free: odds (Games, sport tabs, Odds tools), the parlay builder and Past Slips stay open', Object.values(free).every(v => !v.locked && !v.gate), JSON.stringify(Object.fromEntries(Object.entries(free).map(([k, v]) => [k, v.locked]))));
+  const tr = await view(page, 'trending');
+  check('free: Trending (My Parlay Picks) is locked: part of Betting + Fantasy', tr.locked && tr.gate && /Betting \+ Fantasy/.test(tr.text) && /\$24\.99/.test(tr.text), tr.text.slice(0, 160));
+  await view(page, 'nba');
+  check('free: a sport tab shows its markets but no generated parlay', await page.evaluate(() => /NBA markets/.test(document.getElementById('main').innerText) && !/Easiest NBA parlay/.test(document.getElementById('main').innerText) && !document.querySelector('#main .pc [data-addp]')));
+  await view(page, 'slate'); await page.waitForTimeout(300);
+  const sl = await page.evaluate(() => ({ locked: document.querySelectorAll('[data-sl-lean="locked"]').length, leans: document.querySelectorAll('[data-sl-lean="pm"],[data-sl-lean="trend"],[data-sl-lean="none"]').length, cards: document.querySelectorAll('.sl-card').length }));
+  check('free: Games shows the odds and win chances, with leans locked (no picks)', sl.cards > 0 && sl.locked > 0 && sl.leans === 0, JSON.stringify(sl));
+  // the builder: build your own (Swipe); Generate asks for Betting + Fantasy
+  await view(page, 'builder');
+  await page.evaluate(() => document.querySelector('[data-ui-seg="bld-mode|gen"]').click()); await page.waitForTimeout(200);
+  const bl = await page.evaluate(() => ({ mode: __builder.state.mode, sheet: (document.getElementById('sheet') || {}).innerText || '', lockLbl: /🔒/.test(document.querySelector('[data-ui-seg="bld-mode|gen"]').textContent) }));
+  check('free: the builder stays on Swipe; Generate is marked locked and asks for Betting + Fantasy', bl.mode === 'swipe' && bl.lockLbl && /Generated parlays are part of Betting \+ Fantasy/.test(bl.sheet), JSON.stringify({ mode: bl.mode, lock: bl.lockLbl, sheet: bl.sheet.slice(0, 80) }));
+  await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100);
+  const add = await page.evaluate(() => { const g = SB.DATA.games.find(g => SB.openG(g) && SB.marketsFor(g).length); const m = SB.marketsFor(g)[0]; SB.toggleLeg(g.id, m.key); return { n: SB.slip.length, sheet: !!(document.getElementById('sheet') && document.getElementById('sheet').classList.contains('open')) }; });
+  await page.evaluate(() => document.getElementById('slipbar') && document.getElementById('slipbar').click()); await page.waitForTimeout(200);
+  check('free: legs go on the slip and the slip opens (the builder is free)', add.n === 1 && !/part of Betting/.test(await page.evaluate(() => (document.getElementById('sheet') || {}).innerText || '')), JSON.stringify(add));
+  await page.evaluate(() => { SB.closeSheet(); SB.setSlip && SB.setSlip([]); }); await page.waitForTimeout(100);
+  // Past Slips: the day before only, settled slips only
+  await view(page, 'pastslips'); await page.waitForTimeout(200);
+  const ps = await page.evaluate(() => ({ cards: [...document.querySelectorAll('.ps-card')].map(c => c.dataset.psRes), picker: !!document.querySelector('select[data-ui-select="ps-day"]'), txt: document.getElementById('main').innerText,
+    future: __pastslips.settled({ parlays: [{ id: 'x', legs: [{ res: false, start: '2026-11-22T20:00:00Z' }, { res: null, start: '2026-11-24T20:00:00Z' }] }] }, Date.parse('2026-11-23T12:00:00Z')).length,
+    over: __pastslips.settled({ parlays: [{ id: 'y', legs: [{ res: false, start: '2026-11-22T20:00:00Z' }, { res: null, start: '2026-11-22T21:00:00Z' }] }] }, Date.parse('2026-11-23T12:00:00Z')).length }));
+  check("free: Past Slips shows only yesterday's (22 Nov) settled slips, with no day picker", ps.cards.length === 9 && ps.cards.every(r => r === 'won' || r === 'lost') && !ps.picker && /Sunday, Nov 22/.test(ps.txt) && !/Nov 23|Nov 24/.test(ps.txt), JSON.stringify({ n: ps.cards.length, picker: ps.picker }));
+  check('Past Slips: a slip with a game still to play stays hidden even when it already lost a leg; one whose games are over shows', ps.future === 0 && ps.over === 1, JSON.stringify({ future: ps.future, over: ps.over }));
+  check('free: Past Slips offers the paid plans for today\'s slips', /Today's and upcoming slips/.test(ps.txt));
   const ins = await view(page, 'insights');
   check('free: a betting screen shows a blurred, inert preview with the Mid plan and its price', ins.locked && ins.inert && ins.gate && /Betting \+ Fantasy/.test(ins.text) && /\$24\.99/.test(ins.text), ins.text.slice(0, 160));
   const ff = await view(page, 'ff-trade');
@@ -51,27 +78,27 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   const sx = await view(page, 'statx');
   check('free: Stat Explorer (research) asks for Everything ($39.99)', sx.locked && /Everything/.test(sx.text) && /\$39\.99/.test(sx.text), sx.text.slice(0, 120));
   const badges = await page.evaluate(() => { SB.setMode('betting'); SB.openNav(); const o = {}; for (const b of document.querySelectorAll('#tabs .tab[data-t]')) o[b.dataset.t] = (b.querySelector('.pw-lk') || {}).textContent || ''; SB.closeNav(); return o; });
-  check('free: sidebar lock badges show which plan opens each screen', /MID/.test(badges.insights) && /HIGH/.test(badges.sim) && !badges.trending && !badges.slate, JSON.stringify({ insights: badges.insights, sim: badges.sim, trending: badges.trending }));
+  check('free: sidebar lock badges show which plan opens each screen', /MID/.test(badges.insights) && /HIGH/.test(badges.sim) && /MID/.test(badges.trending) && !badges.slate && !badges.builder && !badges.pastslips && !badges.nba, JSON.stringify({ insights: badges.insights, sim: badges.sim, trending: badges.trending, builder: badges.builder }));
   check('free: the phone top bar offers Upgrade instead of Ask', (await page.textContent('.askpill')).trim() === 'Upgrade');
   check('free: the sidebar footer says Free', /Free/.test(await page.textContent('#pwStat')));
   // the gate's button opens Plans
   await view(page, 'insights'); await page.click('#pwGate [data-gotab="plans"]'); await page.waitForTimeout(150);
   check('the gate\'s "Upgrade" opens the Plans page', await page.evaluate(() => SB.tab === 'plans' && /Pick your plan/i.test(document.getElementById('main').innerText)));
-  // a 500,000-run button on a free screen (My Parlay Picks) asks for High instead of running
-  await page.evaluate(() => SB.goTab('trending', {})); await page.waitForTimeout(400);
+  // a 500,000-run button on a free screen asks for High instead of running
+  await page.evaluate(() => SB.goTab('slate', {})); await page.waitForTimeout(400);
   // any card's 500,000-run / Watch live button (one is added to the open screen so the check does not depend on the slate)
   for (const a of ['sim5', 'simp']) {
     await page.evaluate(a => { const b = document.createElement('button'); b.dataset[a] = 'pairs'; b.id = 'pwT'; document.getElementById('main').appendChild(b); b.click(); b.remove(); }, a); await page.waitForTimeout(200);
     check(`free: a ${a === 'sim5' ? '500,000-run' : 'Watch live'} button opens the upgrade sheet, not a simulation`, await page.evaluate(() => /Simulations are part of Everything/.test((document.getElementById('sheet') || {}).innerText || '')));
     await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100); }
   await page.evaluate(() => SB.closeSheet());
-  // the parlay builder (slip bar / Open in builder) is Mid; saving a parlay starts at Fantasy
-  for (const [sel, re] of [['addp', /parlay builder and your slip are part of Betting \+ Fantasy/], ['savep', /Saved parlays start at Fantasy/]]) {
+  // generated parlays (the builder's Build button) are Mid; saving a parlay starts at Fantasy
+  for (const [sel, re] of [['bldBuild', /Generated parlays are part of Betting \+ Fantasy/], ['savep', /Saved parlays start at Fantasy/]]) {
     await page.evaluate(a => { const b = document.createElement('button'); b.dataset[a] = 'x'; document.getElementById('pwGate').before(b); b.click(); b.remove(); }, sel); await page.waitForTimeout(200);
-    check(`free: ${sel === 'addp' ? 'Open in builder' : '＋ My Parlays'} asks for the right plan`, await page.evaluate(re => new RegExp(re).test((document.getElementById('sheet') || {}).innerText || ''), re.source));
+    check(`free: ${sel === 'bldBuild' ? 'Build my parlay' : '＋ My Parlays'} asks for the right plan`, await page.evaluate(re => new RegExp(re).test((document.getElementById('sheet') || {}).innerText || ''), re.source));
     await page.evaluate(() => SB.closeSheet()); await page.waitForTimeout(100); }
   // a locked preview keeps its shape but not its words or numbers; the filter chips above it are locked too
-  const lk = await view(page, 'nba');
+  const lk = await view(page, 'parlays');
   const hid = await page.evaluate(() => ({ letters: (document.getElementById('main').innerText.match(/[A-Za-z0-9]/g) || []).length, sub: document.getElementById('sub').inert, lab: document.getElementById('labHost').hidden }));
   check('free: a locked preview has no readable words or numbers, and its filter chips are inert', lk.locked && hid.letters === 0 && hid.sub, JSON.stringify(hid));
   // Weekly Plan's 500,000-run buttons are simulations too
@@ -89,7 +116,7 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
   // a first visit (nothing stored) opens on a free screen, not on locked Chat
   const { page, browser } = await open({ width: 390, before: withPlans(cfg()) });
   await ready(page); await page.waitForTimeout(200);
-  check('first visit with plans on: opens on Trending (free), not locked Chat', await page.evaluate(() => SB.tab === 'trending' && !document.getElementById('main').classList.contains('pw-lock')));
+  check('first visit with plans on: opens on Games (free), not locked Chat', await page.evaluate(() => SB.tab === 'slate' && !document.getElementById('main').classList.contains('pw-lock')));
   await browser.close();
   // someone who has seen the paywall: a blocked / failed plans.json keeps it on with the remembered key
   const b2 = await open({ width: 390, tab: 'insights', init: { 'fm2.pw.pk': PUB }, before: async p => { await p.route(/\/plans\.json(\?.*)?$/, r => r.abort()); } });
@@ -109,13 +136,19 @@ const view = async (page, k) => { await page.evaluate(k => SB.goTab(k, {}), k); 
 }
 
 // ---------- each tier ----------
-for (const [t, open1, closed] of [['low', ['ff-trade', 'fantasy', 'players'], ['insights', 'ask', 'statx']], ['mid', ['insights', 'ask', 'sharp', 'ff-trade', 'polymarket'], ['statx', 'sim', 'slipcheck', 'pattern', 'trends', 'upsets']], ['high', ['statx', 'sim', 'slipcheck', 'pattern', 'insights', 'ff-rank'], []]]) {
+for (const [t, open1, closed] of [['low', ['ff-trade', 'fantasy', 'players', 'builder'], ['insights', 'ask', 'statx', 'trending']], ['mid', ['insights', 'ask', 'sharp', 'ff-trade', 'polymarket', 'trending'], ['statx', 'sim', 'slipcheck', 'pattern', 'trends', 'upsets']], ['high', ['statx', 'sim', 'slipcheck', 'pattern', 'insights', 'ff-rank'], []]]) {
   const { page, errors, browser } = await openAs(code(t));
   await ready(page);
   const st = await page.evaluate(() => __tiers.state);
   const o = []; for (const k of open1) o.push([k, (await view(page, k)).locked]);
   const c = []; for (const k of closed) c.push([k, (await view(page, k)).locked]);
   check(`${t} code: its screens open, the ones above it stay locked`, st.tier === t && o.every(x => !x[1]) && c.every(x => x[1]), JSON.stringify({ tier: st.tier, open: o, closed: c }));
+  if (t === 'mid') {
+    await view(page, 'slate'); await page.waitForTimeout(300);
+    const m = await page.evaluate(() => ({ locked: document.querySelectorAll('[data-sl-lean="locked"]').length, gen: (SB.goTab('builder', {}), document.querySelector('[data-ui-seg="bld-mode|gen"]').click(), __builder.state.mode) }));
+    check('mid code: leans and the builder\'s Generate are open', m.locked === 0 && m.gen === 'gen', JSON.stringify(m));
+    await page.evaluate(() => { document.querySelector('[data-ui-seg="bld-mode|swipe"]').click(); });
+  }
   check(`${t} code: no page errors`, !errors.length, errors.join(' | '));
   await browser.close();
 }

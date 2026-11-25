@@ -485,11 +485,15 @@ body:has(.bld-root.bld-side) #slipbar{display:none!important}
     if (!st.T) return;
     if (st.T.legs.some(L => { const g = SB.gameById(L.gid); return !g || !SB.openG(g); })) { st.T = null; st.gone = true; }
   }
+  // Generate is part of the paid plans (free: build your own); a free visitor's builder stays on Swipe
+  const genLocked = () => !!(SB.paywall && !SB.paywall.can('picks'));
   function render(main, params) {
     css(); applyParams(params); needSide(); checkTicket();
+    if (genLocked() && st.mode === 'gen') { st.mode = 'swipe'; st.genOff = true; }        // (not saved: a paid plan that is
+    else if (!genLocked() && st.genOff) { st.mode = 'gen'; st.genOff = false; }          // still being checked gets it back)
     const head = U.page({ kicker: 'Parlay builder', title: 'Your picks,', accent: 'or the model\'s',
       sub: 'Swipe through the slate one prop at a time, or set the sport, legs and risk and Safe Bets builds the slip. Every leg shows the model\'s chance and its fair odds.' });
-    const ctrl = `<div class="bld-ctrl">${U.seg([{ k: 'swipe', label: 'Swipe' }, { k: 'gen', label: 'Generate' }], st.mode, 'bld-mode')}${st.mode === 'swipe' ? U.select({ label: 'Day', value: st.day, options: [['today', 'Today'], ['tomorrow', 'Tomorrow']], name: 'bld-day' }) : ''}</div>${U.pills(sportItems(), st.sport, 'bld-sport')}`;
+    const ctrl = `<div class="bld-ctrl">${U.seg([{ k: 'swipe', label: 'Swipe' }, { k: 'gen', label: genLocked() ? 'Generate 🔒' : 'Generate' }], st.mode, 'bld-mode')}${st.mode === 'swipe' ? U.select({ label: 'Day', value: st.day, options: [['today', 'Today'], ['tomorrow', 'Tomorrow']], name: 'bld-day' }) : ''}</div>${U.pills(sportItems(), st.sport, 'bld-sport')}`;
     let body = ''; try { body = st.mode === 'swipe' ? deckHTML() : genHTML(); } catch (e) { console.error(e); body = U.empty('This part could not load. Try the other view.'); }
     main.innerHTML = `<div class="ui-page bld-root" data-mode="${st.mode}">${head}${ctrl}
       <div class="bld-wrap"><div class="bld-grid"><section class="bld-main" aria-label="${st.mode === 'swipe' ? 'Prop deck' : 'Parlay generator'}">${body}</section><aside class="ui-card bld-slip" aria-labelledby="bld-slip-h">${slipHTML()}</aside></div></div>
@@ -664,7 +668,7 @@ body:has(.bld-root.bld-side) #slipbar{display:none!important}
     const seg = t.getAttribute('data-ui-seg'), pill = t.getAttribute('data-ui-pill');
     if (seg) {
       const [n, k] = seg.split('|');
-      if (n === 'bld-mode' && (k === 'swipe' || k === 'gen')) { st.mode = k; saveSet(); safeRender(`[data-ui-seg="bld-mode|${k}"]`); }
+      if (n === 'bld-mode' && (k === 'swipe' || k === 'gen')) { if (k === 'gen' && genLocked()) return; st.mode = k; st.genOff = false; saveSet(); safeRender(`[data-ui-seg="bld-mode|${k}"]`); }
       else if (n === 'bld-risk' && RISK[k]) { st.risk = k; saveSet(); if (st.T) generate(); safeRender(`[data-ui-seg="bld-risk|${k}"]`); }
       return;
     }

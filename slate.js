@@ -206,6 +206,8 @@
     if (M.kind === 'soccer') return `<div class="sl-tiles">${moneyT}${tile('Draw', M.draw.val, `${pct(M.pD)} · fair`, hl.draw)}${totalT}</div>`;
     return `<div class="sl-tiles">${tile(M.spread.label, M.spread.val, M.spread.sub, hl.spread)}${moneyT}${totalT}</div>`;
   }
+  // free plan: odds only, so no leans (they are picks)
+  const picksLocked = () => !!(SB.paywall && !SB.paywall.can('picks'));
   function leanHTML(L) {
     return `<div class="sl-lean" data-sl-lean="${esc(L.src)}"><div class="sl-lk">${esc(L.kicker.join(' · '))}</div><div class="sl-lt">${esc(L.title)}${L.sub ? `<span class="sl-ls">${esc(L.sub)}</span>` : ''}</div>
       <div class="sl-big">${esc(L.big)}<small>${esc(L.bigSub)}</small></div>
@@ -223,7 +225,8 @@
     else {
       const wb = `<div class="sl-wbar" role="img" aria-label="${esc(`Model win chances: ${A.name} ${pct(M.pA)}${M.pD ? `, draw ${pct(M.pD)}` : ''}, ${H.name} ${pct(M.pH)}`)}"><i style="width:${(M.pA * 100).toFixed(1)}%;--h:${U.hue(A.abbr)}"></i>${M.pD ? `<i class="sl-wd" style="width:${(M.pD * 100).toFixed(1)}%"></i>` : ''}<i style="width:${(M.pH * 100).toFixed(1)}%;--h:${U.hue(H.abbr)}"></i></div>`;
       const pq = leans.some(l => l.src === 'pm') ? '' : pmQuiet(g);   // Polymarket's word when it is not a lean
-      const lean = leans.length ? leans.map(leanHTML).join('') + (pq ? `<p class="sl-pmx" data-sl-pmq>${esc(pq)}</p>` : '') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p>${pq ? `<p class="sl-pmq" data-sl-pmq>${esc(pq)}</p>` : ''}</div>`;
+      const lean = picksLocked() ? `<div class="sl-lean sl-none" data-sl-lean="locked"><div class="sl-lk">Leans 🔒</div><div class="sl-lt">Leans are part of the paid plans</div><p>Free shows the odds and win chances. The model's leans, picks and generated parlays come with Betting + Fantasy.</p><button type="button" class="ui-link" data-gotab="plans">See plans ›</button></div>`
+        : leans.length ? leans.map(leanHTML).join('') + (pq ? `<p class="sl-pmx" data-sl-pmq>${esc(pq)}</p>` : '') : `<div class="sl-lean sl-none" data-sl-lean="none"><div class="sl-lk">No lean</div><div class="sl-lt">No lean: the model is priced from the market</div><p>Our chances come from the sportsbook prices in the feed, so on its own the model never disagrees with them. A lean shows only when Team Trends or Polymarket give a reason.</p>${pq ? `<p class="sl-pmq" data-sl-pmq>${esc(pq)}</p>` : ''}</div>`;
       const ctx = `<div class="sl-ctx">${M.ctx.map(([l, p]) => `<div class="sl-r"><span>${esc(l)}</span><span class="sl-bar"><i style="width:${clamp(p * 100, 0, 100).toFixed(1)}%"></i></span><b>${esc(pct(p))}</b></div>`).join('')}</div>`;
       body = wb + lean + tilesHTML(g, M, hl) + ctx;
     }
@@ -260,7 +263,7 @@
     const list = all.filter(g => st.sport === 'all' || g.sport === st.sport);
     // evidence per game (only when its source has loaded)
     const ev = new Map();
-    for (const g of list) { const M = modelOf(g); if (!M) continue; const L = [...(TR ? trendLeans(g, M) : [])]; const p = pmLean(g); if (p) L.unshift(p); if (L.length) ev.set(g.id, L); }
+    if (!picksLocked()) for (const g of list) { const M = modelOf(g); if (!M) continue; const L = [...(TR ? trendLeans(g, M) : [])]; const p = pmLean(g); if (p) L.unshift(p); if (L.length) ev.set(g.id, L); }
     const priced = list.filter(g => modelOf(g)).length, loadingEv = (TR_ST !== 'done' && !TR) || !S || (S.state !== 'done' && !S.PM);
     const jump = st.jump; if (!loadingEv) st.jump = null;
     const dayName = D.find(d => d.k === st.day) || { label: dayLabel(st.day) };
@@ -269,7 +272,7 @@
       <div class="sl-bar"><div class="sl-scroll">${U.pills(D.map(d => ({ k: d.k, label: d.label, n: d.n })), st.day, 'sl-day')}</div>
         <div class="sl-scroll">${U.pills([{ k: 'all', label: 'All', n: all.length }, ...sports.map(s => ({ k: s, label: SPN[s], n: all.filter(g => g.sport === s).length }))], st.sport, 'sl-sport')}</div></div>
       ${st.miss ? `<p class="ui-note" role="status">${esc(st.miss)}</p>` : ''}
-      <p class="ui-muted sl-sum">${esc(`${list.length} game${list.length === 1 ? '' : 's'} on ${dayLabel(st.day)} · ${priced} with sportsbook prices · ${ev.size} with a lean backed by evidence${loadingEv ? ' (still checking Team Trends and Polymarket)' : ''}`)}</p>
+      <p class="ui-muted sl-sum">${esc(`${list.length} game${list.length === 1 ? '' : 's'} on ${dayLabel(st.day)} · ${priced} with sportsbook prices ${picksLocked() ? '' : ` · ${ev.size} with a lean backed by evidence${loadingEv ? ' (still checking Team Trends and Polymarket)' : ''}`}`)}</p>
       ${list.length ? `<div class="sl-grid">${list.map(g => card(g, ev)).join('')}</div>` : U.empty(`No games left on ${dayName.label === 'Today' ? 'today’s' : dayLabel(st.day) + '’s'} board${st.sport !== 'all' ? ' for ' + SPN[st.sport] : ''}. Pick another day above.`)}
       <p class="ui-note">How these are made: each game's model is fitted to the sportsbook win chances in our feed, so the model's favourite is the market's favourite. Spread is the model's fair line (its average margin rounded to the half point), not a book's posted line. When the feed has no game total, NBA, football and NHL totals sit on a league average and the tile says so. Fair odds are what a chance is worth, not a price you can bet: bet only at that price or better. A lean needs outside evidence: a Team Trends flag (past results, with its sample) or a Polymarket price 3+ points higher than the books on a market with $10k+ traded and a two-sided quote. Past patterns and market gaps are not guarantees.</p>
     </div>`;

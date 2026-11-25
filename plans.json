@@ -8,6 +8,6 @@
  "links":{"low":{"month":"","year":""},"mid":{"month":"","year":""},"high":{"month":"","year":""}},
  "plans":[
   {"id":"low","tag":"Low","name":"Fantasy","month":9.99,"year":99.99,"blurb":"Fantasy football: start / sit, trades, your team, rankings, Fantasy Parlay and player pages."},
-  {"id":"mid","tag":"Mid","name":"Betting + Fantasy","month":24.99,"year":249.99,"popular":true,"blurb":"Everything in Fantasy plus the betting screens: AI Chat, props, parlays, the parlay builder, Sharp Board, Polymarket, highlights."},
+  {"id":"mid","tag":"Mid","name":"Betting + Fantasy","month":24.99,"year":249.99,"popular":true,"blurb":"Everything in Fantasy plus the betting screens: My Parlay Picks and generated parlays, AI Chat, props, Sharp Board, Polymarket, highlights."},
   {"id":"high","tag":"High","name":"Everything","month":39.99,"year":399.99,"blurb":"Everything in Betting + Fantasy plus Slip Check, the game Simulator and 500,000-run sims, and the research tabs."}
  ]}

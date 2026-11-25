@@ -19,7 +19,7 @@ export const PINS = { 'data.json': 'data-2026-11-23.json', 'pairs.json': 'pairs-
 export const CLOCK = '2026-11-23T12:00:00Z';
 let fails = 0, server = null;
 export const check = (name, ok, info = '') => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${info ? ' :: ' + info : ''}`); if (!ok) fails++; };
-export async function open({ width = 390, height = 844, tab = null, pins = {}, clock = CLOCK, notFound = ['mypicks.json', 'recs.json'], init = null } = {}) {
+export async function open({ width = 390, height = 844, tab = null, pins = {}, clock = CLOCK, notFound = ['mypicks.json', 'recs.json'], init = null, before = null } = {}) {
   if (!server) {
     server = http.createServer((req, res) => {
       const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
@@ -44,6 +44,7 @@ export async function open({ width = 390, height = 844, tab = null, pins = {}, c
     if (P[f]) return r.fulfill({ status: 200, contentType: 'application/json', body: FX(P[f]) });
     return r.fallback();
   });
+  if (before) await before(page, ctx);  // extra routes / init scripts registered before the app loads
   if (tab || init) await page.addInitScript(([t, extra]) => { if (t) localStorage.setItem('fm2.tab', JSON.stringify(t)); if (extra) for (const [k, v] of Object.entries(extra)) localStorage.setItem(k, JSON.stringify(v)); }, [tab, init]);
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html`);
   await page.waitForFunction(() => window.SB && SB.firstRender, null, { timeout: 30000 });

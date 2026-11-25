@@ -610,6 +610,7 @@ h2{font:700 19px/1.2 'Rubik',sans-serif!important;letter-spacing:-.01em}
 </header>
 <section class="hero" id="hero" aria-label="Safe Bets home" hidden></section>
 <div class="sub" id="sub"></div>
+<div class="pw-gate" id="pwGate" hidden></div>
 <main id="main"><div class="loading" aria-busy="true">Loading games and prices…</div></main>
 <div class="labhost" id="labHost" hidden></div>
 <footer class="foot">Hit chances are model estimates, not guarantees. Bet responsibly. 21+.</footer>
@@ -1166,7 +1167,7 @@ let tab=store.get('tab','ask'),subf='All',q='',win=store.get('win','3d');
 // Betting / Fantasy mode: the sidebar's switch. Fantasy mode shows the fantasy football screens (and Chat, Players, Stat
 // Explorer, Fantasy Parlay); betting mode shows everything else. Opening a screen of the other mode switches to it.
 let mode=store.get('mode','betting')==='fantasy'?'fantasy':'betting';
-const FF_KEYS=new Set(['ff-startsit','ff-trade','ff-rate','ff-rank']),BOTH_KEYS=new Set(['ask','players','statx','fantasy']);
+const FF_KEYS=new Set(['ff-startsit','ff-trade','ff-rate','ff-rank']),BOTH_KEYS=new Set(['ask','players','statx','fantasy','plans']);
 const modeOf=k=>FF_KEYS.has(k)?'fantasy':BOTH_KEYS.has(k)?'both':'betting';
 const inMode=k=>{const m=modeOf(k);return m==='both'||m===mode;};
 {const m0=modeOf(tab);if(m0!=='both'&&m0!==mode)mode=m0;}  // a stored screen of the other mode opens in its own mode
@@ -1244,7 +1245,7 @@ function renderTabs(){const T=$('tabs');let g0=null,h='';
   // keep the active tab in view (centred) when the strip scrolls sideways (phones); rects, not offsetLeft (header is sticky)
   const on=T.querySelector('.tab.on');if(on&&T.scrollWidth>T.clientWidth+1){const tr=T.getBoundingClientRect(),r=on.getBoundingClientRect();T.scrollLeft+=r.left-tr.left-(tr.width-r.width)/2;}
   if(on&&T.scrollHeight>T.clientHeight+1){const tr=T.getBoundingClientRect(),r=on.getBoundingClientRect();if(r.top<tr.top||r.bottom>tr.bottom)T.scrollTop+=r.top-tr.top-(tr.height-r.height)/2;}
-  tabFade();}
+  tabFade();emit('tabs',T);}
 // ---- sidebar: mode switch, and the drawer on phones (menu button, scrim, Escape; the page behind is inert while it is open)
 const wideNav=()=>window.matchMedia('(min-width:900px)').matches;
 function applyMode(){document.body.classList.toggle('mode-fantasy',mode==='fantasy');const b=$('modeSw');if(b){b.setAttribute('aria-checked',String(mode==='fantasy'));const v=mode==='fantasy'?'Fantasy':'Betting';b.querySelector('.ml').textContent=v;b.setAttribute('aria-label',v+' mode: fantasy switch');}}
@@ -1411,7 +1412,8 @@ function dayBucket(g){const d=new Date(g.start),t=new Date();const dd=Math.round
 function updatedLine(){const u=DATA.updated?new Date(DATA.updated):null,stale=lastGood&&now()-lastGood>25*60e3;
   if(DATA.seeded)return `<div class="updated" style="color:var(--no)"><i></i>Today's games didn't load. This is a saved slate from ${u?u.toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'}):'an earlier day'}, not today's board. Retrying every minute.</div>`;
   return `<div class="updated"><i></i>Real schedules · updated ${u?u.toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'—'} · refreshes hourly${stale?` · last good check ${new Date(lastGood).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`:''}</div>`;}
-function render(){
+function render(){renderView();emit('rendered',TABS.some(x=>x[0]===tab)?tab:'trending');}
+function renderView(){
   booted=true;pendingRender=false;
   // a stored tab whose module has not registered (yet) shows Trending until it does
   const view=TABS.some(x=>x[0]===tab)?tab:'trending';
@@ -2807,6 +2809,7 @@ window.__fm2={legMeta,legRho,jointP,bvnP,gameJoint,helpPairs,helpGroups,sgpTicke
 })();
 </script>
 <script src="ui.js"></script>
+<script src="tiers.js"></script>
 <script src="soccer.js"></script>
 <script src="sim.js"></script>
 <script src="lottos.js"></script>

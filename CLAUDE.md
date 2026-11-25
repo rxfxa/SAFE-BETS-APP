@@ -221,14 +221,13 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - A traded player shows one row per team.
   - insights.js could share its season index (`__insights.needSeason`) with builder.js; both work without it.
 - **Keyboard access:** on phones the menu is a closed drawer now, so content comes first. On desktop the sidebar's ~30 items still come before the page: a skip link would fix that.
-- **tests/sim.test.mjs:** failed once in a full-suite run on 2026-11-23, then passed 5 times in a row on its own. It looks like a timing problem; if it fails again, capture which check fails.
 
 ## Change log
 - 2026-11-22:
   - My Parlay Picks; QA by 3 agents (64 findings, nearly all fixed).
   - Upset Parlays: form, streak check, close-game edges, swaps.
   - Swap legs and 500,000-run sims on every card; player model that reads the game.
-- 2026-11-24 nightly save (Los Angeles date; the 2026-11-25 entries below are the same evening in UTC): 39 commits today: pro interface published (v163), plans and tiers, the owner's new free tier with Past Slips (v181), Chat breakdowns (v182), season.json team results. Live app = repo.
+- 2026-11-24 nightly save (Los Angeles date; the 2026-11-25 entries below are the same evening in UTC): 39 commits today: pro interface published (v163), plans and tiers, the owner's new free tier with Past Slips (v181), Chat breakdowns (v182), season.json team results. Full suite 48/48 (sim.test, once flaky, has passed every full run since 2026-11-23). Live app = repo.
 - 2026-11-25 (night):
   - Chat breakdowns: 6 new tools and cards (player stats, a player's game reviewed, a parlay reviewed, team, leaders, track record), offline intents for each; two reviewers found 18 problems (QB anytime TD graded on passing TDs, wrong player in typed parlays, traded players' old games, two players with one name, dates, made-up lines through typed dates, a player who sat, pushes, unplayed parlays called missed, a 430px card at 390, ...), all fixed. tests/ask.test.mjs: 190 checks (fixture recs-askbd-2026-11-23.json). Full suite 48/48; published as version 182 with season.json (team results).
 - 2026-11-25 (later):

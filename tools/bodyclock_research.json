@@ -85,14 +85,6 @@
    "where": "review",
    "found": "Footballers' physical performance peaks around 4-8 PM in lab tests, in line with the window the reel cites; dribbling skill showed no time-of-day effect (p = 0.55). Lab tests, not match results.",
    "url": ""
-  },
-  {
-   "sport": "soccer",
-   "who": "(none found)",
-   "year": null,
-   "where": "",
-   "found": "We found no study that tests a time-zone or kickoff-time effect against soccer betting odds.",
-   "url": ""
   }
  ],
  "tests": [
@@ -228,7 +220,7 @@
    "title": "Soccer (MLS and Liga MX)",
    "found": false,
    "headline": "MLS: -0.04 league points a game against the odds (588 games)",
-   "what": "MLS 2012-2026 (Pacific clubs vs Eastern clubs) and Liga MX (Tijuana, the only Pacific-time club), against closing 1X2 odds from football-data.co.uk (Pinnacle where available), margin removed. Measured in league points a game (3 for a win, 1 for a draw) against what the odds expected. 2020 left out.",
+   "what": "MLS 2012-2026 (Pacific clubs vs Eastern clubs) and Liga MX (Tijuana, the only Pacific-time club), against closing 1X2 odds from football-data.co.uk (Pinnacle where available), margin removed. Measured in league points a game (3 for a win, 1 for a draw) against what the odds expected. Tijuana is Liga MX's only Pacific-time club, so its late games against Central-time clubs (1-2 hours apart) are the nearest case there. 2020 left out.",
    "unit": "ppg",
    "rows": [
     {
@@ -287,7 +279,7 @@
     "The odds already give home teams more when the visitor comes from further east, so travel looks priced in.",
     "In Europe nearly every league sits in one time zone; only UEFA and Asian cup games cross 2+ hours, too few to test."
    ],
-   "verdict": "Not found. The only result near significance went against the reel."
+   "verdict": "Not found. The two results near significance both went against the reel."
   }
  ],
  "verdict": {
@@ -299,7 +291,7 @@
  "rule": {
   "nfl": "A Pacific-time team (LAR, LAC, SF, SEA, LV) against an Eastern-time team, kicking off at 8 PM ET or later.",
   "nba": "A Pacific-time team (LAL, LAC, GS, SAC, POR) against an Eastern-time team, tipping off at 8 PM ET or later.",
-  "soccer": "Clubs whose home time zones are 2+ hours apart. Only MLS Pacific vs Eastern games match the reel's idea."
+  "soccer": "MLS: a Pacific club against an Eastern club, kicking off at 8 PM ET or later. The list also shows other clubs whose home clocks are 2+ hours apart, for context."
  },
  "notVerified": [
   "The 1997 paper's full text: we read its abstract and later write-ups only, so its game count and the exact 67.9% were not seen in the paper.",
@@ -309,5 +301,6 @@
   "Player rest, injuries and travel plans are not in the tests."
  ],
  "sources": "ESPN scoreboards and game summaries (lines: DraftKings, TeamRankings), football-data.co.uk (MLS and Liga MX closing odds), journal abstracts. Research run 2026-11-25; every headline number was recounted by a second, independent check.",
- "key": "How to read the numbers: decisions are games that weren't a push. The bar is the 95% range, where the true rate most likely sits. p is how often a result at least this far from even would turn up by luck alone if there were no edge; under 0.05 is the usual bar, and with many tests some will dip under it by chance."
+ "key": "How to read the numbers: decisions are games that weren't a push. The bar is the 95% range, where the true rate most likely sits. p is how often a result at least this far from even would turn up by luck alone if there were no edge; under 0.05 is the usual bar, and with many tests some will dip under it by chance.",
+ "studiesNote": "We found no study that tests a time-zone or kickoff-time effect against soccer betting odds; studies of results alone (no odds) do find travel effects, as Goumas did."
 }

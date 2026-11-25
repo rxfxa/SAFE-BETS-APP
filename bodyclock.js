@@ -17,9 +17,12 @@
   const num = x => typeof x === 'number' && isFinite(x);
   const P = x => (num(x) ? Math.round(x * 100) + '%' : '—');
   const P1 = x => (num(x) ? (x * 100).toFixed(1) + '%' : '—');
+  // two- or three-way chances shown so they add to 100 (each side rounded on its own can make 101)
+  const pair = (a, x, b, y) => { if (!num(x) || !num(y)) return `${a} ${P(x)} · ${b} ${P(y)}`; const s = x + y, h = Math.round(x / s * 100); return `${a} ${h}% · ${b} ${100 - h}%`; };
+  const trio = (a, x, d, b, y) => { if (![x, d, y].every(num)) return `${a} ${P(x)} · draw ${P(d)} · ${b} ${P(y)}`; const s = x + d + y, h = Math.round(x / s * 100), w = Math.round(y / s * 100); return `${a} ${h}% · draw ${100 - h - w}% · ${b} ${w}%`; };
   const am = x => (num(x) ? (x > 0 ? '+' : '') + Math.round(x) : '—');
   const sp = x => (!num(x) ? '—' : x === 0 ? 'PK' : (x > 0 ? '+' : '−') + Math.abs(x));
-  const pv = p => (!num(p) ? '—' : p < 0.001 ? '< 0.001' : p < 0.01 ? p.toFixed(3) : p.toFixed(2));
+  const pv = p => (!num(p) ? '—' : p < 0.001 ? '< 0.001' : p < 0.1 ? p.toFixed(3) : p.toFixed(2));
   const team = (a, big) => (SB.ui && SB.ui.team ? SB.ui.team(a, big) : '');
   let BC = null, LOADED = false, SEASON = null, SEASON_ASKED = false;
   let view = 'mnf', wk = 'all';
@@ -95,7 +98,7 @@
   const small = n => (num(n) && n < 100 ? ' <span class="bc-sm">small sample</span>' : '');
   const clockRow = (iso, a, h) => {
     const ha = hourAt(iso, a.tz), hh = hourAt(iso, h.tz);
-    const one = (t, hr) => `<div class="bc-clk${inWin(hr) ? ' win' : ''}">${team(t.abbr)}<div><b>${esc(clock(iso, t.tz))}</b><small>${esc(t.abbr)} body clock${t.zone ? ` · ${esc(t.zone)}` : ''}${inWin(hr) ? ' · in the 4-8 PM window' : ''}</small></div></div>`;
+    const one = (t, hr) => `<div class="bc-clk${inWin(hr) ? ' win' : ''}">${team(t.abbr)}<div><b>${esc(clock(iso, t.tz))}</b><small>${esc(t.abbr && t.abbr.length <= 5 ? t.abbr : t.name || t.abbr)} body clock${t.zone ? ` · ${esc(t.zone)}` : ''}${inWin(hr) ? ' · in the 4-8 PM window' : ''}</small></div></div>`;
     return `<div class="bc-clocks">${one(a, ha)}${one(h, hh)}</div>`;
   };
   const list = (items, cls) => (items && items.length ? `<ul class="bc-list ${cls || ''}">${items.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '');
@@ -121,9 +124,9 @@
     if (num(mk.spread)) tiles.push(['Spread', mk.fav ? `${mk.fav} ${sp(mk.spread)}${mk.spreadOdds ? ` (${am(mk.fav === hA ? mk.spreadOdds.home : mk.spreadOdds.away)})` : ''}` : 'Pick’em']);
     if (num(mk.total)) tiles.push(['Total', String(mk.total)]);
     if (mk.ml) tiles.push(['Moneyline', `${hA} ${am(mk.ml.home)} · ${aA} ${am(mk.ml.away)}`]);
-    if (mk.noVig) tiles.push(['Market chance (margin removed)', `${hA} ${P(mk.noVig.home)} · ${aA} ${P(mk.noVig.away)}`, true]);
+    if (mk.noVig) tiles.push(['Market chance (margin removed)', pair(hA, mk.noVig.home, aA, mk.noVig.away), true]);
     if (M.predictor) tiles.push(["ESPN's model", `${hA} ${P(M.predictor.home)} · ${aA} ${P(M.predictor.away)}`]);
-    if (M.polymarket) tiles.push(['Polymarket', `${hA} ${P(M.polymarket.home)} · ${aA} ${P(M.polymarket.away)}`]);
+    if (M.polymarket) tiles.push(['Polymarket', pair(hA, M.polymarket.home, aA, M.polymarket.away)]);
     if (mk.implied) tiles.push(['Implied score', `${hA} ${mk.implied.home} · ${aA} ${mk.implied.away}`]);
     html += section('The market', `${mk.book || ''}${mk.fetched ? ` · checked ${dateOnly(mk.fetched)}` : ''}`,
       `<div class="pc">${SB.ui && SB.ui.tiles ? SB.ui.tiles(tiles) : tiles.map(t => `<div>${esc(t[0])}: ${esc(t[1])}</div>`).join('')}
@@ -147,7 +150,7 @@
     }
     // team form vs the closing lines
     if (M.teams) html += section('Form against the closing lines', 'this season', `<div class="bc-two">${[['away', a], ['home', h]].map(([k, t]) => teamForm(M.teams[k], t)).join('')}</div>
-      <div class="note">ATS = against the spread (wins-losses-pushes); O/U = over / under the closing total. Lines: DraftKings via ESPN. Every split here is a small sample (10 games or fewer) and could easily be chance.</div>`);
+      <div class="note">ATS = against the spread (wins-losses-pushes); O/U = over / under the closing total. Lines: DraftKings via ESPN. Every split here is a small sample (${Math.max(0, ...['away', 'home'].map(k => (M.teams[k] && M.teams[k].season && M.teams[k].season.n) || 0))} games or fewer) and could easily be chance.</div>`);
     // players (season.json, loaded on demand)
     html += section('Key players', "this season's box scores", `<div id="bcPlayers">${playersHTML(M)}</div>`);
     // injuries
@@ -235,8 +238,8 @@
     return section('Last Monday', `${R.label} · ${dateOnly(R.date)}`, `<div class="pc"><div class="pchead"><span class="pctitle">${esc(R.final)}</span></div>
       <div class="why">${esc(R.how || '')}</div>${qt}
       ${R.line ? `<div class="why"><b>Line:</b> ${esc(R.line)}. ${esc(R.result || '')}</div>` : ''}
-      ${(R.beat || []).length ? `<div class="bc-sub">Beat their average</div>${list(R.beat, 'good')}` : ''}
-      ${(R.short || []).length ? `<div class="bc-sub">Fell short</div>${list(R.short, 'bad')}` : ''}
+      ${(R.beat || []).length ? `<div class="bc-sub">Beat their average</div>${list(R.beat, 'bc-good')}` : ''}
+      ${(R.short || []).length ? `<div class="bc-sub">Fell short</div>${list(R.short, 'bc-bad')}` : ''}
       ${R.appLegs ? `<div class="why"><b>The app's legs on this game:</b> ${esc(R.appLegs)}</div>` : ''}
       ${R.lesson ? `<div class="why"><b>Lesson for Monday:</b> ${esc(R.lesson)}</div>` : ''}
       ${R.story ? `<div class="note"><a href="${esc(R.story)}" target="_blank" rel="noopener">${esc(R.storyTitle || 'ESPN recap')}</a></div>` : ''}</div>`);
@@ -247,7 +250,7 @@
     const R = BC.research, C = R.claim || {}, V = R.verdict || {};
     let html = `<div class="pc"><div class="bc-kick">The claim · ${esc(C.who || '')}</div><div class="bc-sub" style="margin-top:0">${esc(C.label || "The reel's claim, in short")}</div><div class="bc-quote">${esc(C.says || '')}</div><div class="why"><b>What we found:</b> ${esc(C.found || '')}</div></div>`;
     html += SB.ui && SB.ui.verdict ? SB.ui.verdict({ tone: V.multi ? 'lean' : 'pass', kicker: 'Our verdict, 3 sports', title: V.title || '', tag: V.multi ? 'Multi game' : 'Not multi game' }) : '';
-    html += `${V.multiLine ? `<div class="bc-multi">${esc(V.multiLine)}</div>` : ''}<div class="why">${esc(V.text || '')}</div>${R.key ? `<div class="note bc-key">${esc(R.key)}</div>` : ''}`;
+    html += `<div class="why">${esc(V.text || '')}</div>${R.key ? `<div class="bc-key">${esc(R.key)}</div>` : ''}`;
     for (const T of R.tests) {
       const ppg = T.unit === 'ppg';
       const rows = (T.rows || []).map(r => {
@@ -268,27 +271,39 @@
     html += section('The papers', 'what each one found', ['nfl', 'nba', 'soccer'].map(s => {
       const L = bySport(s); if (!L.length) return '';
       return `<div class="pc"><div class="pchead"><span class="pctitle">${s === 'nfl' ? 'NFL and college football' : s === 'nba' ? 'NBA' : 'Soccer'}</span></div>${L.map(x => `<div class="bc-paper"><b>${esc(x.who)}${x.year ? ` (${x.year})` : ''}</b>${x.where ? ` <small>${esc(x.where)}</small>` : ''}<p>${esc(x.found)}</p>${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">Source</a>` : ''}</div>`).join('')}</div>`;
-    }).join('') + '<div class="note">We read abstracts, press releases and later write-ups; the full texts were not reachable from here.</div>');
+    }).join('') + `${R.studiesNote ? `<div class="bc-key">${esc(R.studiesNote)}</div>` : ''}<div class="note">We read abstracts, press releases and later write-ups; the full texts were not reachable from here.</div>`);
     html += `<details class="bc-more pc"><summary>What we couldn't verify</summary>${list(R.notVerified)}</details>`;
     if (R.sources) html += `<div class="note">${esc(R.sources)}</div>`;
     return html;
   }
 
-  // ---------- view: night games ----------
+  // ---------- view: this week ----------
+  // the week's games (every NFL night game, NBA and soccer games 2+ hours apart) up to upcoming.to (Eastern date), then
+  // later rule games on their own ("kickoffs can still move"); notes and this season's NFL record follow the sport filter
+  const etDate = iso => fmt(iso, 'America/New_York', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$1-$2');
+  const noteSport = (t, i, S) => (S && S[i]) || (/\bNBA\b/.test(t) ? 'nba' : /\bMLS\b|soccer|Liga MX|\bclubs?\b/i.test(t) ? 'soccer' : /\bNFL\b|Later this season|kickoff time/.test(t) ? 'nfl' : 'all');
   function weekView() {
-    const U = BC.upcoming || { games: [] }, now = Date.now();
+    const U = BC.upcoming || { games: [] }, now = Date.now(), to = U.to || '9999-12-31';
     const G = (U.games || []).filter(g => Date.parse(g.kickoffUTC) > now - 4 * 3600e3);
     const sports = [['all', 'All'], ['nfl', 'NFL'], ['nba', 'NBA'], ['soccer', 'Soccer']].filter(([k]) => k === 'all' || G.some(g => g.sport === k));
     if (!sports.some(s => s[0] === wk)) wk = 'all';
-    const show = G.filter(g => wk === 'all' || g.sport === wk).sort((a, b) => (b.applies - a.applies) || Date.parse(a.kickoffUTC) - Date.parse(b.kickoffUTC));
-    const ap = show.filter(g => g.applies), RU = BC.research.rule || {};
-    const rules = wk === 'all' ? ['nfl', 'nba', 'soccer'].filter(k => RU[k] && G.some(g => g.sport === k)).map(k => `<b>${k === 'soccer' ? 'Soccer' : k.toUpperCase()}:</b> ${esc(RU[k])}`).join('<br>') : (RU[wk] ? esc(RU[wk]) : '');
-    let html = `<div class="pc"><div class="why" style="margin-top:0">Games in the next week where the two teams' body clocks differ by 2+ hours, with each team's kickoff time on its own clock.</div><div class="why"><b>The rule</b> ${wk === 'all' ? '' : '· '}${rules}</div><div class="why">${ap.length ? `It points at ${ap.length} game${ap.length === 1 ? '' : 's'} below.` : 'It points at no game here.'} We found no edge beyond the prices in these spots, so treat them as curiosities, not picks.</div>
+    const mine = G.filter(g => wk === 'all' || g.sport === wk), byT = (a, b) => Date.parse(a.kickoffUTC) - Date.parse(b.kickoffUTC);
+    const week = mine.filter(g => etDate(g.kickoffUTC) <= to).sort((a, b) => (b.applies - a.applies) || byT(a, b));
+    const later = mine.filter(g => etDate(g.kickoffUTC) > to && g.applies).sort(byT);
+    const ap = week.filter(g => g.applies), RU = BC.research.rule || {};
+    const rk = wk === 'all' ? ['nfl', 'nba', 'soccer'].filter(k => RU[k] && G.some(g => g.sport === k)) : [wk].filter(k => RU[k]);
+    const rules = rk.length ? `<ul class="bc-list bc-rules">${rk.map(k => `<li><b>${k === 'soccer' ? 'Soccer' : k.toUpperCase()}:</b> ${esc(RU[k])}</li>`).join('')}</ul>` : '';
+    const thru = dateOnly(to);
+    let html = `<div class="pc"><div class="bc-intro">Through ${esc(thru)}: every NFL night game (8 PM ET or later), plus NBA and soccer games where the two teams' home clocks are 2+ hours apart, with each team's kickoff time on its own clock.</div>
+      <div class="bc-sub">The reel's rule</div>${rules}
+      <div class="bc-intro">${ap.length ? `It points at ${ap.length} game${ap.length === 1 ? '' : 's'} through ${esc(thru)}.` : `It points at no game here through ${esc(thru)}.`} Our tests found no clear edge in these spots (the NFL sample is small), so treat them as curiosities, not picks.</div>
       <div class="bc-pills" role="group" aria-label="Filter by sport">${sports.map(([k, l]) => `<button type="button" class="chip ${wk === k ? 'on' : ''}" data-bcw="${k}" aria-pressed="${wk === k}">${esc(l)}</button>`).join('')}</div></div>`;
-    html += show.length ? show.map(gameCard).join('') : '<div class="pc"><div class="why">No games with a time-zone gap in this window.</div></div>';
-    html += list(U.notes, 'bc-notes');
+    html += week.length ? week.map(gameCard).join('') : `<div class="pc"><div class="why">No games of this kind through ${esc(thru)}.</div></div>`;
+    if (later.length) html += section('Later this season', 'where the rule would point · kickoff times can still move', later.map(gameCard).join(''));
+    const notes = (U.notes || []).filter((t, i) => wk === 'all' || [wk, 'all'].includes(noteSport(t, i, U.noteSports)));
+    html += list(notes, 'bc-notes');
     const S = BC.season2026 || [];
-    if (S.length) {
+    if (S.length && (wk === 'all' || wk === 'nfl')) {
       const cov = S.filter(g => g.ats === 'covered').length, lost = S.filter(g => g.ats === 'did not cover').length, push = S.filter(g => g.ats === 'push').length;
       html += section('The rule this NFL season', `${cov}-${lost}${push ? '-' + push : ''} against the spread · ${S.length} games · small sample`, `<div class="pc">${S.map(g => `<div class="mrow"><div class="lbl">${esc(g.label)} · ${esc(g.final)}<small>${esc(g.date)} · ${esc(g.west)} ${sp(g.line)}</small></div><span class="bc-st ${g.ats === 'covered' ? 'w' : g.ats === 'push' ? 'q' : 'out'}">${esc(g.ats)}</span></div>`).join('')}<div class="note">${S.length} games say nothing either way; the 13-season test is in The study.</div></div>`);
     }
@@ -296,21 +311,25 @@
   }
   function gameCard(x) {
     const o0 = x.odds, nv = o0 && o0.noVig, o = o0 && (num(o0.homeSpread) || num(o0.total) || num(o0.homeML) || (nv && num(nv.home))) ? o0 : null, spreadHome = o && num(o.homeSpread) ? o.homeSpread : null;
-    const started = Date.now() >= Date.parse(x.kickoffUTC);
+    const started = Date.now() >= Date.parse(x.kickoffUTC), soc = x.sport === 'soccer';
+    const nm = t => (soc ? t.name || t.abbr : t.abbr);
     const m = model(x, spreadHome);
-    const lg = x.sport === 'soccer' ? (x.league || 'Soccer') : x.sport.toUpperCase();
-    const mk = o && nv && num(nv.home) ? (x.sport === 'soccer' ? `${x.home.abbr} ${P(o.noVig.home)} · draw ${P(o.noVig.draw)} · ${x.away.abbr} ${P(o.noVig.away)}` : `${x.home.abbr} ${P(o.noVig.home)} · ${x.away.abbr} ${P(o.noVig.away)}`) : null;
+    const lg = soc ? (x.league || 'Soccer') : x.sport.toUpperCase();
+    const mk = o && nv && num(nv.home) ? (soc ? trio(nm(x.home), nv.home, nv.draw, nm(x.away), nv.away) : pair(nm(x.home), nv.home, nm(x.away), nv.away)) : null;
     let mm = '';
     if (m.priced) {
-      mm = x.sport === 'soccer' ? `${x.home.abbr} ${P(m.home)} · draw ${P(m.draw)} · ${x.away.abbr} ${P(m.away)}` : `${x.home.abbr} ${P(m.home)} · ${x.away.abbr} ${P(m.away)}`;
+      mm = soc ? trio(nm(x.home), m.home, m.draw, nm(x.away), m.away) : pair(nm(x.home), m.home, nm(x.away), m.away);
       if (m.cover && x.west) { const wHome = canon(x.sport, x.west) === canon(x.sport, x.home.abbr), c = wHome ? m.cover.home : m.cover.away, ln = wHome ? m.cover.line : -m.cover.line; mm += ` · ${x.west} ${sp(ln)} covers ${P(c)}`; }
     }
-    const isAbbr = x.sport !== 'soccer';
-    return `<div class="pc bc-game${x.applies ? ' ap' : ''}"><div class="pchead"><span class="pctitle">${isAbbr ? `${esc(x.away.abbr)} @ ${esc(x.home.abbr)}` : esc(x.label)}</span>${started ? tag('Started', 'n') : ''}${x.applies ? tag('Rule points at ' + x.west, 'r') : x.gap ? tag(`${x.gap}-hour gap`) : tag('Rule n/a')}</div>
+    // the gap between the two body clocks at kickoff (from each team's own time zone)
+    const ha = hourAt(x.kickoffUTC, x.away.tz), hh = hourAt(x.kickoffUTC, x.home.tz);
+    let gap = num(ha) && num(hh) ? Math.abs(ha - hh) : null; if (num(gap) && gap > 12) gap = 24 - gap;
+    const gapTag = num(gap) ? (gap < 0.5 ? tag('Same body clock') : tag(`${Math.round(gap * 2) / 2}-hour gap`)) : x.gap ? tag(`${x.gap}-hour gap`) : '';
+    return `<div class="pc bc-game${x.applies ? ' ap' : ''}"><div class="pchead"><span class="pctitle">${soc ? esc(x.label) : `${esc(x.away.abbr)} @ ${esc(x.home.abbr)}`}</span><span class="bc-tags">${started ? tag('Started', 'n') : ''}${x.applies ? tag('Rule points at ' + x.west, 'r') : gapTag}</span></div>
       <div class="bc-when">${esc(lg)}${x.slot ? ` · ${esc(x.slot)}` : ''} · ${esc(dayLbl(x.kickoffUTC, x.home.tz))}${x.venue ? ` · ${esc(x.venue)}` : ''}${(x.b2b || []).length ? ` · back-to-back: ${esc(x.b2b.join(', '))}` : ''}</div>
       ${clockRow(x.kickoffUTC, x.away, x.home)}
       <div class="why">${esc(x.why || '')}</div>
-      ${o || m.priced ? `<div class="bc-mk">${o ? `<div><small>${started ? 'Pre-game market' : 'Market'}${o.book ? ' · ' + esc(o.book) : ''}</small><b>${esc(o.text || '')}</b>${mk ? `<span>${esc(mk)}</span>` : ''}</div>` : ''}${m.priced ? `<div><small>The app's model</small><b>${esc(mm)}</b></div>` : ''}</div>` : `<div class="note">${started ? 'Under way or finished.' : 'No price posted yet.'}</div>`}</div>`;
+      ${o || m.priced ? `<div class="bc-mk">${o ? `<div><small>${started ? 'Pre-game market' : 'Market'}${o.book ? ' · ' + esc(o.book) : ''}</small>${o.text && !/None|null|undefined/.test(o.text) ? `<b>${esc(o.text)}</b>` : ''}${mk ? `<span>${esc(mk)}</span>` : ''}</div>` : ''}${m.priced ? `<div><small>The app's model</small><b>${esc(mm)}</b></div>` : ''}</div>` : `<div class="note">${started ? 'Under way or finished.' : 'No price posted yet.'}</div>`}</div>`;
   }
 
   // ---------- page ----------
@@ -334,7 +353,7 @@
   }
   const css = document.createElement('style');
   css.textContent = '#bcSeg button{flex:1;min-width:0}.bc-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}' +
-    '.bc-tag{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--mute);white-space:nowrap}.bc-tag.y{background:color-mix(in srgb,var(--yes) 18%,transparent);color:var(--yes)}.bc-tag.n{background:color-mix(in srgb,var(--no) 14%,transparent);color:var(--no)}.bc-tag.r{background:color-mix(in srgb,#d9a400 16%,transparent);color:#d9a400}.bc-tag+.bc-tag{margin-left:4px}.bc-multi{font-size:13.5px;font-weight:700;margin:0 0 10px}.bc-leg{font-size:11px;color:var(--mute);margin-top:6px;line-height:1.35}.bc-pl td small{line-height:1.35}' +
+    '.bc-tag{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--soft);color:var(--mute);white-space:nowrap}.bc-tag.y{background:color-mix(in srgb,var(--yes) 18%,transparent);color:var(--yes)}.bc-tag.n{background:color-mix(in srgb,var(--no) 14%,transparent);color:var(--no)}.bc-tag.r{background:color-mix(in srgb,#d9a400 16%,transparent);color:#d9a400}.bc-tag+.bc-tag{margin-left:4px}.bc-multi{font-size:13.5px;font-weight:700;margin:0 0 10px}.bc-key{font-size:12px;color:var(--dim);line-height:1.45;margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--soft)}.bc-intro{font-size:13px;line-height:1.45;margin:4px 0}.bc-rules{margin-top:2px}.bc-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}.bc-leg{font-size:11px;color:var(--mute);margin-top:6px;line-height:1.35}.bc-pl td small{line-height:1.35}' +
     '.bc-kick{font-size:11.5px;font-weight:700;color:var(--mute);letter-spacing:.02em;margin-bottom:6px}.bc-match{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto minmax(0,1fr);gap:8px;align-items:center}.bc-match b{display:block;font-size:15px;line-height:1.2}.bc-match small{color:var(--mute);font-size:12px}.bc-at{color:var(--mute);font-weight:700}' +
     '.bc-when{font-size:12.5px;color:var(--mute);margin:8px 0}.bc-clocks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}.bc-clk{display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--line);border-radius:10px;min-width:0}.bc-clk.win{border-color:color-mix(in srgb,var(--yes) 55%,transparent)}.bc-clk b{display:block;font-size:14px}.bc-clk small{display:block;color:var(--mute);font-size:11px;line-height:1.3}.bc-clk>div{min-width:0}' +
     '.bc-rule{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin:8px 0 2px;font-size:13px}.bc-rule span:last-child{flex:1 1 220px}' +
@@ -342,7 +361,7 @@
     '.bc-pl td:first-child{white-space:normal;min-width:120px}.bc-pl td small{display:block;color:var(--mute);font-size:10.5px}.bc-l5{font-size:11.5px}.bc-miss{color:var(--no)}.bc-stt td:first-child{white-space:normal}' +
     '.bc-st{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;background:var(--soft);color:var(--mute)}.bc-st.out{background:color-mix(in srgb,var(--no) 16%,transparent);color:var(--no)}.bc-st.q{background:color-mix(in srgb,#d9a400 18%,transparent);color:#d9a400}.bc-st.w{background:color-mix(in srgb,var(--yes) 18%,transparent);color:var(--yes)}' +
     '.bc-pos{font-size:11px;color:var(--mute);font-weight:700}.bc-sm,.bc-sm2{font-size:10.5px;color:#d9a400;font-weight:700}.bc-sm2{color:var(--mute)}.bc-gs{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.bc-g{display:inline-flex;flex-direction:column;align-items:center;font-size:10.5px;font-weight:700;padding:3px 5px;border-radius:6px;background:var(--soft);min-width:44px}.bc-g i{font-style:normal;font-weight:600}.bc-g em{font-style:normal;color:var(--mute);font-weight:600}.bc-g.w{box-shadow:inset 0 -2px 0 var(--yes)}.bc-g.l{box-shadow:inset 0 -2px 0 var(--no)}' +
-    '.bc-list{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.45}.bc-list li{margin:3px 0}.bc-list.good li::marker{color:var(--yes)}.bc-list.bad li::marker{color:var(--no)}.bc-notes{color:var(--mute);font-size:12px}.bc-sub{font-size:12px;font-weight:700;margin-top:8px;color:var(--dim)}' +
+    '.bc-list{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.45}.bc-list li{margin:3px 0}.bc-list.bc-good li::marker{color:var(--yes)}.bc-list.bc-bad li::marker{color:var(--no)}.bc-notes{color:var(--mute);font-size:12px}.bc-sub{font-size:12px;font-weight:700;margin-top:8px;color:var(--dim)}' +
     '.bc-more summary{cursor:pointer;font-weight:700;font-size:13px;padding:2px 0}.bc-k{grid-template-columns:repeat(2,minmax(0,1fr))!important}' +
     '.bc-quote{font-size:15px;line-height:1.45;font-weight:600;margin:2px 0 6px}.bc-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(90px,1fr) 52px;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}.bc-row .lbl{font-size:13px;min-width:0}.bc-row .lbl small{display:block;color:var(--mute);font-size:11px}.bc-v{text-align:right;font-weight:800;font-size:13px}' +
     '.bc-ci{position:relative;height:16px;background:var(--soft);border-radius:8px}.bc-ci span{position:absolute;top:4px;height:8px;border-radius:4px;background:color-mix(in srgb,var(--text) 30%,transparent)}.bc-ci b{position:absolute;top:1px;width:4px;height:14px;margin-left:-2px;border-radius:2px;background:var(--text)}.bc-ci i{position:absolute;top:0;width:1px;height:16px;background:var(--mute);opacity:.6}.bc-ci i.be{background:#d9a400}.bc-ci i.cl{background:var(--no);width:2px}' +

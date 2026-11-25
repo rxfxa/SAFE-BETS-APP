@@ -1396,7 +1396,7 @@ def main():
             lat = [g for g in ng if etd(P(g['kickoffUTC'])) > to]
             if lat:
                 notes.append(f"Later this season: {len(lat)} more Pacific vs Eastern night {'game' if len(lat) == 1 else 'games'} ("
-                             + join(f"{g['label']} {mday(etd(P(g['kickoffUTC'])))}" for g in lat) + ').')
+                             + join(f"{g['label']} {mday(etd(P(g['kickoffUTC'])))}" for g in lat) + '); late-season kickoff times can still be moved (flexed).')
             pe_tbd = [r for r, pe in tbd if pe]
             if tbd:
                 notes.append(f"{len(tbd)} later NFL {'game has' if len(tbd) == 1 else 'games have'} no kickoff time yet (ESPN TBD)"

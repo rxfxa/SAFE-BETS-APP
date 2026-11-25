@@ -5,7 +5,31 @@
 // for, the UTC log-date rule, under bars, the price-only verdict kicker, render time measured in the page, focus and the live
 // region, and on the Claude side: a price or line only Claude wrote never reaches a card, the no-tools path sends cache:false,
 // every error code, the tools limit, and New chat during a slow call.
-import { open, check, done } from './lib/harness.mjs';
+// Breakdowns (2026-11-25): any player's season (player_stats), one game (review_player), a parlay leg by leg (review_parlay:
+// the app's graded picks from a recs.json fixture with a miss and a near miss, typed legs, My Parlays), a team, leaders and the
+// app's track record, offline and through the mocked capability; every number checked against the fixtures computed here;
+// the "general knowledge" rule in the instructions turn; hostile names, titles, headlines and links in every new card.
+import { open, check, done, FX } from './lib/harness.mjs';
+
+const SEA = JSON.parse(FX('season-2026-11-23.json')), RECS = JSON.parse(FX('recs-askbd-2026-11-23.json')), TODAY = '2026-11-23';
+const nameKey = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const f1 = x => (Math.round(x * 10) / 10).toFixed(1), mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+const MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], fmtD = d => `${MONS[+d.slice(5, 7) - 1]} ${+d.slice(8, 10)}`;
+// one player's season the way the box scores give it: every entry of his name (a traded pro), logs up to today (UTC)
+function sPl(sp, name) {
+  const S = SEA.sports[sp], k = nameKey(name), ents = S.players.filter(p => nameKey(p.n) === k), fi = f => S.fields.indexOf(f);
+  let gp = 0; const tot = S.fields.map(() => 0), rows = [];
+  for (const e of ents) { gp += e.gp; e.tot.forEach((v, i) => { tot[i] += v; }); for (const r of e.log) if (r[0] <= TODAY) rows.push({ r, t: e.t }); }
+  rows.sort((a, b) => a.r[0].localeCompare(b.r[0]));
+  return { gp, tot, rows, T: f => tot[fi(f)], v: (row, f) => row.r[3 + fi(f)] };
+}
+const resOf = (sp, ab, d) => SEA.sports[sp].results[ab].find(r => r[0] === d);
+function leadersOf(sp, f, pg, mg) {
+  const S = SEA.sports[sp], fi = S.fields.indexOf(f), m = new Map();
+  for (const p of S.players) { const k = sp === 'ncaaf' ? nameKey(p.n) + '|' + p.t : nameKey(p.n), e = m.get(k) || { n: p.n, gp: 0, v: 0 }; e.gp += p.gp; e.v += p.tot[fi]; m.set(k, e); }
+  return [...m.values()].filter(e => e.gp >= (mg || 1) && e.gp > 0).map(e => ({ ...e, x: pg ? e.v / e.gp : e.v })).sort((a, b) => b.x - a.x || a.gp - b.gp || a.n.localeCompare(b.n));
+}
+const medGames = sp => { const L = Object.values(SEA.sports[sp].results).map(r => r.length).filter(Boolean).sort((a, b) => a - b); return L[Math.floor(L.length / 2)]; };
 
 const settle = page => page.waitForFunction(() => window.__ask && !__ask.state.busy, null, { timeout: 30000 });
 async function askQ(page, q) { await page.fill('.ask-input', q); await page.click('.ask-send'); await page.waitForTimeout(30); await settle(page); }
@@ -223,7 +247,7 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
       for (const d of parts) { text += d; options.onText({ text, delta: d }); window.__streamed = (window.__streamed || 0) + 1; await new Promise(r => setTimeout(r, 250)); }
       return { text, truncated: false, modelTierApplied: 'default' };
     };
-    fakeSample.limits = async () => ({ maxPromptBytes: 262144, tools: { maxCount: 7 } });
+    fakeSample.limits = async () => ({ maxPromptBytes: 262144, tools: { maxCount: 16 } });
     window.claude = { use: async name => (name === 'sample' ? fakeSample : null) };
   });
   await page.reload(); await page.waitForFunction(() => window.SB && SB.firstRender && document.querySelector('.ask-chip'));
@@ -243,7 +267,7 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
   check('model text with <img onerror> shows as text, never as HTML', M.imgs === 0 && M.xss === undefined && M.text.includes('<img src=x onerror="window.__xss=1">'));
   check('the card comes from the engine (Maxey, Over 24.5 points), not from the model\'s words', M.name === 'Tyrese Maxey' && M.market === 'Over 24.5 points');
   check('input: a leading instructions turn, the question last, user turns at both ends', M.first.role === 'user' && /Safe Bets research assistant/.test(M.first.content) && /model estimates/.test(M.first.content) && /never|Never/.test(M.first.content) && M.last.content === 'Is Tyrese Maxey over 24.5 points a good bet?' && M.roles[M.roles.length - 1] === 'user', JSON.stringify(M.roles));
-  check('page tools offered: find_players, prop_report, game_report, build_parlay, price_parlay, top_props (+ start_sit); a signal; no cache with tools', ['find_players', 'prop_report', 'game_report', 'build_parlay', 'price_parlay', 'top_props'].every(t => M.tools.includes(t)) && M.signal && M.cache === undefined, JSON.stringify(M.tools));
+  check('page tools offered: find_players, prop_report, game_report, build_parlay, price_parlay, top_props, start_sit and the breakdown tools; a signal; no cache with tools', ['find_players', 'prop_report', 'game_report', 'build_parlay', 'price_parlay', 'top_props', 'start_sit', 'player_stats', 'review_player', 'review_parlay', 'team_report', 'leaders', 'track_record'].every(t => M.tools.includes(t)) && M.signal && M.cache === undefined, JSON.stringify(M.tools));
   check('a tool with no data throws a plain error for Claude', /No player named "Nobody Atall"/.test(M.toolErr || ''), M.toolErr);
   check('the tool result is small plain data with the numbers', M.res && M.res.player === 'Tyrese Maxey' && /model estimate/.test(M.res.verdict) && Array.isArray(M.res.factors) && M.res.factors.length === 4 && JSON.stringify(M.res).length < 4000, JSON.stringify(M.res).length);
   check('no offline note on a Claude answer', !/AI answers aren't available/.test(M.note), M.note);
@@ -290,12 +314,12 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
   const NT = await page.evaluate(() => { const c = window.__calls[window.__calls.length - 1]; return { tools: c.tools.length, cache: c.cache, last: c.input[c.input.length - 1].content, card: !!document.querySelector('.ask-a:last-child .ask-pc') }; });
   check('no tools: cache:false, the app\'s numbers in the last turn, the card still drawn by the engine', NT.tools === 0 && NT.cache === false && /The app's numbers for this question/.test(NT.last) && NT.card, JSON.stringify({ ...NT, last: NT.last.slice(0, 60) }));
   await page.evaluate(() => { __ask.state.toolsOk = true; });
-  check('limits(): the tools limit is read (maxCount 7)', await page.evaluate(() => __ask.state.maxTools === 7));
+  check('limits(): the tools limit is read (maxCount 16)', await page.evaluate(() => __ask.state.maxTools === 16));
   await page.evaluate(() => { __ask.state.maxTools = 3; window.__mock = 'fine'; });
   await askQ(page, 'Best props tonight?');
   const MT = await page.evaluate(() => window.__calls[window.__calls.length - 1].tools);
-  check('a view that allows 3 tools gets the 3 that matter most (prop_report first)', JSON.stringify(MT) === '["prop_report","build_parlay","game_report"]', JSON.stringify(MT));
-  await page.evaluate(() => { __ask.state.maxTools = 7; });
+  check('a view that allows 3 tools gets the 3 that matter most (prop_report, player_stats, review_parlay)', JSON.stringify(MT) === '["prop_report","player_stats","review_parlay"]', JSON.stringify(MT));
+  await page.evaluate(() => { __ask.state.maxTools = 16; });
 
   // every other error code
   const errCase = async (mode, q) => { await page.evaluate(m => { window.__mock = m; }, mode); await askQ(page, q); return page.evaluate(() => { const a = document.querySelector('.ask-a:last-child'); return { text: a.querySelector('.ask-text').textContent, err: (a.querySelector('.ask-err') || {}).textContent || '', note: (a.querySelector('.ask-note') || {}).textContent || '', card: !!a.querySelector('.ask-pc'), retry: !!a.querySelector('[data-ask-retry]'), box: document.querySelector('.ask-input').value, ai: __ask.state.ai, toolsOk: __ask.state.toolsOk }; }); };
@@ -364,6 +388,240 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
   await browser.close();
 }
 
+// ---------------------------------------------------------------- 4. breakdowns, offline: a player's season, one game, a parlay, a team, leaders, the track record
+const lastBD = page => page.evaluate(() => {
+  const a = [...document.querySelectorAll('.ask-a')].pop(), q = s => a.querySelector(s), txt = e => (e ? e.textContent.replace(/\s+/g, ' ').trim() : '');
+  const tiles = root => Object.fromEntries([...a.querySelectorAll(root + ' .ui-tile')].map(t => [txt(t.querySelector('.ui-lbl')), txt(t.querySelector('b'))]));
+  const rows = root => [...a.querySelectorAll(root + ' .ui-table tbody tr')].map(tr => [...tr.children].map(td => txt(td)));
+  return { text: txt(q('.ask-text')), note: txt(q('.ask-note')),
+    ps: q('.ask-ps') ? { name: txt(q('.ask-ps .ask-hd .nm b')), tiles: tiles('.ask-ps'), rows: rows('.ask-ps'), bars: a.querySelectorAll('.ask-ps .ui-log .b').length, lineLbl: txt(q('.ask-ps .ui-log .lv')), notes: [...a.querySelectorAll('.ask-ps .ui-note')].map(txt), all: txt(q('.ask-ps')) } : null,
+    rv: q('.ask-rv') ? { title: txt(q('.ask-rv .ui-verdict .t')), kick: txt(q('.ask-rv .ui-verdict .k')), tone: q('.ask-rv .ui-verdict').className, close: txt(q('.ask-rv .ask-p')), facts: [...a.querySelectorAll('.ask-rv .ask-why li')].map(li => [txt(li.querySelector('.ask-tag')), txt(li.querySelector('span:last-child'))]),
+      sel: [...a.querySelectorAll('.ask-rv .ui-log .b')].findIndex(b => b.classList.contains('sel')), bars: a.querySelectorAll('.ask-rv .ui-log .b').length, all: txt(q('.ask-rv')) } : null,
+    pr: q('.ask-pr') ? { title: txt(q('.ask-pr .ui-verdict .t')), kick: txt(q('.ask-pr .ui-verdict .k')), tiles: tiles('.ask-pr'), secs: [...a.querySelectorAll('.ask-pr .ask-sec > .ui-lbl')].map(txt), all: txt(q('.ask-pr')),
+      legs: [...a.querySelectorAll('.ask-pr .ask-legs > li')].map(li => ({ cls: li.className, ic: txt(li.querySelector('.ic')), label: txt(li.querySelector('.t b')), badge: txt(li.querySelector('.ask-badge')), sub: txt(li.querySelector('.t > span:not(.ask-badge)')), p: txt(li.querySelector('.pp')) })) } : null,
+    tm: q('.ask-tm') ? { name: txt(q('.ask-tm .ask-hd .nm b')), tiles: tiles('.ask-tm'), rows: rows('.ask-tm'), secs: [...a.querySelectorAll('.ask-tm .ask-sec > .ui-lbl')].map(txt), all: txt(q('.ask-tm')) } : null,
+    ld: q('.ask-ld') ? { title: txt(q('.ask-ld .ask-lh b')), rule: txt(q('.ask-ld .ask-lh .ui-note')), rows: [...a.querySelectorAll('.ask-ld li')].map(li => [txt(li.querySelector('.ask-lname')), txt(li.querySelector('.p b'))]) } : null,
+    tr: q('.ask-tr') ? { tiles: tiles('.ask-tr'), all: txt(q('.ask-tr')) } : null };
+});
+{
+  // small researched-form and trends files for the team card (the live ones change every day)
+  const FORM = { teams: [{ name: 'Lakers', comp: 'NBA', league: 'Western Conference', position: 2, of: 15, record: '14-3', winStreak: 1, lossStreak: 0, unbeaten: 0, last5: 'W W W L W', games: [{ date: '2026-11-21', comp: 'NBA', home: true, opp: 'Sacramento Kings', oppPos: 15, oppOf: 15, result: 'W', score: '106-104' }], absences: 'Austin Reaves out (heel)', asOf: '2026-11-22' }] };
+  const TRENDS = { teams: [{ sport: 'nba', comp: 'NBA', name: 'Los Angeles Lakers', abbr: 'LAL', espn: 'LAL', windows: { season: { n: 17, fav: { n: 15, won: 12, exp: 10.5 }, dog: { n: 2, won: 2, exp: 0.8 }, ln: { n: 17, hit: 11, exp: 8.5 } } }, streak: { res: 'W1' }, next: null }] };
+  const json = b => r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+  const before = async pg => { await pg.route(/\/form\.json(\?.*)?$/, json(FORM)); await pg.route(/\/trends\.json(\?.*)?$/, json(TRENDS)); };
+  const { page, errors, browser } = await open({ width: 390, tab: 'ask', notFound: ['mypicks.json'], pins: { 'recs.json': 'recs-askbd-2026-11-23.json', 'news.json': 'news-2026-11-24.json' }, before });
+  await page.evaluate(() => localStorage.removeItem('fm2.chat'));
+  await page.waitForSelector('.ask-chip');
+
+  // a player's season, on the slate
+  await askQ(page, 'Tyrese Maxey stats');
+  let B = await lastBD(page);
+  const MX = sPl('nba', 'Tyrese Maxey'), mxL = MX.rows[MX.rows.length - 1], mxR = resOf('nba', 'PHI', mxL.r[0]), mxPg = f1(MX.T('pts') / MX.gp);
+  check('"Tyrese Maxey stats" -> a player card with per-game numbers from the season totals (tot / gp)', B.ps && B.ps.name === 'Tyrese Maxey' && B.ps.tiles['PTS a game'] === mxPg && B.ps.tiles.Games === String(MX.gp) && B.ps.tiles['REB a game'] === f1(MX.T('reb') / MX.gp) && B.text.includes(`${mxPg} points`), JSON.stringify(B.ps && B.ps.tiles));
+  check('player card: the latest game first in the table, with his line and the team\'s result from the results', B.ps && JSON.stringify(B.ps.rows[0]) === JSON.stringify([fmtD(mxL.r[0]), `${mxL.r[2] ? 'vs' : '@'} ${mxL.r[1]}`, ...[4, 5, 6, 3].map(i => String(mxL.r[i])), `${mxR[3] > mxR[4] ? 'W' : 'L'} ${mxR[3]}-${mxR[4]}`]), JSON.stringify(B.ps && B.ps.rows[0]));
+  check('player card: a chart of his last 5 with his season average as the line', B.ps && B.ps.bars === 5 && B.ps.lineLbl === mxPg, JSON.stringify([B.ps && B.ps.bars, B.ps && B.ps.lineLbl]));
+  check('text: the last-5 average from the logged games, called a small sample; the UTC date rule', B.text.includes(`Last 5: ${f1(mean(MX.rows.slice(-5).map(x => x.r[4])))} points a game (a small sample)`) && /UTC start date/.test(B.text), B.text.slice(0, 300));
+  check('player card: the app\'s line for his next game is a model estimate with fair odds', /Next game/.test(B.ps.all) && /model estimate/.test(B.ps.all) && /fair [+-]\d+/.test(B.ps.all), B.ps.all.slice(-400));
+
+  // a player with no game on the slate
+  await askQ(page, 'Nickeil Alexander-Walker last 5');
+  B = await lastBD(page);
+  const NW = sPl('nba', 'Nickeil Alexander-Walker');
+  check('a player with no game on the slate still gets his season (NAW, last 5)', B.ps && B.ps.name === 'Nickeil Alexander-Walker' && B.ps.rows.length === 5 && B.ps.tiles['PTS a game'] === f1(NW.T('pts') / NW.gp), JSON.stringify(B.ps && [B.ps.rows.length, B.ps.tiles]));
+  check('the card says when the file keeps fewer games than the season (last 15 of 17)', NW.rows.length < NW.gp && B.ps.notes.some(n => n.includes(`last ${NW.rows.length} logged games; season numbers cover all ${NW.gp}`)), JSON.stringify(B.ps.notes));
+
+  // one game: a miss, the app's own line and chance, facts vs possibilities
+  await askQ(page, 'How did Cade Cunningham do on Nov 22?');
+  B = await lastBD(page);
+  const CC = sPl('nba', 'Cade Cunningham'), ccRow = CC.rows.find(x => x.r[0] === '2026-11-22'), ccRes = resOf('nba', 'DET', '2026-11-22');
+  const ccLeg = RECS.days[0].parlays.flatMap(P => P.legs).find(L => L.player && L.player.name === 'Cade Cunningham'), minO = (CC.T('min') - ccRow.r[3]) / (CC.gp - 1);
+  check('"How did Cade Cunningham do on Nov 22?" -> a review card: missed, his points vs the app\'s 15+ line (not the slate\'s Caleb Cunningham)', B.rv && B.rv.title === `Missed: ${ccRow.r[4]} points vs 14.5` && /pass/.test(B.rv.tone) && /the app's line/.test(B.rv.kick) && !/Caleb/.test(B.text), JSON.stringify(B.rv && [B.rv.title, B.rv.kick]));
+  check('how close: points short and the number needed', B.rv.close === `How close: ${15 - ccRow.r[4]} points short (needed 15).`, B.rv.close);
+  check('facts from the box score: minutes vs his other games, the final score', B.rv.facts.some(([t, x]) => t === 'Fact' && x.startsWith(`Played ${ccRow.r[3]} minutes vs ${f1(minO)} a game in his other ${CC.gp - 1} games`)) && B.rv.facts.some(([t, x]) => t === 'Fact' && x.startsWith(`DET ${ccRes[3] > ccRes[4] ? 'won' : 'lost'} ${ccRes[3]}-${ccRes[4]} at ATL`)), JSON.stringify(B.rv.facts.slice(0, 3)));
+  check('what the data can\'t show is tagged Possible, and no Fact says may / might / often', B.rv.facts.some(([t]) => t === 'Possible') && B.rv.facts.filter(([t]) => t === 'Fact').every(([, x]) => !/\b(may|might|often|probably|likely)\b/i.test(x)), JSON.stringify(B.rv.facts));
+  check('the app\'s pre-game chance from its saved pick, then variance (an 86% leg misses about 1 time in 7)', B.text.includes(`gave this leg ${Math.round(ccLeg.p * 100)}% before the game (model estimate)`) && /misses about 1 time in 7/.test(B.text), B.text.slice(-400));
+  check('the reviewed game is picked out on his chart', B.rv.bars >= 5 && B.rv.sel === B.rv.bars - 1, JSON.stringify([B.rv.bars, B.rv.sel]));
+  check('no hindsight words in the answer or the card (obvious, due, guaranteed, lock)', !/\b(obvious|due|guarantee[ds]?|lock)\b/i.test(B.text + ' ' + B.rv.all), '');
+
+  // a near miss, last night
+  await askQ(page, 'why did Aaron Nesmith miss last night');
+  B = await lastBD(page);
+  const AN = sPl('nba', 'Aaron Nesmith'), anL = AN.rows[AN.rows.length - 1], anLeg = RECS.days[0].parlays.flatMap(P => P.legs).find(L => L.player && L.player.name === 'Aaron Nesmith');
+  check('"why did Aaron Nesmith miss last night" -> his latest game: 1 point short of the app\'s 10+, a near miss', B.rv && B.rv.title === `Missed: ${anL.r[4]} points vs 9.5` && anL.r[4] === 9 && /1 point short \(needed 10\), a near miss/.test(B.rv.close) && B.text.includes(`${Math.round(anLeg.p * 100)}% before the game`), JSON.stringify(B.rv && [B.rv.title, B.rv.close]));
+
+  // the app's picks: the closest loss of the day, leg by leg
+  await askQ(page, "What went wrong with yesterday's picks?");
+  B = await lastBD(page);
+  const D22 = RECS.days.find(d => d.day === '2026-11-22'), missN = P => P.legs.filter(L => L.res === false).length;
+  const pick = D22.parlays.filter(P => P.tab === 'picks' && P.result === 'lost').sort((a, b) => missN(a) - missN(b) || b.p - a.p)[0];
+  check("\"What went wrong with yesterday's picks?\" -> the closest loss of Nov 22's picks, leg by leg", B.pr && B.pr.kick.includes(pick.title) && B.pr.kick.includes('Nov 22') && B.pr.legs.length === pick.legs.length && B.pr.title === `Missed: ${missN(pick)} of ${pick.legs.length} legs`, JSON.stringify(B.pr && [B.pr.kick, B.pr.title]));
+  const legOk = pick.legs.every((L, i) => { const P = sPl('nba', L.player.name), row = P.rows.find(x => x.r[0] === L.start.slice(0, 10)), v = P.v(row, L.player.stat); return B.pr.legs[i].sub.startsWith(`${v} ${L.player.stat.toUpperCase()}`) && B.pr.legs[i].ic === (v >= L.player.thr ? '✓' : '✗') && (B.pr.legs[i].ic === '✓') === (L.res === true); });
+  check('each leg: the box-score number, ✓ / ✗ from it, the same as the app\'s morning grading', legOk, JSON.stringify(B.pr.legs.map(l => [l.ic, l.sub])));
+  check('the breaking leg is highlighted with how far it missed and its chance before', B.pr.legs.filter(l => /brk/.test(l.cls)).length === missN(pick) && B.pr.legs.filter(l => /brk/.test(l.cls)).every(l => /short/.test(l.sub) && /%/.test(l.p)), JSON.stringify(B.pr.legs.filter(l => /brk/.test(l.cls))));
+  check('the parlay\'s chance before (model estimate) and what it says about variance', B.pr.tiles['Chance before'] === `${Math.round(pick.p * 100)}%` && /misses about 5 times in 10 even when every leg is priced right/.test(B.text), JSON.stringify(B.pr.tiles));
+  check('the app\'s track record for those kinds of legs (Lessons)', B.pr.secs.some(x => /track record/i.test(x)) && /player points legs: hit \d+ of \d+ \(\d+%\) vs \d+% the model expected/.test(B.pr.all), JSON.stringify(B.pr.secs));
+
+  // a 14-leg props parlay with a near miss
+  await askQ(page, "what went wrong with yesterday's NBA player props parlay");
+  B = await lastBD(page);
+  const NP = D22.parlays.find(P => P.id === 'mp-nba15'), nes = B.pr && B.pr.legs.find(l => l.label.startsWith('Aaron Nesmith'));
+  check('a 14-leg props parlay: the near miss (Nesmith, 1 point short) is flagged as one', B.pr && B.pr.kick.includes(NP.title) && nes && nes.badge === 'Near miss' && /1 point short/.test(nes.sub) && /miss/.test(nes.cls), JSON.stringify(nes));
+  check('its misses match the app\'s own grading, leg for leg', B.pr.legs.length === NP.legs.length && NP.legs.every((L, i) => (B.pr.legs[i].ic === '✗') === (L.res === false)), JSON.stringify(B.pr.legs.map(l => l.ic).join('')));
+
+  // legs the viewer types
+  await askQ(page, 'what went wrong with my parlay: Maxey over 20.5 points and Siakam over 20.5 points');
+  B = await lastBD(page);
+  const PS = sPl('nba', 'Pascal Siakam'), psL = PS.rows[PS.rows.length - 1];
+  check('typed legs are graded from each player\'s latest box score (Maxey 17 vs 20.5: 4 short)', B.pr && B.pr.legs.length === 2 && B.pr.legs[0].ic === '✗' && B.pr.legs[0].sub.startsWith(`${mxL.r[4]} PTS`) && /4 points short \(needed 21\)/.test(B.pr.legs[0].sub) && B.pr.legs[1].ic === (psL.r[4] > 20.5 ? '✓' : '✗') && B.pr.legs[1].sub.startsWith(`${psL.r[4]} PTS`), JSON.stringify(B.pr && B.pr.legs));
+  check('typed legs without a date: the card says each leg used that player\'s latest game', mxL.r[0] === psL.r[0] || /No date was given/.test(B.pr.all), B.pr.all.slice(-300));
+  const LAr = SEA.sports.nba.results.LAL.filter(r => r[0] <= TODAY), lal = LAr[LAr.length - 1], INr = SEA.sports.nba.results.IND.filter(r => r[0] <= TODAY), ind = INr[INr.length - 1];
+  const TL = await page.evaluate(() => __ask.tools.review_parlay({ source: 'legs', legs: [{ team: 'Pacers', market: 'win' }, { team: 'Lakers', market: 'over', line: 210.5 }, { player: 'Tyrese Maxey', stat: 'points', line: 20.5, date: '2026-11-21' }] }));
+  check('typed team legs: a win from the final score, a game total vs its line, a dated player leg', TL.legs && TL.legs[0] === `${ind[3] > ind[4] ? '✓' : '✗'} Indiana Pacers to win: IND ${ind[3]}-${ind[4]} ${ind[1]} (${fmtD(ind[0])}) (${ind[3] > ind[4] ? 'won' : 'lost'} by ${Math.abs(ind[3] - ind[4])})`
+    && TL.legs[1].startsWith(`${lal[3] + lal[4] > 210.5 ? '✓' : '✗'} Los Angeles Lakers game over 210.5: LAL ${lal[3]}-${lal[4]}`) && TL.legs[1].includes(`total ${lal[3] + lal[4]} vs 210.5`) && TL.legs[2].startsWith('✗ Tyrese Maxey over 20.5 points: 17 PTS'), JSON.stringify(TL.legs));
+
+  // a yes / no leg (an anytime TD, line 0.5) that missed is never called a near miss
+  const nflS = SEA.sports.nfl, td = r => r[3 + nflS.fields.indexOf('rtd')] + r[3 + nflS.fields.indexOf('ctd')];
+  const rb = nflS.players.find(p => p.pos === 'RB' && p.gp >= 6 && nflS.players.filter(q => nameKey(q.n) === nameKey(p.n)).length === 1 && p.log.length && td(p.log[p.log.length - 1]) === 0);
+  const TD0 = await page.evaluate(n => __ask.tools.review_parlay({ source: 'legs', legs: [{ player: n, stat: 'touchdowns', line: 0.5 }] }), rb.n);
+  check('an anytime-TD leg with no TD: "1 touchdown short", not a near miss', TD0.legs && TD0.legs[0].startsWith(`✗ ${rb.n} over 0.5 touchdowns: 0 TD`) && /1 touchdown short \(needed 1\)/.test(TD0.legs[0]) && !/near miss/.test(TD0.legs[0]) && !TD0.near_misses, JSON.stringify(TD0.legs));
+
+  // the track record
+  await askQ(page, 'How did your picks do?');
+  B = await lastBD(page);
+  const G22 = D22.parlays.filter(P => P.result === 'won' || P.result === 'lost'), gl = G22.flatMap(P => P.legs).filter(L => L.res === true || L.res === false), exp = G22.reduce((s, P) => s + P.p, 0);
+  check('"How did your picks do?" -> wins vs what the model expected, legs hit, from the graded days', B.tr && B.text.includes(`won ${G22.filter(P => P.result === 'won').length} of ${G22.length}`) && B.text.includes(`the model expected ${f1(exp)}`) && B.text.includes(`${gl.filter(L => L.res).length} of ${gl.length} graded legs hit`) && B.tr.tiles['Parlays won'] === `${G22.filter(P => P.result === 'won').length} of ${G22.length}`, B.text.slice(0, 200));
+  check('track record card: by kind, the legs that broke parlays most, the lessons', /By kind/.test(B.tr.all) && /Legs that broke parlays most/.test(B.tr.all) && /Lessons/.test(B.tr.all), B.tr.all.slice(0, 200));
+
+  // leaders
+  await askQ(page, 'Who leads the NFL in rushing yards?');
+  B = await lastBD(page);
+  const LR = leadersOf('nfl', 'ryd');
+  check('"Who leads the NFL in rushing yards?" -> season totals from the box scores, ranked', B.ld && JSON.stringify(B.ld.rows.slice(0, 3)) === JSON.stringify(LR.slice(0, 3).map(e => [e.n, e.v.toLocaleString('en-US')])) && B.text.includes(`1. ${LR[0].n}`), JSON.stringify(B.ld && B.ld.rows.slice(0, 3)));
+  await askQ(page, 'NBA rebounds leaders per game');
+  B = await lastBD(page);
+  const mg = Math.max(2, Math.ceil(medGames('nba') / 2)), LB = leadersOf('nba', 'reb', true, mg);
+  check('per-game leaders state the minimum-games rule (half the typical team\'s games)', B.ld && B.ld.rows[0][0] === LB[0].n && B.ld.rows[0][1] === f1(LB[0].x) && B.ld.rule.includes(`at least ${mg} games`), JSON.stringify(B.ld && [B.ld.rows[0], B.ld.rule]));
+
+  // a team
+  await askQ(page, 'How are the Lakers doing?');
+  B = await lastBD(page);
+  const lw = LAr.filter(r => r[3] > r[4]).length, ll = LAr.length - lw;
+  check('"How are the Lakers doing?" -> record, points for and against a game, from the results', B.tm && B.tm.tiles.Record === `${lw}-${ll}` && B.text.includes(`${lw}-${ll} this season`) && B.tm.tiles['Scored / game'] === f1(mean(LAr.map(r => r[3]))) && B.tm.tiles['Allowed / game'] === f1(mean(LAr.map(r => r[4]))), JSON.stringify(B.tm && B.tm.tiles));
+  check('team card: the last 10 newest first, researched form and trends with their caveats', B.tm.rows.length === Math.min(10, LAr.length) && B.tm.rows[0][0] === fmtD(lal[0]) && B.tm.secs.includes('Researched form') && /As favourite: won 12 of 15 \(the prices expected 10\.5\)/.test(B.tm.all) && /Past patterns, not predictions/.test(B.tm.all), JSON.stringify(B.tm.secs));
+  await askQ(page, 'Kings record');
+  B = await lastBD(page);
+  check('a nickname two leagues share: one team, the other named (Kings)', B.tm && B.tm.name === 'Sacramento Kings' && /Also matching: Los Angeles Kings \(NHL\)/.test(B.text), B.text.slice(-160));
+
+  // a football player's season
+  await askQ(page, 'Josh Allen stats this season');
+  B = await lastBD(page);
+  const JA = sPl('nfl', 'Josh Allen');
+  check('a QB\'s season: passing yards, passing TDs, attempts and rushing yards a game', B.ps && B.ps.name === 'Josh Allen' && B.ps.tiles['PASS YDS a game'] === f1(JA.T('pyd') / JA.gp) && B.ps.tiles['PASS TD a game'] === f1(JA.T('ptd') / JA.gp) && B.ps.tiles['RUSH YDS a game'] === f1(JA.T('ryd') / JA.gp), JSON.stringify(B.ps && B.ps.tiles));
+
+  // the parser: breakdown questions find their intent, the old ones keep theirs
+  const PI2 = await page.evaluate(() => { const f = q => { const I = __ask.parseIntent(q); return [I.kind, I.name || (I.p && I.p.n) || (I.e && I.e.name) || I.src || I.sp || '']; };
+    return { cade: f('Is Cade Cunningham over 20.5 points?'), build: f("Build me today's parlay"), maxey: f('Is Tyrese Maxey over 24.5 points a good bet?'), rec: f('Lakers record'), day: f('how did your picks do yesterday'), lead: f('most points in the NBA'),
+      mine: f('what went wrong with my last parlay'), hou: f('How does Houston look tonight?'), vs: f('how did Derrick Henry do vs the Bengals'), slip: f('is my parlay good?'), mars: f('What is the weather on Mars?') }; });
+  check('parser: breakdown intents', JSON.stringify([PI2.rec, PI2.day, PI2.lead, PI2.mine, PI2.vs]) === JSON.stringify([['team', 'Los Angeles Lakers'], ['rparlay', 'picks'], ['leaders', 'nba'], ['rparlay', 'saved'], ['rplayer', 'Derrick Henry']]), JSON.stringify(PI2));
+  check('parser: the old intents keep theirs (a full name off the slate beats a slate surname; build stays build)', PI2.cade[0] === 'seasononly' && PI2.cade[1] === 'Cade Cunningham' && PI2.build[0] === 'parlay' && PI2.maxey[0] === 'prop' && PI2.hou[0] === 'game' && PI2.slip[0] === 'slipq' && PI2.mars[0] === 'help', JSON.stringify(PI2));
+  await askQ(page, 'how is my parlay doing');
+  B = await lastBD(page);
+  check('no saved parlays: a plain answer that says how to type the legs, no card', /no saved parlays in My Parlays/.test(B.text) && !B.pr, B.text);
+
+  check('no horizontal scroll at 390 with every breakdown card on screen', await noHScroll(page));
+  check('breakdown card buttons and links are 40px+ tap targets', await page.evaluate(() => [...document.querySelectorAll('.ask-ps button, .ask-rv button, .ask-pr button, .ask-tm button, .ask-ld button, .ask-tr button, .ask-news a')].every(b => b.getBoundingClientRect().height >= 40)));
+  check('headline links are https only', await page.evaluate(() => [...document.querySelectorAll('.ask-thread a')].every(x => x.href.startsWith('https://'))));
+  // history: the breakdown cards come back after a reload and are redrawn from the data
+  await page.reload(); await page.waitForFunction(() => window.SB && SB.firstRender && document.querySelector('.ask-thread'));
+  await page.waitForFunction(() => document.querySelector('.ask-ld') && document.querySelector('.ask-tm .ui-tile'), null, { timeout: 15000 });
+  const HR = await page.evaluate(() => ({ ps: document.querySelectorAll('.ask-ps').length, pr: document.querySelectorAll('.ask-pr').length, tm: document.querySelectorAll('.ask-tm').length, ld: document.querySelectorAll('.ask-ld').length, tr: document.querySelectorAll('.ask-tr').length, rv: document.querySelectorAll('.ask-rv').length }));
+  check('history: player, parlay review, team, leaders and track record cards survive a reload', HR.ps >= 1 && HR.pr >= 2 && HR.tm >= 2 && HR.ld >= 2 && HR.tr >= 1, JSON.stringify(HR));
+  const RT = await page.evaluate(() => { const t0 = performance.now(); SB.goTab('insights'); SB.goTab('ask'); return performance.now() - t0; });
+  check('render measured in the page with a history of breakdown cards: under 1,500 ms', RT < 1500, `${Math.round(RT)} ms`);
+  check('no page errors (breakdowns, offline)', errors.length === 0, errors.join(' | '));
+  await page.evaluate(() => localStorage.removeItem('fm2.chat'));
+  await browser.close();
+}
+
+// ---------------------------------------------------------------- 5. breakdowns through the mocked capability: review_parlay, player_stats, review_player run as page tools
+{
+  const { page, errors, browser } = await open({ width: 390, tab: 'ask', notFound: ['mypicks.json'], pins: { 'recs.json': 'recs-askbd-2026-11-23.json', 'news.json': 'news-2026-11-24.json' } });
+  await page.addInitScript(() => {
+    localStorage.removeItem('fm2.chat'); window.__calls = [];
+    const fake = async (input, options) => {
+      window.__calls.push({ input, tools: (options.tools || []).map(t => t.name) });
+      const T = n => options.tools.find(x => x.name === n), o = { signal: options.signal };
+      window.__bd = {};
+      window.__bd.parlay = await T('review_parlay').execute({ source: 'picks', day: '2026-11-22', title: 'same game' }, o);
+      window.__bd.stats = await T('player_stats').execute({ player: 'Cade Cunningham', last: 5 }, o);
+      window.__bd.review = await T('review_player').execute({ player: 'Cade Cunningham', date: '2026-11-22', stat: 'points', line: 30.5 }, o);
+      try { await T('player_stats').execute({ player: 'Nobody Atall' }, o); } catch (e) { window.__bd.err = String(e && e.message); }
+      const text = '**Missed on one leg:** Cade Cunningham scored 5 (see the cards).'; options.onText({ text, delta: text }); return { text, truncated: false };
+    };
+    fake.limits = async () => ({ maxPromptBytes: 262144, tools: { maxCount: 16 } });
+    window.claude = { use: async n => (n === 'sample' ? fake : null) };
+  });
+  await page.reload(); await page.waitForFunction(() => window.SB && SB.firstRender && document.querySelector('.ask-chip'));
+  await page.waitForFunction(() => __ask.state.ai === 'ready');
+  await askQ(page, 'What went wrong with the same game parlay yesterday, and how has Cade Cunningham been playing?');
+  const M = await page.evaluate(() => { const c = window.__calls[0], a = document.querySelector('.ask-a:last-child'); return { rules: c.input[0].content, tools: c.tools, bd: window.__bd, sizes: Object.values(window.__bd).map(x => JSON.stringify(x).length),
+    pr: !!a.querySelector('.ask-pr'), ps: !!a.querySelector('.ask-ps'), rv: (a.querySelector('.ask-rv .ui-verdict .t') || {}).textContent, prLegs: a.querySelectorAll('.ask-pr .ask-legs > li').length }; });
+  check('the breakdown tools are offered to Claude', ['player_stats', 'review_player', 'review_parlay', 'team_report', 'leaders', 'track_record'].every(t => M.tools.includes(t)), JSON.stringify(M.tools));
+  check('instructions: general knowledge only as background, labelled "general knowledge (may be out of date)", never mixed into this season', M.rules.includes('general knowledge (may be out of date)') && /never mix it into this season's numbers/.test(M.rules), '');
+  check('instructions: breakdowns go facts, likely reasons (possibilities named), how close, what it says; no hindsight, never due', /1\) what happened/.test(M.rules) && /2\) why it likely happened/.test(M.rules) && /3\) how close it was/.test(M.rules) && /4\) what that says/.test(M.rules) && /never say a result was obvious/.test(M.rules) && /due/.test(M.rules), '');
+  check('instructions: say when a player or team isn\'t in the app\'s data, and what it covers', /isn't in the app's data, say so plainly and say what the app covers/.test(M.rules) && /5 soccer leagues/.test(M.rules), '');
+  const CCs = sPl('nba', 'Cade Cunningham');
+  check('review_parlay through options.tools: the same game parlay, missed on 1 of 5, the breaking leg named', M.bd.parlay.result === 'missed: 1 of 5 legs' && M.bd.parlay.broke_it[0] === 'Cade Cunningham 15+ points' && M.bd.parlay.legs.length === 5 && Array.isArray(M.bd.parlay.what_it_says), JSON.stringify(M.bd.parlay).slice(0, 300));
+  check('player_stats through options.tools: per-game points from the season totals, his last 5', M.bd.stats.per_game.points === +f1(CCs.T('pts') / CCs.gp) && M.bd.stats.games_this_season === CCs.gp && M.bd.stats.last_5_games.length === 5, JSON.stringify(M.bd.stats).slice(0, 300));
+  check('review_player: a line only Claude wrote is ignored (the app\'s own 14.5 line is used, and Claude is told)', /line 30\.5 ignored/.test((M.bd.review.ignored || []).join(' ')) && M.rv === `Missed: ${CCs.rows.find(x => x.r[0] === '2026-11-22').r[4]} points vs 14.5` && Array.isArray(M.bd.review.why_facts) && Array.isArray(M.bd.review.why_possibilities), JSON.stringify(M.bd.review).slice(0, 300));
+  check('the tool results are small plain data (under 32 KB each)', M.sizes.every(n => n < 32000), JSON.stringify(M.sizes));
+  check('a player the app doesn\'t have: a plain error that says what the app covers', /No player named "Nobody Atall".*NFL, college football, the NBA, the NHL and 5 soccer leagues/.test(M.bd.err || ''), M.bd.err);
+  check('the cards come from the engine: parlay review (5 legs), player card and review card under the answer', M.pr && M.prLegs === 5 && M.ps && !!M.rv, JSON.stringify([M.pr, M.prLegs, M.ps, M.rv]));
+  check('no page errors (breakdowns through Claude)', errors.length === 0, errors.join(' | '));
+  await browser.close();
+}
+
+// ---------------------------------------------------------------- 6. hostile names, team names, titles, labels, headlines and links in every new card
+{
+  const H = `Zed "<img src=x onerror=window.__xss=1>" O'Neil`, HT = '<svg onload=window.__xss=2>Zed City';
+  const SEA2 = JSON.parse(FX('season-2026-11-23.json')), nba = SEA2.sports.nba;
+  nba.players.push({ n: H, t: 'ZZX', pos: '<b>G</b>', gp: 3, tot: [90, 180, 15, 9], log: [['2026-11-19', 'BOS', 1, 30, 60, 5, 3], ['2026-11-21', 'NY', 0, 30, 60, 5, 3], ['2026-11-23', 'MIA', 1, 30, 60, 5, 3]] });
+  nba.teams.ZZX = HT; nba.results.ZZX = [['2026-11-19', 'BOS', 1, 120, 100], ['2026-11-21', 'NY', 0, 99, 101], ['2026-11-23', 'MIA', 1, 130, 90]];
+  const RECS2 = JSON.parse(FX('recs-askbd-2026-11-23.json'));
+  RECS2.days.unshift({ day: '2026-11-20', made: '2026-11-20T11:00:00Z', parlays: [{ id: 'mp-sgp5', tab: 'picks', title: '<img src=x onerror=window.__xss=3> SGP', p: 0.3, result: 'lost', legs: [{ gid: 'nba-NYK-ZZX-2026-11-21', key: 'P:zed-pts~nba-NYK-ZZX-2026-11-21:70', label: `${H} 70+ points`, p: 0.3, sport: 'nba', comp: 'NBA', home: 'NYK', away: 'ZZX', start: '2026-11-21T00:30:00Z', player: { name: H, team: 'ZZX', stat: 'pts', thr: 70, under: false }, res: false, actual: '60 pts' }] }] });
+  const NEWS2 = JSON.parse(FX('news-2026-11-24.json'));
+  NEWS2.items.unshift({ id: 'x1', sport: 'nba', league: 'NBA', headline: '<img src=x onerror=window.__xss=5> headline', published: '2026-11-24T20:00:00Z', type: 'story', link: 'javascript:window.__xss=6', athletes: [H], teams: [{ name: HT, abbr: 'ZZX' }] });
+  const SAVED = [{ legs: [{ gid: 'nba-PHI-MIL-2026-11-21', key: 'H', label: '<img src=x onerror=window.__xss=4> PHI win', sport: 'nba', comp: 'NBA', home: 'PHI', away: 'MIL', start: '2026-11-21T00:00:00Z' }], p: 0.55, at: Date.parse('2026-11-20T20:00:00Z') }];
+  const json = b => r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+  const before = async pg => { await pg.route(/\/season\.json(\?.*)?$/, json(SEA2)); await pg.route(/\/recs\.json(\?.*)?$/, json(RECS2)); await pg.route(/\/news\.json(\?.*)?$/, json(NEWS2)); };
+  const { page, errors, browser } = await open({ width: 390, tab: 'ask', notFound: ['mypicks.json'], before, init: { 'fm2.saved': SAVED } });
+  await page.addInitScript(([h]) => {
+    localStorage.removeItem('fm2.chat'); window.__mode = 'h1';
+    const fake = async (input, options) => {
+      const T = n => options.tools.find(x => x.name === n), o = { signal: options.signal };
+      if (window.__mode === 'h1') { await T('player_stats').execute({ player: h }, o); await T('review_player').execute({ player: h }, o); await T('team_report').execute({ team: 'ZZX', sport: 'nba' }, o); await T('review_parlay').execute({ source: 'picks', day: '2026-11-20' }, o); }
+      else { await T('review_parlay').execute({ source: 'saved' }, o); await T('leaders').execute({ sport: 'nba', stat: 'points', per_game: true, min_games: 1, n: 5 }, o); await T('track_record').execute({}, o); }
+      options.onText({ text: 'See the cards.', delta: 'See the cards.' }); return { text: 'See the cards.', truncated: false };
+    };
+    fake.limits = async () => ({ maxPromptBytes: 262144, tools: { maxCount: 16 } });
+    window.claude = { use: async n => (n === 'sample' ? fake : null) };
+  }, [H]);
+  await page.reload(); await page.waitForFunction(() => window.SB && SB.firstRender && document.querySelector('.ask-chip'));
+  await page.waitForFunction(() => __ask.state.ai === 'ready');
+  await askQ(page, 'Tell me about this player and his team');
+  await page.evaluate(() => { window.__mode = 'h2'; });
+  await askQ(page, 'And my saved parlay, the leaders and your record');
+  const X = await page.evaluate(([h, ht]) => { const T = document.querySelector('.ask-thread'), t = s => [...T.querySelectorAll(s)].map(e => e.textContent).join(' ');
+    return { xss: window.__xss, tags: T.querySelectorAll('img, svg, script, b b').length, js: T.querySelectorAll('a[href^="javascript"]').length,
+      ps: t('.ask-ps').includes(h) && t('.ask-ps').includes('<img src=x onerror=window.__xss=5> headline'), rv: t('.ask-rv').includes(h), tm: t('.ask-tm').includes(ht), pr: t('.ask-pr').includes(`${h} 70+ points`) && t('.ask-pr').includes('<img src=x onerror=window.__xss=3> SGP') && t('.ask-pr').includes('<img src=x onerror=window.__xss=4> PHI win'),
+      ld: t('.ask-ld').includes(h), tr: !!T.querySelector('.ask-tr'), pos: t('.ask-ps').includes('<b>G</b>') }; }, [H, HT]);
+  check('hostile names in every new card show as text: player card (name, position, headline), review, team, parlay reviews (title, labels), leaders', X.xss === undefined && X.tags === 0 && X.ps && X.pos && X.rv && X.tm && X.pr && X.ld && X.tr, JSON.stringify(X));
+  check('a javascript: headline link is never drawn as a link', X.js === 0, JSON.stringify(X.js));
+  check('no horizontal scroll at 390 with long hostile names in the cards', await noHScroll(page), JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.ask-thread *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest('.ui-tablewrap')).slice(0, 6).map(e => e.tagName + '.' + e.className + ':' + e.textContent.slice(0, 40)))));
+  check('no page errors (hostile data)', errors.length === 0, errors.join(' | '));
+  await browser.close();
+}
+
 // ---------------------------------------------------------------- 3. wide screen
 {
   const { page, errors, browser } = await open({ width: 1440, height: 900, tab: 'ask' });
@@ -372,6 +630,9 @@ const noHScroll = page => page.evaluate(() => document.documentElement.scrollWid
   check('1440: the header and the chat panel sit side by side', W.side && W.top, JSON.stringify(W));
   await askQ(page, 'Is Tyrese Maxey over 24.5 points a good bet?');
   check('1440: no horizontal scroll with a card', await noHScroll(page));
+  await askQ(page, 'How did Cade Cunningham do on Nov 22?');
+  const WR = await page.evaluate(() => { const c = document.querySelector('.ask-a:last-child .ask-rv'); return c ? { w: c.getBoundingClientRect().width, t: c.querySelector('.ui-verdict .t').textContent } : null; });
+  check('1440: a review card without the app\'s picks file compares with his average, at most 620px wide', WR && WR.w <= 621 && /vs his average/.test(WR.t) && await noHScroll(page), JSON.stringify(WR));
   check('no page errors (1440)', errors.length === 0, errors.join(' | '));
   await page.evaluate(() => localStorage.removeItem('fm2.chat'));
   await done(browser);

@@ -386,7 +386,7 @@ def nfl_upcoming(rows):
         if pe:
             west = r['home'] if zh == 'Pacific' else r['away']
             east = r['away'] if west == r['home'] else r['home']
-            g['why'] = f"{west} (Pacific) vs {east} (Eastern), night kickoff: the reel's rule backs {west}."
+            g['why'] = f"{west} (Pacific) vs {east} (Eastern), night kickoff: the reel's rule would back {west}. Our tests found no edge in this spot once the prices are counted."
             g['west'] = west
             g['westLine'] = None if not L or L['hs'] is None else (L['hs'] if west == r['home'] else -L['hs'])
         games.append(g)
@@ -575,7 +575,7 @@ def injuries(summ, r):
         room = max(0, 12 - len(out[s]))
         out[s] += extra[:room]
         added += len(extra[:room])
-    note = f"ESPN's game page lists the {max(from_summary.values()) if from_summary else 0} most relevant per team"
+    note = f"ESPN's game summary shows up to {max(from_summary.values()) if from_summary else 0} per team"
     note += f"; {added} more from the team rosters (status only)." if added else '.'
     out['asOf'] = str(NOW.astimezone(ET).date())
     out['note'] = note + ' Final statuses come out before kickoff.'
@@ -1132,7 +1132,7 @@ def nba_upcoming():
         g = {'sport': 'nba', 'espnId': r['id'], 'label': r['short'], 'slot': '', 'kickoffUTC': iso(r['t']),
              'away': team(r['away'], za, ta, record=r['arec']), 'home': team(r['home'], zh, th, record=r['hrec']),
              'venue': ', '.join(x for x in (r['city'], r['region']) if x), 'applies': bool(pe and late)}
-        why = (f"Pacific vs Eastern at 8 PM ET or later: the reel's rule would back {west}." if pe and late else
+        why = (f"Pacific vs Eastern at 8 PM ET or later: the reel's rule would back {west}. Our NBA test found no edge in this spot (about 50% against the spread)." if pe and late else
                'Pacific vs Eastern, but before 8 PM ET.' if pe else
                f"{za} vs {zh} ({hrs(gap)}-hour gap): not the Pacific vs Eastern match-up the rule is about.")
         if d <= to:
@@ -1408,7 +1408,7 @@ def main():
             games += near + later
             pe_near = [g for g in near if 'west' in g]
             if not pe_near:
-                notes.append('No Pacific vs Eastern NBA game in the next 8 days' + (f"; the next is {later[0]['label']} on {etd(P(later[0]['kickoffUTC'])):%a} {mday(etd(P(later[0]['kickoffUTC'])))}."
+                notes.append('No Pacific vs Eastern NBA game in the next 8 days' + (f"; the next one ESPN lists (later dates may still be added) is {later[0]['label']} on {etd(P(later[0]['kickoffUTC'])):%a} {mday(etd(P(later[0]['kickoffUTC'])))}."
                                                                                      if later else ' or the 30 days after.'))
             else:
                 notes.append(f"NBA: {len(pe_near)} Pacific vs Eastern {'game' if len(pe_near) == 1 else 'games'} in the next 8 days; "

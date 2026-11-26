@@ -116,12 +116,13 @@ and how the owner wants things done. The nightly run adds a dated line to "Chang
   - **Our re-tests on real closing lines (ESPN pickcenter; football-data.co.uk for soccer), each recounted by a second check:**
     - NFL 2012-2026: 30-25-2 (54.5%, p 0.59; straight-up wins matched the spreads).
     - NBA: 289-289-14 late home tips, 371-369-12 in the East (about 50% over 1,318).
-    - MLS: -0.04 points a game against the odds over 588 games. The one near-significant cut went the wrong way.
+    - MLS: -0.04 league points a game against the odds over 588 games; Liga MX (Tijuana) nothing either. Both near-significant cuts went the wrong way.
     - **No edge anywhere, so the tab is NOT marked "Multi game"** (`research.verdict.multi`; the label follows it).
   - **Three views:**
     - **Monday night** (the next Monday game, broken down): rule check, market (no-vig), ESPN predictor, Polymarket, last meeting, form vs closing lines, key players from season.json (median next to the average), injuries, Monday nights this season, "check before you bet", last Monday's recap. Once the game is priced in the feed: the model's chances, the spread cover from the 100,000 sims, and two same game parlays (4 and 7 legs, ⇄ + 500,000 runs).
     - **The study:** papers and the re-tests with 95% ranges.
-    - **Night games:** each team's body-clock time, the 4-8 PM window, where the rule points (Pacific vs Eastern at 8 PM ET+), market and model.
+    - **This week:** through `upcoming.to`, every NFL night game plus NBA / soccer games 2+ hours apart, each team's body-clock time (4-8 PM window), the rule per sport, market and model (chances shown adding to 100); later rule games in a "Later this season" block (kickoffs can be flexed); notes and the season table follow the sport filter.
+  - **tools/body_clock.py:** a failed ESPN fetch fails only its section and keeps the old one; finished summaries cached in .work/espn; Monday doubleheaders prefer the rule game, else the later kickoff. The front end reloads bodyclock.json on every feed refresh.
   - The feed adds NFL games ~4-5 days ahead and prices them with a win chance only (no total), so total-points legs stay out of the parlays.
 - **Other tabs:** Soccer Parlays, Point Lottos, Polymarket, Weekly Plan, Best Parlays, NBA Props, First TD, UFC.
 - **Your bets:** My Parlays (ledger, grading) and Slip Check (screenshot or typed slips, 500,000-run simulation, recommended changes).
@@ -233,9 +234,12 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - season.json lacks full names for a few college teams (ALB, RGV, WES).
   - A traded player shows one row per team.
   - insights.js could share its season index (`__insights.needSeason`) with builder.js; both work without it.
+- **Body Clock:** the Monday game (CAR @ TB) isn't in the feed yet; its model numbers and parlays appear once the feed prices it (the feed's NFL games carry a win chance only, so total legs stay out). CAR / TB players reach nflplayers.json only once their game is in the feed.
+- **Form research:** clubs from leagues ESPN doesn't carry (Hungary, Croatia, Bulgaria...) rest on Polymarket alone, so they stay "partial".
 - **Keyboard access:** on phones the menu is a closed drawer now, so content comes first. On desktop the sidebar's ~30 items still come before the page: a skip link would fix that.
 
 ## Change log
+- 2026-11-25 nightly save (Los Angeles date; the 3:47 AM run, the Body Clock tab and the 7:32 AM run): 16 commits. Daily refresh v185 (Nov 24 picks 5 won / 15 lost / 29 pending). Body Clock tab built from the owner's reel, reviewed twice (~60 fixes), published v189. Morning research v190: 246 teams (207 verified), 1,004 players, all 18 NBA teams' injuries re-checked (no picked player listed), Body Clock refreshed. Full suite 49/49. Live app = repo (data.json excepted).
 - 2026-11-25 (afternoon):
   - 🌙 Body Clock tab from the owner's Instagram reel. The research (4 agents, then an independent recount) found no edge against closing lines in the NFL, NBA or soccer, so the tab is not marked multi game. It has the Monday night breakdown (CAR @ TB) and tests/bodyclock.test.mjs.
   - Two review rounds (3 reviewers each) found ~60 problems, all fixed. Among them: study wording stronger than its sources, games vs decisions, this week vs later games, an empty odds object shown as "None", soccer name matching (LAFC, D.C. United, derbies), a weather day count off by one, and failed ESPN fetches overwriting good sections (they now keep the old ones). tools/body_clock.py joined the 7:32 AM run (prompt only). Full suite 49/49; published as version 189.

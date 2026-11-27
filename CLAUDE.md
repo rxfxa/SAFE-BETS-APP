@@ -234,11 +234,13 @@ All of these fire into this session (`session_01BXNfXbMbY5NYSUdc1M3X6r`). Times 
   - season.json lacks full names for a few college teams (ALB, RGV, WES).
   - A traded player shows one row per team.
   - insights.js could share its season index (`__insights.needSeason`) with builder.js; both work without it.
-- **Body Clock:** the Monday game (CAR @ TB) isn't in the feed yet; its model numbers and parlays appear once the feed prices it (the feed's NFL games carry a win chance only, so total legs stay out). CAR / TB players reach nflplayers.json only once their game is in the feed.
+- **Body Clock:** the Monday game (CAR @ TB) is in the feed since Nov 26 but has no prices yet; its model numbers and parlays appear once the feed prices it (the feed's NFL games carry a win chance only, so total legs stay out). CAR / TB players reach nflplayers.json only once their game is in the feed.
 - **Form research:** clubs from leagues ESPN doesn't carry (Hungary, Croatia, Bulgaria...) rest on Polymarket alone, so they stay "partial".
+- **No-NBA days (e.g. Thanksgiving):** make_picks builds the next day's picks, so the daily and morning runs should check that day's NBA teams (injuries, `nba_last4.py <that date>`); the runs' prompts still say "today".
 - **Keyboard access:** on phones the menu is a closed drawer now, so content comes first. On desktop the sidebar's ~30 items still come before the page: a skip link would fix that.
 
 ## Change log
+- 2026-11-26 nightly save (Thanksgiving, no NBA games): 8 commits, all scheduled runs. 3:47 AM: graded 99 parlays (Nov 25's My Parlay Picks all missed or wait on ungraded NFL player legs); make_picks chose Fri Nov 27 (no NBA today), so Friday's 22 NBA teams' injuries were checked (Nov 25-26 reports) before rebuilding the picks; published v201. 7:32 AM: Friday's NBA last 4, 327 teams' form (288 verified, 23 soft streaks), injury re-check (no picked player listed), Body Clock refreshed (CAR @ TB now in the feed, not yet priced); published v205.
 - 2026-11-25 nightly save (Los Angeles date; the 3:47 AM run, the Body Clock tab and the 7:32 AM run): 16 commits. Daily refresh v185 (Nov 24 picks 5 won / 15 lost / 29 pending). Body Clock tab built from the owner's reel, reviewed twice (~60 fixes), published v189. Morning research v190: 246 teams (207 verified), 1,004 players, all 18 NBA teams' injuries re-checked (no picked player listed), Body Clock refreshed. Nightly suite: plans.test failed once because it read the live trends.json (this morning's refresh dropped the Nov 24 leans); it now pins tests/fixtures/trends-2026-11-24.json, and all 49 pass. Live app = repo (data.json excepted).
 - 2026-11-25 (afternoon):
   - 🌙 Body Clock tab from the owner's Instagram reel. The research (4 agents, then an independent recount) found no edge against closing lines in the NFL, NBA or soccer, so the tab is not marked multi game. It has the Monday night breakdown (CAR @ TB) and tests/bodyclock.test.mjs.

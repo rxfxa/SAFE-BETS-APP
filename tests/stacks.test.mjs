@@ -26,7 +26,8 @@ const page = await (await browser.newContext({ viewport: { width: 390, height: 8
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 await page.clock.setFixedTime(new Date('2026-11-23T08:00:00Z'));
-for (const [glob, file] of [['**/data.json', 'data-2026-11-23.json'], ['**/polymarket.json', 'polymarket-2026-11-23b.json'], ['**/nbalast4.json', 'nbalast4-2026-11-23.json'], ['**/nbaroles.json', 'nbaroles-2026-11-23.json']])
+// the slate's own injury report, so a later day's absences can't change which teammate takes a stat
+for (const [glob, file] of [['**/data.json', 'data-2026-11-23.json'], ['**/polymarket.json', 'polymarket-2026-11-23b.json'], ['**/nbalast4.json', 'nbalast4-2026-11-23.json'], ['**/nbaroles.json', 'nbaroles-2026-11-23.json'], ['**/injuries.json', 'injuries-2026-11-23.json']])
   await page.route(glob, r => r.fulfill({ status: 200, contentType: 'application/json', body: F(file) }));
 await page.addInitScript(() => { localStorage.setItem('fm2.tab', JSON.stringify('fantasy')); localStorage.setItem('fm2.stk', JSON.stringify({ legs: 6, games: 3 })); });
 try {
